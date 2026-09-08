@@ -48,16 +48,14 @@ describe("accessIdentityFromClaims", () => {
     });
   });
 
-  it("accepts only an explicitly allowlisted service-token identity", () => {
+  it("accepts a service token already authorized by the Access policy", () => {
     const serviceName = `${"a".repeat(32)}.access`;
     const claims = {
       common_name: serviceName,
       sub: "",
       type: "app",
     };
-    expect(accessIdentityFromClaims(claims)).toBeNull();
-    expect(accessIdentityFromClaims(claims, ["another-service"])).toBeNull();
-    expect(accessIdentityFromClaims(claims, [serviceName])).toEqual({
+    expect(accessIdentityFromClaims(claims)).toEqual({
       email: `${serviceName}@service-token.invalid`,
       subject: `service:${serviceName}`,
     });

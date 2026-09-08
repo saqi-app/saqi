@@ -45,11 +45,11 @@ the platform secret manager. Development and tests use an inert synthetic
 source profile.
 
 The GitHub `production` environment must define `CF_ACCESS_AUD`,
-`CF_ACCESS_SERVICE_TOKEN_COMMON_NAMES`, `CF_ACCESS_TEAM_DOMAIN`,
-`CF_CACHE_PURGE_TOKEN`, `CF_ZONE_ID`, `SAQI_SOURCE_ADAPTER_CONFIG`,
-`SAQI_SOURCE_BASE_URL`, and `SAQI_SOURCE_NAME`. The deploy workflow validates
-all eight and replaces the Worker bindings in one atomic secret operation
-before deploying the authenticated operations Worker. Use a dedicated token
+`CF_ACCESS_TEAM_DOMAIN`, `CF_CACHE_PURGE_TOKEN`, `CF_ZONE_ID`,
+`SAQI_SOURCE_ADAPTER_CONFIG`, `SAQI_SOURCE_BASE_URL`, and `SAQI_SOURCE_NAME`.
+The deploy workflow validates all seven and replaces the Worker bindings in one
+atomic secret operation before deploying the authenticated operations Worker.
+Use a dedicated token
 limited to cache purge for `CF_CACHE_PURGE_TOKEN`; do not reuse either Workers
 deployment token.
 
