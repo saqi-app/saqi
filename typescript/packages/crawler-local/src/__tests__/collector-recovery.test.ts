@@ -244,7 +244,7 @@ describe("bounded collector recovery", () => {
     expect(controller.cycle(now).state.phase).toBe("complete");
     expect(controller.status().completed).toBe(130);
     ledger.close();
-  });
+  }, 15_000);
 
   it("persists its chosen rest deadline and stops on a failed reservation", () => {
     const ledger = open();

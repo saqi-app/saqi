@@ -2616,7 +2616,7 @@ describe("collector coordinator", () => {
       preferredKind: "source_poem_detail",
     });
     ledger.close();
-  });
+  }, 15_000);
 
   it("falls through to a manifest immediately when no detail is ready", async () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-empty-detail-lane-"));

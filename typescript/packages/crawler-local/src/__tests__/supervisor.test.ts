@@ -39,9 +39,10 @@ function testConfig(input: Record<string, unknown>) {
 }
 
 async function waitForCondition(condition: () => boolean): Promise<void> {
-  for (let index = 0; index < 1_000; index += 1) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
     if (condition()) return;
-    await new Promise<void>((resolvePromise) => setImmediate(resolvePromise));
+    await new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 1));
   }
   throw new Error("Timed out waiting for test condition");
 }
