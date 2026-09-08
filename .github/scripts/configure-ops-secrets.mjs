@@ -4,7 +4,6 @@ const SECRET_BINDINGS = [
   ["CF_CACHE_PURGE_TOKEN", "CF_CACHE_PURGE_TOKEN"],
   ["CF_ZONE_ID", "CF_ZONE_ID"],
   ["SAQI_ACCESS_AUDIENCE", "CF_ACCESS_AUD"],
-  ["SAQI_ACCESS_SERVICE_IDENTITIES", "CF_ACCESS_SERVICE_TOKEN_COMMON_NAMES"],
   ["SAQI_ACCESS_TEAM_ORIGIN", "CF_ACCESS_TEAM_DOMAIN"],
   ["SAQI_SOURCE_BASE_URL", "SAQI_SOURCE_BASE_URL"],
   ["SAQI_SOURCE_ADAPTER_CONFIG", "SAQI_SOURCE_ADAPTER_CONFIG"],
@@ -15,9 +14,7 @@ const secrets = Object.fromEntries(
   SECRET_BINDINGS.map(([binding, environmentName]) => {
     const value = process.env[environmentName];
     if (value === undefined || value.length === 0) {
-      throw new Error(
-        `Missing required operations secret: ${environmentName}`,
-      );
+      throw new Error(`Missing required operations secret: ${environmentName}`);
     }
     return [binding, value];
   }),

@@ -1,7 +1,6 @@
 # Copy to .dev.vars for local development only. Never commit real values.
 CF_ACCESS_TEAM_DOMAIN=https://example.cloudflareaccess.com
 CF_ACCESS_AUD=replace-with-access-application-audience
-CF_ACCESS_SERVICE_TOKEN_COMMON_NAMES=replace-with-service-token-common-name
 CF_CACHE_PURGE_TOKEN=replace-with-cache-purge-token
 CF_ZONE_ID=replace-with-zone-id
 SAQI_SOURCE_NAME=source

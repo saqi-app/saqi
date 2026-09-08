@@ -3,7 +3,6 @@ import { z } from "zod";
 
 export interface AccessEnv {
   SAQI_ACCESS_AUDIENCE?: string;
-  SAQI_ACCESS_SERVICE_IDENTITIES?: string;
   SAQI_ACCESS_TEAM_ORIGIN?: string;
 }
 
@@ -22,23 +21,18 @@ const AccessClaimsSchema = z.object({
 });
 
 const ServiceClaimsSchema = z.object({
-  common_name: z.string().trim().min(1).max(256),
+  common_name: z.string().regex(/^[\da-f]{32}\.access$/),
   type: z.literal("app"),
 });
 
 export function accessIdentityFromClaims(
-  payload: unknown,
-  allowedServiceCommonNames: readonly string[] = []
+  payload: unknown
 ): AccessIdentity | null {
   const claims = AccessClaimsSchema.safeParse(payload);
   if (claims.success)
     return { email: claims.data.email, subject: claims.data.sub };
   const service = ServiceClaimsSchema.safeParse(payload);
-  if (
-    !service.success ||
-    !allowedServiceCommonNames.includes(service.data.common_name)
-  )
-    return null;
+  if (!service.success) return null;
   return {
     email: `${service.data.common_name}@service-token.invalid`,
     subject: `service:${service.data.common_name}`,
@@ -73,11 +67,8 @@ export async function verifyAccessIdentity(
   request: Request,
   env: AccessEnv
 ): Promise<AccessIdentity | null> {
-  const {
-    SAQI_ACCESS_TEAM_ORIGIN: teamDomain,
-    SAQI_ACCESS_AUDIENCE: aud,
-    SAQI_ACCESS_SERVICE_IDENTITIES: serviceNames,
-  } = env;
+  const { SAQI_ACCESS_TEAM_ORIGIN: teamDomain, SAQI_ACCESS_AUDIENCE: aud } =
+    env;
 
   if (!teamDomain || !aud) return null;
   const issuer = accessIssuer(teamDomain);
@@ -97,11 +88,11 @@ export async function verifyAccessIdentity(
       issuer,
       audience: aud,
     });
-    const allowedServiceCommonNames = (serviceNames ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
-    return accessIdentityFromClaims(payload, allowedServiceCommonNames);
+    // The attached Cloudflare Access Service Auth policy is the authority for
+    // which service tokens may reach this Worker. Repeating that allowlist in
+    // a Worker secret creates a second mutable policy that can drift and lock
+    // out every publisher even after Access has authenticated it.
+    return accessIdentityFromClaims(payload);
   } catch {
     return null;
   }
