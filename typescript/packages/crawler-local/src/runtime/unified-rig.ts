@@ -134,7 +134,7 @@ type ApprovedSolResolution =
     >;
 
 const PUBLICATION_BLOCKING_RESOLUTION_PRIORITY = 1_000;
-const REDACTED_SOURCE_ORIGIN = "https://source.invalid";
+export const REDACTED_SOURCE_ORIGIN = "https://source.invalid";
 const CanonicalPoemIdSchema = z.uuid();
 const SourceLineageMaintenanceStateSchema = z.enum([
   "active",
@@ -174,7 +174,7 @@ function diagnosticSourceErrorCode(code: null | string): null | string {
   return "SOURCE_COLLECTION_FAILED";
 }
 
-function diagnosticLedgerStatus(
+export function diagnosticLedgerStatus(
   status: ReturnType<Ledger["status"]>,
 ): ReturnType<Ledger["status"]> {
   const sourceErrorCodes = new Set(
