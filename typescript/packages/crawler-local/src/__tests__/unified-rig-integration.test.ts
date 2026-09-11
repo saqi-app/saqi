@@ -1634,14 +1634,25 @@ describe("unified rig restart integration", () => {
     const database = join(root, "ledger.sqlite3");
     const now = Date.now();
     const writer = Ledger.open(database);
-    const origin = writer.claimOrigin("https://source.invalid", now, 10_000);
+    const origin = writer.claimOrigin("https://private.example", now, 10_000);
     if (origin.state !== "claimed") throw new Error("Expected origin lease");
     writer.failOrigin(origin.lease, now + 1, 0, {
       circuitBreakerAfter: 1,
       circuitBreakerCooldownMs: 60_000,
       retryAt: now + 60_000,
-      stopReason: "SOURCE_HUMAN_REQUIRED",
+      stopReason: "PRIVATE_HUMAN_REQUIRED",
     });
+    writer.seed(
+      {
+        implementationVersion: "test-v1",
+        input: {},
+        inputHash: inputHash({}),
+        kind: "private_poem_detail",
+        priority: 0,
+        schemaVersion: "test-v1",
+      },
+      now,
+    );
     writer.close();
     const config = parseScraperOperationConfig({
       collector: { enabled: true, headless: true },
@@ -1667,17 +1678,41 @@ describe("unified rig restart integration", () => {
       publicationAllowed: false,
       status: {},
     });
-    await runtime.status();
-    expect(
-      JSON.parse(readFileSync(join(root, "health", "latest.json"), "utf8")),
-    ).toMatchObject({
+    const status = await runtime.status();
+    const health = JSON.parse(
+      readFileSync(join(root, "health", "latest.json"), "utf8"),
+    ) as {
+      readonly origins: readonly unknown[];
+      readonly queues: readonly { readonly kind: string }[];
+    };
+    expect(health).toMatchObject({
       origins: [
         {
+          origin: "https://source.invalid",
           state: "challenge_wait",
           stopReason: "SOURCE_HUMAN_REQUIRED",
         },
       ],
     });
+    expect(health.queues).toContainEqual(
+      expect.objectContaining({ kind: "source_poem_detail" }),
+    );
+    expect(status).toMatchObject({
+      collectorSchedule: expect.objectContaining({
+        preferredKind: "source_poem_detail",
+      }),
+      ledger: {
+        kindProgress: [expect.objectContaining({ kind: "source_poem_detail" })],
+        origins: [
+          expect.objectContaining({
+            origin: "https://source.invalid",
+            stopReason: "SOURCE_HUMAN_REQUIRED",
+          }),
+        ],
+      },
+    });
+    expect(JSON.stringify(status)).not.toContain("private.example");
+    expect(JSON.stringify(status)).not.toContain("PRIVATE_");
     for (const lane of lanes) await lane.close();
     runtime.close();
   });
