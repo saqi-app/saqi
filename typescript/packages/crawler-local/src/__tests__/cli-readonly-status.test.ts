@@ -77,6 +77,27 @@ it("status inspects the current schema without budget or control changes", () =>
   }
 });
 
+it("status redacts persisted source identity from operator diagnostics", () => {
+  const f = fixture();
+  const ledger = Ledger.open(f.path);
+  const privateOrigin = "https://private-origin.example";
+  const origin = ledger.claimOrigin(privateOrigin, 1_000, 10_000);
+  if (origin.state !== "claimed") throw new Error("expected origin lease");
+  ledger.failOrigin(origin.lease, 2_000, 3_000, {
+    circuitBreakerAfter: 3,
+    circuitBreakerCooldownMs: 60_000,
+    retryAt: 5_000,
+    stopReason: "PRIVATE_HUMAN_REQUIRED",
+  });
+  ledger.close();
+
+  const body = JSON.stringify(status(f.root));
+  expect(body).not.toContain("private-origin.example");
+  expect(body).not.toContain("PRIVATE_HUMAN_REQUIRED");
+  expect(body).toContain("https://source.invalid");
+  expect(body).toContain("SOURCE_HUMAN_REQUIRED");
+});
+
 it("source mismatch cannot mutate the inspected ledger", () => {
   const f = fixture();
   const before = readFileSync(f.path);

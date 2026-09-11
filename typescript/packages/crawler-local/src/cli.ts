@@ -68,7 +68,11 @@ import {
 } from "./runtime/source-keychain.js";
 import { inspectStateInventory } from "./runtime/state-inventory.js";
 import { UnifiedSupervisor } from "./runtime/supervisor.js";
-import { UnifiedRigRuntime } from "./runtime/unified-rig.js";
+import {
+  diagnosticLedgerStatus,
+  REDACTED_SOURCE_ORIGIN,
+  UnifiedRigRuntime,
+} from "./runtime/unified-rig.js";
 
 interface Locations {
   readonly artifacts: string;
@@ -677,7 +681,12 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       )
         throw new Error("INIT_UNSAFE_ATTEMPT_INDEX");
       new ArtifactStore(paths.artifacts);
-      print({ command, initialized: true, paths, status: ledger.status() });
+      print({
+        command,
+        initialized: true,
+        paths,
+        status: diagnosticLedgerStatus(ledger.status()),
+      });
     } finally {
       ledger.close();
     }
@@ -725,7 +734,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         supervisorStatus: (await pathExists(resolve(paths.root, "status.json")))
           ? await readJson(resolve(paths.root, "status.json"))
           : null,
-        status: ledger.status(),
+        status: diagnosticLedgerStatus(ledger.status()),
         stateInventory,
       });
     } finally {
@@ -780,8 +789,8 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       print({
         cleared: ledger.clearOriginStop(currentSource().origin),
         command,
-        origin: currentSource().origin,
-        status: ledger.status(),
+        origin: REDACTED_SOURCE_ORIGIN,
+        status: diagnosticLedgerStatus(ledger.status()),
       });
     } finally {
       ledger.close();
@@ -797,7 +806,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       print({
         command,
         result: seedAuthorManifest(ledger, author),
-        status: ledger.status(),
+        status: diagnosticLedgerStatus(ledger.status()),
       });
     } finally {
       ledger.close();
@@ -824,7 +833,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         declaredPoems: inventory.declaredPoems,
         duplicate: results.filter(({ inserted }) => !inserted).length,
         inserted: results.filter(({ inserted }) => inserted).length,
-        status: ledger.status(),
+        status: diagnosticLedgerStatus(ledger.status()),
         unknownPoemCounts: inventory.unknownPoemCounts,
       });
     } finally {
@@ -864,7 +873,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         duplicate: results.filter((result) => !result.inserted).length,
         inserted: results.filter((result) => result.inserted).length,
         paths,
-        status: ledger.status(),
+        status: diagnosticLedgerStatus(ledger.status()),
       });
     } finally {
       ledger.close();
@@ -949,7 +958,12 @@ async function main(commandArguments: readonly string[]): Promise<void> {
           return state.paused || state.paidWorkPaused;
         },
       });
-      print({ command, paths, result, status: activeLedger.status() });
+      print({
+        command,
+        paths,
+        result,
+        status: diagnosticLedgerStatus(activeLedger.status()),
+      });
     } finally {
       process.off("SIGINT", abort);
       process.off("SIGTERM", abort);
