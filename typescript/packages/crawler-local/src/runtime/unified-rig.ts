@@ -134,6 +134,7 @@ type ApprovedSolResolution =
     >;
 
 const PUBLICATION_BLOCKING_RESOLUTION_PRIORITY = 1_000;
+const REDACTED_SOURCE_ORIGIN = "https://source.invalid";
 const CanonicalPoemIdSchema = z.uuid();
 const SourceLineageMaintenanceStateSchema = z.enum([
   "active",
@@ -149,6 +150,71 @@ const SourceLineageMaintenanceResponseSchema = z.strictObject({
     state: SourceLineageMaintenanceStateSchema,
   }),
 });
+
+function diagnosticWorkKind(kind: string): string {
+  if (kind.endsWith("_author_manifest")) return "source_author_manifest";
+  if (kind.endsWith("_poem_detail")) return "source_poem_detail";
+  return kind;
+}
+
+function diagnosticSourceErrorCode(code: null): null;
+function diagnosticSourceErrorCode(code: string): string;
+function diagnosticSourceErrorCode(code: null | string): null | string;
+function diagnosticSourceErrorCode(code: null | string): null | string {
+  if (
+    code === null ||
+    code.startsWith("SOURCE_") ||
+    code.startsWith("COLLECTOR_")
+  )
+    return code;
+  if (code.endsWith("_HUMAN_REQUIRED")) return "SOURCE_HUMAN_REQUIRED";
+  if (code.endsWith("_NETWORK_UNAVAILABLE"))
+    return "SOURCE_NETWORK_UNAVAILABLE";
+  if (code.endsWith("_RATE_LIMITED")) return "SOURCE_RATE_LIMITED";
+  return "SOURCE_COLLECTION_FAILED";
+}
+
+function diagnosticLedgerStatus(
+  status: ReturnType<Ledger["status"]>,
+): ReturnType<Ledger["status"]> {
+  const sourceErrorCodes = new Set(
+    status.affectedByKindAndErrorCode
+      .filter(({ kind }) => diagnosticWorkKind(kind) !== kind)
+      .map(({ code }) => code),
+  );
+  const diagnosticCode = (code: string): string =>
+    sourceErrorCodes.has(code) ? diagnosticSourceErrorCode(code) : code;
+  return {
+    ...status,
+    affectedByErrorCode: status.affectedByErrorCode.map((entry) => ({
+      ...entry,
+      code: diagnosticCode(entry.code),
+    })),
+    affectedByKindAndErrorCode: status.affectedByKindAndErrorCode.map(
+      (entry) => ({
+        ...entry,
+        code:
+          diagnosticWorkKind(entry.kind) === entry.kind
+            ? entry.code
+            : diagnosticSourceErrorCode(entry.code),
+        kind: diagnosticWorkKind(entry.kind),
+      }),
+    ),
+    failureEventsByCode: status.failureEventsByCode.map((entry) => ({
+      ...entry,
+      code: diagnosticCode(entry.code),
+    })),
+    kindProgress: status.kindProgress.map((entry) => ({
+      ...entry,
+      kind: diagnosticWorkKind(entry.kind),
+    })),
+    origins: status.origins.map((origin) => ({
+      ...origin,
+      origin: REDACTED_SOURCE_ORIGIN,
+      stopReason: diagnosticSourceErrorCode(origin.stopReason),
+    })),
+  };
+}
 
 export function resolveApprovedSolBinding(
   cache: ApprovedSolResolutionCache,
@@ -1154,17 +1220,28 @@ export class UnifiedRigRuntime {
     const ledgerStatus = this.#ledger?.status() ?? null;
     if (ledgerStatus)
       await this.#writePipelineHealth(ledgerStatus, providerSchedulers);
+    const collectorSchedule =
+      this.#collectorCoordinator?.scheduleSnapshot() ?? null;
     return {
       authorInventory:
         this.#authorInventoryStatus ??
         (await this.#readOptionalStatus(this.#config.inventory.statusPath)),
       baseline: this.#baselineStatus,
       capacity: this.#capacityStatus,
-      collectorSchedule: this.#collectorCoordinator?.scheduleSnapshot() ?? null,
+      collectorSchedule:
+        collectorSchedule === null
+          ? null
+          : {
+              ...collectorSchedule,
+              preferredKind: diagnosticWorkKind(
+                collectorSchedule.preferredKind,
+              ),
+            },
       collectorRecovery: this.#collectorRecovery?.status() ?? null,
       enrichmentReconciliation: this.#enrichmentReconciliationStatus,
       fanout: this.#fanoutStatus,
-      ledger: ledgerStatus,
+      ledger:
+        ledgerStatus === null ? null : diagnosticLedgerStatus(ledgerStatus),
       localFanout: this.#localFanoutStatus,
       publication: this.#publicationStatus,
       publicationAuth: this.#publicationAuth?.status() ?? null,
@@ -2174,7 +2251,14 @@ export class UnifiedRigRuntime {
                   : "ready",
         },
       },
-      lanes,
+      lanes: lanes.map((lane) =>
+        lane.name === "collector"
+          ? {
+              ...lane,
+              lastErrorCode: diagnosticSourceErrorCode(lane.lastErrorCode),
+            }
+          : lane,
+      ),
       lastProgressAt: lastProgressAt === 0 ? null : lastProgressAt,
       localFanout: (["sol"] as const).flatMap((provider) => {
         const status = this.#localFanoutStatus[provider];
@@ -2191,6 +2275,7 @@ export class UnifiedRigRuntime {
       }),
       origins: ledgerStatus.origins.map((origin) => ({
         ...origin,
+        origin: REDACTED_SOURCE_ORIGIN,
         state: deriveCollectorOriginHealthState({
           configured: this.#config.collector.enabled,
           consecutiveFailures: origin.consecutiveFailures,
@@ -2206,8 +2291,9 @@ export class UnifiedRigRuntime {
                     ? "network_wait"
                     : this.#collectorOriginState,
               }),
-          stopReason: origin.stopReason,
+          stopReason: diagnosticSourceErrorCode(origin.stopReason),
         }),
+        stopReason: diagnosticSourceErrorCode(origin.stopReason),
       })),
       providerHostAdmission: {
         activeProcesses: providerHostAdmission.activeProcesses,
@@ -2231,7 +2317,7 @@ export class UnifiedRigRuntime {
         return {
           active: byState.running,
           deadLetter: byState.dead_letter,
-          kind,
+          kind: diagnosticWorkKind(kind),
           lastSuccessAt,
           oldestReadyAt:
             exactAvailability === undefined
