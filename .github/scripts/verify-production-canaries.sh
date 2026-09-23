@@ -33,8 +33,7 @@ if [[ "$public_status" == '200' ]]; then
   public_content_available=true
 elif [[ "$public_status" == '403' ]] \
   && is_cloudflare_challenge "$public_headers"; then
-  echo 'PUBLIC_CANARY_FAILED: Cloudflare challenged the public probe; production content was not verified' >&2
-  exit 1
+  echo 'PUBLIC_CANARY_CHALLENGED: Cloudflare challenged the public probe; continuing with authenticated canaries' >&2
 else
   echo "public homepage canary returned unexpected HTTP ${public_status}" >&2
   sed -n '1,40p' "$public_headers" >&2
