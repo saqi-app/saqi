@@ -33,7 +33,7 @@ test("index filtering updates only rows whose visibility changes", async () => {
     }
 
     dispatch(name) {
-      this.listeners.get(name)?.(new InputEvent());
+      this.listeners.get(name)?.(new globalThis.InputEvent(name));
     }
   }
 
@@ -56,26 +56,28 @@ test("index filtering updates only rows whose visibility changes", async () => {
       "[data-filter-input]": input,
       "[data-filter-status]": status,
     })[selector];
-  root.removeAttribute = () => {};
+  root.removeAttribute = () => undefined;
   let frame;
 
   try {
-    globalThis.HTMLElement = Element;
-    globalThis.HTMLInputElement = Input;
-    globalThis.InputEvent = class {};
-    globalThis.document = {
-      querySelectorAll: (selector) =>
-        selector === "[data-filter-root]" ? [root] : [emptyState],
-      getElementById: () => list,
-    };
     emptyState.dataset = { filterEmptyFor: "author-index" };
-    globalThis.requestAnimationFrame = (callback) => {
-      frame = callback;
-      return 1;
-    };
-    globalThis.cancelAnimationFrame = () => {
-      frame = undefined;
-    };
+    Object.assign(globalThis, {
+      HTMLElement: Element,
+      HTMLInputElement: Input,
+      InputEvent: globalThis.Event,
+      document: {
+        querySelectorAll: (selector) =>
+          selector === "[data-filter-root]" ? [root] : [emptyState],
+        getElementById: () => list,
+      },
+      requestAnimationFrame: (callback) => {
+        frame = callback;
+        return 1;
+      },
+      cancelAnimationFrame: () => {
+        frame = undefined;
+      },
+    });
 
     await import("../src/scripts/index-filter.js");
     const filter = (query) => {
