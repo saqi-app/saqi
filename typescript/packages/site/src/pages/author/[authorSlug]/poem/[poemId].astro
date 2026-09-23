@@ -67,7 +67,7 @@ const translationDescription =
       : "";
 const title = contextualPageTitle(poem.nameArabic, authorName);
 const description = metaDescription(
-  `Read this ${poem.verses}-verse Arabic poem by ${authorName}${translationDescription}.`,
+  `Read “${poemName}” — a ${poem.verses}-verse Arabic poem by ${authorName}${translationDescription}.`,
 );
 const canonical = new URL(poemPath(author, poem), Astro.site).href;
 const structuredData = [
