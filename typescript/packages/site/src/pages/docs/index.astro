@@ -37,6 +37,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         {architecture.packages.map((item) => (
           <li><strong>{item.name}</strong><span>{item.description}</span><code>{item.source}</code></li>
         ))}
+        <li>
+          <strong>{architecture.macos.name}</strong>
+          <span>{architecture.macos.targets.map((target) => `${target.name}: ${target.kind}`).join(" · ")}</span>
+          <code>{architecture.macos.source}</code>
+        </li>
       </ul>
     </section>
   </article>

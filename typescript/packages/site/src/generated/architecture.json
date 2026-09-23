@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "TypeScript AST imports and D1 calls, Astro route frontmatter, and workspace package manifests",
+  "generatedFrom": "TypeScript AST imports and D1 calls, Astro route frontmatter, workspace package manifests, and parsed SwiftPM and Swift syntax trees",
   "packages": [
     {
       "name": "crawler-local",
@@ -42,6 +42,11 @@
       "title": "Public routes and data access",
       "file": "/docs/diagrams/routes.mmd",
       "image": "/docs/diagrams/routes.svg"
+    },
+    {
+      "title": "macOS targets and imports",
+      "file": "/docs/diagrams/macos.mmd",
+      "image": "/docs/diagrams/macos.svg"
     }
   ],
   "routes": [
@@ -140,5 +145,42 @@
         "../../lib/xml"
       ]
     }
-  ]
+  ],
+  "macos": {
+    "name": "SaqiActivityMonitor",
+    "source": "macos/SaqiActivityMonitor/Package.swift",
+    "targets": [
+      {
+        "name": "SaqiActivityMonitor",
+        "kind": "executableTarget",
+        "path": "Sources/SaqiActivityMonitor",
+        "dependencies": [],
+        "sources": 21,
+        "imports": [
+          "AppKit",
+          "Darwin",
+          "Foundation",
+          "OSLog",
+          "SQLite3",
+          "SwiftUI"
+        ]
+      },
+      {
+        "name": "SaqiActivityMonitorTests",
+        "kind": "testTarget",
+        "path": "Tests/SaqiActivityMonitorTests",
+        "dependencies": [
+          "SaqiActivityMonitor"
+        ],
+        "sources": 19,
+        "imports": [
+          "Darwin",
+          "Foundation",
+          "SQLite3",
+          "SaqiActivityMonitor",
+          "XCTest"
+        ]
+      }
+    ]
+  }
 }

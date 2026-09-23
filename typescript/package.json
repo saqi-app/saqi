@@ -32,6 +32,7 @@
     "knip": "knip"
   },
   "devDependencies": {
+    "@binclusive/tree-sitter-swift-wasm": "0.1.0",
     "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
     "@eslint/compat": "2.1.1",
     "@eslint/js": "10.0.1",
@@ -59,7 +60,8 @@
     "react-doctor": "0.9.14",
     "tailwindcss": "^4.3.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.1"
+    "typescript-eslint": "8.70.1",
+    "web-tree-sitter": "0.26.11"
   },
   "resolutions": {
     "devalue": "5.9.2",
