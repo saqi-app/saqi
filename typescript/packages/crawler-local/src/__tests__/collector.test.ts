@@ -743,6 +743,113 @@ describe("Chrome profile ownership", () => {
     await replacement.close();
   });
 
+  it("requires restart when forced browser close never settles", async () => {
+    const profileDirectory = mkdtempSync(join(tmpdir(), "saqi-close-wedge-"));
+    const routeSetup = Promise.withResolvers<undefined>();
+    const close = Promise.withResolvers<undefined>();
+    const cleanup = Promise.withResolvers<undefined>();
+    let connected = true;
+    const browser = {
+      close: vi.fn(() => {
+        if (browser.close.mock.calls.length === 1) return close.promise;
+        connected = false;
+        cleanup.resolve(undefined);
+        return Promise.resolve();
+      }),
+      isConnected: () => connected,
+    };
+    const context = {
+      browser: () => browser,
+      close: vi.fn(),
+      on: vi.fn(),
+      route: vi.fn(() => routeSetup.promise),
+      setDefaultNavigationTimeout: vi.fn((_timeout: number): void => undefined),
+    } as BrowserContext;
+    const collector = await SourceChromeCollector.create({
+      launchPersistentContext: vi.fn(async () => context),
+      poemOperationTimeoutMs: 10,
+      profileDirectory,
+      shutdownGraceMs: 10,
+    });
+
+    await expect(
+      collector.collectPoemDetail(
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({
+      code: "SOURCE_BROWSER_RESTART_REQUIRED",
+    });
+    expect(browser.close).toHaveBeenCalledOnce();
+    await expect(
+      SourceChromeCollector.create({ profileDirectory }),
+    ).rejects.toMatchObject({ code: "SOURCE_PROFILE_LOCKED" });
+    routeSetup.reject(new Error("Test route cleanup"));
+    await cleanup.promise;
+    close.resolve(undefined);
+    await vi.waitFor(async () => {
+      const replacement = await SourceChromeCollector.create({
+        profileDirectory,
+      });
+      await replacement.close();
+    });
+  });
+
+  it("bounds graceful browser close and retains the profile until a retry disconnects", async () => {
+    const profileDirectory = mkdtempSync(
+      join(tmpdir(), "saqi-graceful-wedge-"),
+    );
+    const firstClose = Promise.withResolvers<undefined>();
+    let connected = true;
+    const page = {
+      close: vi.fn(async () => undefined),
+      goto: vi.fn(async () => {
+        throw new Error("net::ERR_CONNECTION_RESET");
+      }),
+      isClosed: () => false,
+      on: vi.fn(),
+    } as Page;
+    const closeContext = vi.fn(() => {
+      if (closeContext.mock.calls.length === 1) return firstClose.promise;
+      connected = false;
+      return Promise.resolve();
+    });
+    const context = {
+      browser: () => ({ isConnected: () => connected }),
+      close: closeContext,
+      on: vi.fn(),
+      pages: () => [page],
+      route: vi.fn(async () => undefined),
+      setDefaultNavigationTimeout: vi.fn((_timeout: number): void => undefined),
+    } as BrowserContext;
+    const collector = await SourceChromeCollector.create({
+      launchPersistentContext: vi.fn(async () => context),
+      profileDirectory,
+      shutdownGraceMs: 10,
+    });
+
+    await expect(
+      collector.collectPoemDetail(
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "SOURCE_NAVIGATION_FAILED" });
+    await expect(collector.close()).rejects.toMatchObject({
+      code: "SOURCE_BROWSER_RESTART_REQUIRED",
+    });
+    await expect(
+      SourceChromeCollector.create({ profileDirectory }),
+    ).rejects.toMatchObject({ code: "SOURCE_PROFILE_LOCKED" });
+    await collector.close();
+    firstClose.resolve(undefined);
+    const replacement = await SourceChromeCollector.create({
+      profileDirectory,
+    });
+    await replacement.close();
+  });
+
   it.each([
     {
       code: "SOURCE_AUTHOR_OPERATION_TIMEOUT",

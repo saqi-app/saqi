@@ -675,6 +675,7 @@ function isGlobalResolutionError(error: unknown): boolean {
   return (
     error instanceof Error &&
     [
+      "PRODUCTION_RESOLUTION_EXPIRED",
       "PRODUCTION_RESOLUTION_OBSERVED_AT_FUTURE",
       "PRODUCTION_RESOLUTION_STALE",
     ].includes(error.message)

@@ -249,6 +249,34 @@ describe("local enrichment fanout", () => {
     fixture.ledger.close();
   });
 
+  it("retries an expired resolution snapshot without quarantining source work", async () => {
+    const fixture = createFixture();
+    await seedDetail(fixture);
+    let expired = true;
+    const fanout = createFanout(fixture, "sol-5.6", undefined, () => {
+      if (expired) throw new Error("PRODUCTION_RESOLUTION_EXPIRED");
+      return {
+        mapping: MAPPING,
+        observedAt: "2026-08-26T00:00:00.000Z",
+        writerEpoch: 7,
+      };
+    });
+    let now = Date.now() + 1_000;
+
+    await expect(
+      fanout.cycle({ maximum: 10, now: () => now }),
+    ).resolves.toMatchObject({ deadLettered: 0, retried: 1, scanned: 0 });
+    expect(localSourceTotal(fixture.ledger)).toBe(0);
+
+    expired = false;
+    now += 31_000;
+    await expect(
+      fanout.cycle({ maximum: 10, now: () => now }),
+    ).resolves.toMatchObject({ deadLettered: 0, scanned: 1, seeded: 1 });
+    expect(providerTotal(fixture.ledger, "provider-sol-5.6")).toBe(1);
+    fixture.ledger.close();
+  });
+
   it("does not let an older resolution miss monopolize later bounded cycles", async () => {
     const fixture = createFixture();
     await seedDetail(fixture, DETAIL, "refresh-1", 1, 300);

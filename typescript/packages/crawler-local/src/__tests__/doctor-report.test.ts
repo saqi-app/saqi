@@ -14,6 +14,57 @@ import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.j
 const DIGEST = "a".repeat(64);
 
 describe("doctor report", () => {
+  it("distinguishes the local operation cap from provider quota", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-doctor-local-cap-"));
+    const ledger = Ledger.initialize(join(root, "ledger.sqlite3"));
+    const config = parseScraperOperationConfig({
+      collector: { enabled: false },
+      retention: { enabled: false },
+      schemaVersion: 1,
+      sol: { enabled: true },
+      stateDirectory: root,
+    });
+    const report = buildDoctorReport({
+      cdp: null,
+      config,
+      configDigest: DIGEST,
+      configPath: null,
+      controlReadError: null,
+      currentEnrichmentCompleted: 0,
+      health: null,
+      healthReadError: null,
+      ledgerReport: ledger.doctor(1_000),
+      ledgerStatus: ledger.status(1_000),
+      now: 1_000,
+      paidWorkPaused: false,
+      paused: false,
+      root,
+      runLock: null,
+      runtimeOwnerIssue: null,
+      solBudget: {
+        budgetId: "00000000-0000-4000-8000-000000000001",
+        maximumOperations: 3,
+        remainingOperations: 0,
+        reservedOperations: 3,
+        state: "exhausted",
+      },
+      stateInventory: healthyStateInventory(),
+    });
+    ledger.close();
+
+    expect(report.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "SOL_PAID_USAGE_BUDGET_INACTIVE",
+          detail: expect.stringMatching(
+            /local Sol operation cap is exhausted: 3 of 3 operations reserved.*not a measurement of provider quota/,
+          ),
+          title: "Local translation operation cap blocks admission",
+        }),
+      ]),
+    );
+  });
+
   it("makes a gated publication path actionable when translation is enabled", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-doctor-publication-gate-"));
     const ledger = Ledger.initialize(join(root, "ledger.sqlite3"));

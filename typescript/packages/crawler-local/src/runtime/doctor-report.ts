@@ -363,9 +363,9 @@ export function buildDoctorReport(input: DoctorReportInput): DoctorReport {
       finding(
         "SOL_PAID_USAGE_BUDGET_INACTIVE",
         "error",
-        "Translation budget is not armed",
-        `The durable Sol budget is ${input.solBudget.state} with ${String(input.solBudget.remainingOperations)} operations remaining.`,
-        "Choose an authorized positive multiple-of-3 ceiling, then run resume-paid with that explicit ceiling; add --rearm only for a closed or exhausted prior budget.",
+        "Local translation operation cap blocks admission",
+        `The rig's durable local Sol operation cap is ${input.solBudget.state}: ${String(input.solBudget.reservedOperations)} of ${String(input.solBudget.maximumOperations)} operations reserved, with ${String(input.solBudget.remainingOperations)} remaining. This is not a measurement of provider quota or account balance.`,
+        "Choose an authorized positive multiple-of-3 local ceiling, then run resume-paid with that explicit ceiling; add --rearm only for a closed or exhausted prior cap.",
         null,
       ),
     );

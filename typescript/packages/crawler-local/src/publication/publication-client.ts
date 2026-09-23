@@ -171,101 +171,19 @@ export class PublicationClient {
       throw new Error("PUBLICATION_ACTION_TOO_LARGE");
     }
     const actionHash = sha256(body);
-    const timeoutSignal = AbortSignal.timeout(this.#requestTimeoutMs);
-    const requestSignal = signal
-      ? AbortSignal.any([signal, timeoutSignal])
-      : timeoutSignal;
-    let response: PublicationTransportResponse;
-    try {
-      response = await this.#transport({
-        body,
-        signal: requestSignal,
-        url: this.#endpoint,
-      });
-    } catch (error) {
-      if (timeoutSignal.aborted || isNetworkFailureText(errorText(error))) {
-        this.#consecutiveNetworkFailures += 1;
-        return {
-          errorCode: "PUBLICATION_NETWORK_UNAVAILABLE",
-          retryAt:
-            this.#now() +
-            networkProbeDelayMs(this.#consecutiveNetworkFailures, this.#random),
-          state: "network_wait",
-        };
-      }
-      this.#consecutiveNetworkFailures = 0;
-      return {
-        // A transport can fail after the server commits. Corpus publication
-        // actions are content-addressed and idempotent, so a bounded replay is
-        // safe; do not call an unclassified failure a proven network outage.
-        errorCode: "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN",
-        retryAt: this.#now() + 30_000,
-        state: "retry_wait",
-      };
-    }
-    this.#consecutiveNetworkFailures = 0;
-    if (
-      response.authFailure !== undefined ||
-      response.status === 401 ||
-      response.status === 403
-    ) {
-      this.#consecutiveAuthFailures += 1;
-      this.#consecutiveServiceFailures = 0;
-      return {
-        errorCode:
-          response.authFailure === "expired"
-            ? "PUBLICATION_AUTH_EXPIRED"
-            : response.authFailure === "rejected"
-              ? "PUBLICATION_AUTH_REJECTED"
-              : "PUBLICATION_AUTH_REQUIRED",
-        retryAt:
-          this.#now() +
-          networkProbeDelayMs(
-            this.#consecutiveAuthFailures,
-            this.#random,
-            30_000,
-            30 * 60_000,
-          ),
-        state: "auth_wait",
-      };
-    }
-    this.#consecutiveAuthFailures = 0;
-    if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
-      this.#consecutiveServiceFailures = 0;
-      return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
-    }
-    if ([408, 425, 429].includes(response.status) || response.status >= 500) {
-      if (response.status !== 429) {
-        this.#consecutiveServiceFailures += 1;
-        return {
-          errorCode: serviceUnavailableCode(response.status),
-          retryAt: Math.max(
-            retryAt(response.retryAfter, this.#now()),
-            this.#now() +
-              networkProbeDelayMs(
-                this.#consecutiveServiceFailures,
-                this.#random,
-                30_000,
-                30 * 60_000,
-              ),
-          ),
-          state: "service_wait",
-        };
-      }
-      this.#consecutiveServiceFailures = 0;
-      return {
-        errorCode: "PUBLICATION_RATE_LIMITED",
-        retryAt: retryAt(response.retryAfter, this.#now()),
-        state: "retry_wait",
-      };
-    }
-    this.#consecutiveServiceFailures = 0;
+    const transmission = await this.#transmit(body, this.#endpoint, signal);
+    if (transmission.result) return transmission.result;
+    const { response } = transmission;
     let parsed: z.infer<typeof ResponseSchema>;
     try {
       parsed = ResponseSchema.parse(JSON.parse(response.body));
     } catch {
+      if (response.status >= 200 && response.status < 300)
+        return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
+      this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
     }
+    this.#consecutiveServiceFailures = 0;
     if (response.status < 200 || response.status >= 300 || !parsed.ok) {
       if (!parsed.ok && parsed.conflict) {
         return {
@@ -298,93 +216,15 @@ export class PublicationClient {
       throw new Error("PUBLICATION_ACTION_TOO_LARGE");
     }
     const actionHash = sha256(body);
-    const timeoutSignal = AbortSignal.timeout(this.#requestTimeoutMs);
-    const requestSignal = signal
-      ? AbortSignal.any([signal, timeoutSignal])
-      : timeoutSignal;
-    let response: PublicationTransportResponse;
-    try {
-      response = await this.#transport({
-        body,
-        signal: requestSignal,
-        url: this.#boundEnrichmentEndpoint,
-      });
-    } catch (error) {
-      if (timeoutSignal.aborted || isNetworkFailureText(errorText(error))) {
-        this.#consecutiveNetworkFailures += 1;
-        return {
-          errorCode: "PUBLICATION_NETWORK_UNAVAILABLE",
-          retryAt:
-            this.#now() +
-            networkProbeDelayMs(this.#consecutiveNetworkFailures, this.#random),
-          state: "network_wait",
-        };
-      }
-      this.#consecutiveNetworkFailures = 0;
-      return {
-        errorCode: "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN",
-        retryAt: this.#now() + 30_000,
-        state: "retry_wait",
-      };
-    }
-    this.#consecutiveNetworkFailures = 0;
-    if (
-      response.authFailure !== undefined ||
-      response.status === 401 ||
-      response.status === 403
-    ) {
-      this.#consecutiveAuthFailures += 1;
-      this.#consecutiveServiceFailures = 0;
-      return {
-        errorCode:
-          response.authFailure === "expired"
-            ? "PUBLICATION_AUTH_EXPIRED"
-            : response.authFailure === "rejected"
-              ? "PUBLICATION_AUTH_REJECTED"
-              : "PUBLICATION_AUTH_REQUIRED",
-        retryAt:
-          this.#now() +
-          networkProbeDelayMs(
-            this.#consecutiveAuthFailures,
-            this.#random,
-            30_000,
-            30 * 60_000,
-          ),
-        state: "auth_wait",
-      };
-    }
-    this.#consecutiveAuthFailures = 0;
-    if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
-      this.#consecutiveServiceFailures = 0;
-      return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
-    }
-    if ([408, 425, 429].includes(response.status) || response.status >= 500) {
-      if (response.status !== 429) {
-        this.#consecutiveServiceFailures += 1;
-        return {
-          errorCode: serviceUnavailableCode(response.status),
-          retryAt: Math.max(
-            retryAt(response.retryAfter, this.#now()),
-            this.#now() +
-              networkProbeDelayMs(
-                this.#consecutiveServiceFailures,
-                this.#random,
-                30_000,
-                30 * 60_000,
-              ),
-          ),
-          state: "service_wait",
-        };
-      }
-      this.#consecutiveServiceFailures = 0;
-      return {
-        errorCode: "PUBLICATION_RATE_LIMITED",
-        retryAt: retryAt(response.retryAfter, this.#now()),
-        state: "retry_wait",
-      };
-    }
-    this.#consecutiveServiceFailures = 0;
+    const transmission = await this.#transmit(
+      body,
+      this.#boundEnrichmentEndpoint,
+      signal,
+    );
+    if (transmission.result) return transmission.result;
+    const { response } = transmission;
     if (response.status < 200 || response.status >= 300) {
+      this.#consecutiveServiceFailures = 0;
       try {
         const superseded = SupersededPublicationResponseSchema.safeParse(
           JSON.parse(response.body),
@@ -400,6 +240,7 @@ export class PublicationClient {
       const result = EnrichmentPublicationV2ResponseSchema.parse(
         JSON.parse(response.body),
       );
+      this.#consecutiveServiceFailures = 0;
       return {
         actionHash,
         responseHash: sha256(canonicalJson(result)),
@@ -407,7 +248,7 @@ export class PublicationClient {
         state: "confirmed",
       };
     } catch {
-      return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
+      return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
     }
   }
 
@@ -421,6 +262,41 @@ export class PublicationClient {
       throw new Error("PUBLICATION_ACTION_TOO_LARGE");
     }
     const actionHash = sha256(body);
+    const transmission = await this.#transmit(
+      body,
+      this.#sourceAdmissionEndpoint,
+      signal,
+    );
+    if (transmission.result) return transmission.result;
+    const { response } = transmission;
+    if (response.status < 200 || response.status >= 300) {
+      this.#consecutiveServiceFailures = 0;
+      return { errorCode: "PUBLICATION_HTTP_REJECTED", state: "rejected" };
+    }
+    try {
+      const result = SourceAdmissionV2ResponseSchema.parse(
+        JSON.parse(response.body),
+      );
+      this.#consecutiveServiceFailures = 0;
+      return {
+        actionHash,
+        responseHash: sha256(canonicalJson(result)),
+        result,
+        state: "confirmed",
+      };
+    } catch {
+      return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
+    }
+  }
+
+  async #transmit(
+    body: string,
+    endpoint: string,
+    signal?: AbortSignal,
+  ): Promise<
+    | { response: PublicationTransportResponse; result?: never }
+    | { response?: never; result: PublicationClientResult }
+  > {
     const timeoutSignal = AbortSignal.timeout(this.#requestTimeoutMs);
     const requestSignal = signal
       ? AbortSignal.any([signal, timeoutSignal])
@@ -430,24 +306,32 @@ export class PublicationClient {
       response = await this.#transport({
         body,
         signal: requestSignal,
-        url: this.#sourceAdmissionEndpoint,
+        url: endpoint,
       });
     } catch (error) {
       if (timeoutSignal.aborted || isNetworkFailureText(errorText(error))) {
         this.#consecutiveNetworkFailures += 1;
         return {
-          errorCode: "PUBLICATION_NETWORK_UNAVAILABLE",
-          retryAt:
-            this.#now() +
-            networkProbeDelayMs(this.#consecutiveNetworkFailures, this.#random),
-          state: "network_wait",
+          result: {
+            errorCode: "PUBLICATION_NETWORK_UNAVAILABLE",
+            retryAt:
+              this.#now() +
+              networkProbeDelayMs(
+                this.#consecutiveNetworkFailures,
+                this.#random,
+              ),
+            state: "network_wait",
+          },
         };
       }
       this.#consecutiveNetworkFailures = 0;
+      // A transport can fail after a content-addressed action commits.
       return {
-        errorCode: "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN",
-        retryAt: this.#now() + 30_000,
-        state: "retry_wait",
+        result: {
+          errorCode: "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN",
+          retryAt: this.#now() + 30_000,
+          state: "retry_wait",
+        },
       };
     }
     this.#consecutiveNetworkFailures = 0;
@@ -459,70 +343,89 @@ export class PublicationClient {
       this.#consecutiveAuthFailures += 1;
       this.#consecutiveServiceFailures = 0;
       return {
-        errorCode:
-          response.authFailure === "expired"
-            ? "PUBLICATION_AUTH_EXPIRED"
-            : response.authFailure === "rejected"
-              ? "PUBLICATION_AUTH_REJECTED"
-              : "PUBLICATION_AUTH_REQUIRED",
-        retryAt:
-          this.#now() +
-          networkProbeDelayMs(
-            this.#consecutiveAuthFailures,
-            this.#random,
-            30_000,
-            30 * 60_000,
-          ),
-        state: "auth_wait",
+        result: {
+          errorCode:
+            response.authFailure === "expired"
+              ? "PUBLICATION_AUTH_EXPIRED"
+              : response.authFailure === "rejected"
+                ? "PUBLICATION_AUTH_REJECTED"
+                : "PUBLICATION_AUTH_REQUIRED",
+          retryAt:
+            this.#now() +
+            networkProbeDelayMs(
+              this.#consecutiveAuthFailures,
+              this.#random,
+              30_000,
+              30 * 60_000,
+            ),
+          state: "auth_wait",
+        },
       };
     }
     this.#consecutiveAuthFailures = 0;
     if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
+      if (response.status >= 200 && response.status < 300)
+        return {
+          result: this.#unknownCommittedResponse(
+            "PUBLICATION_RESPONSE_TOO_LARGE",
+          ),
+        };
       this.#consecutiveServiceFailures = 0;
-      return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
+      return {
+        result: {
+          errorCode: "PUBLICATION_RESPONSE_TOO_LARGE",
+          state: "rejected",
+        },
+      };
     }
     if ([408, 425, 429].includes(response.status) || response.status >= 500) {
       if (response.status !== 429) {
         this.#consecutiveServiceFailures += 1;
         return {
-          errorCode: serviceUnavailableCode(response.status),
-          retryAt: Math.max(
-            retryAt(response.retryAfter, this.#now()),
-            this.#now() +
-              networkProbeDelayMs(
-                this.#consecutiveServiceFailures,
-                this.#random,
-                30_000,
-                30 * 60_000,
-              ),
-          ),
-          state: "service_wait",
+          result: {
+            errorCode: serviceUnavailableCode(response.status),
+            retryAt: Math.max(
+              retryAt(response.retryAfter, this.#now()),
+              this.#now() +
+                networkProbeDelayMs(
+                  this.#consecutiveServiceFailures,
+                  this.#random,
+                  30_000,
+                  30 * 60_000,
+                ),
+            ),
+            state: "service_wait",
+          },
         };
       }
       this.#consecutiveServiceFailures = 0;
       return {
-        errorCode: "PUBLICATION_RATE_LIMITED",
-        retryAt: retryAt(response.retryAfter, this.#now()),
-        state: "retry_wait",
+        result: {
+          errorCode: "PUBLICATION_RATE_LIMITED",
+          retryAt: retryAt(response.retryAfter, this.#now()),
+          state: "retry_wait",
+        },
       };
     }
-    this.#consecutiveServiceFailures = 0;
-    if (response.status < 200 || response.status >= 300) {
-      return { errorCode: "PUBLICATION_HTTP_REJECTED", state: "rejected" };
-    }
-    try {
-      const result = SourceAdmissionV2ResponseSchema.parse(
-        JSON.parse(response.body),
-      );
-      return {
-        actionHash,
-        responseHash: sha256(canonicalJson(result)),
-        result,
-        state: "confirmed",
-      };
-    } catch {
-      return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
-    }
+    return { response };
+  }
+
+  #unknownCommittedResponse(errorCode: string): PublicationClientResult {
+    // A 2xx means the server may already have committed. Keep the immutable
+    // action pending and replay it after a bounded probe instead of losing it.
+    this.#consecutiveServiceFailures += 1;
+    return {
+      errorCode,
+      retryAt:
+        this.#now() +
+        networkProbeDelayMs(
+          this.#consecutiveServiceFailures,
+          this.#random,
+          30_000,
+          30 * 60_000,
+        ),
+      state: "service_wait",
+    };
   }
 }
 

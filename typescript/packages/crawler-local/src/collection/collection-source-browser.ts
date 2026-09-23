@@ -952,10 +952,12 @@ export class SourceChromeCollector
         // with Browser.setDownloadBehavior / context-management errors. Keep
         // one inert target across disconnects. The next attachment creates its
         // routed page first, then reclaims this previous target.
-        await ensureCdpAnchorPage(context);
-        await browser.close({ reason: "SOURCE_COLLECTOR_CLOSED" });
+        await this.#awaitBrowserShutdown(async () => {
+          await ensureCdpAnchorPage(context);
+          await browser.close({ reason: "SOURCE_COLLECTOR_CLOSED" });
+        });
       } else {
-        await context.close();
+        await this.#awaitBrowserShutdown(() => context.close());
       }
       if (browser?.isConnected())
         throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
@@ -1054,12 +1056,12 @@ export class SourceChromeCollector
     const isInitializing = context === this.#initializingContext;
     try {
       const browser = context.browser();
+      await this.#awaitBrowserShutdown(() =>
+        browser ? browser.close({ reason }) : context.close(),
+      );
       if (browser) {
-        await browser.close({ reason });
         if (browser.isConnected())
           throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
-      } else {
-        await context.close();
       }
       // Initialization still owns the profile fence and will release it only
       // after every setup promise observes the closed browser and settles.
@@ -1072,6 +1074,25 @@ export class SourceChromeCollector
         `Browser force-close could not prove process isolation: ${cause.message.slice(0, 1_000)}`,
       );
       throw this.#poisoned;
+    }
+  }
+
+  async #awaitBrowserShutdown(close: () => Promise<void>): Promise<void> {
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // A stuck Playwright transport must not hold the serial queue forever.
+      // The caller retains the profile fence unless disconnection is proven.
+      await Promise.race([
+        Promise.resolve().then(close),
+        new Promise<never>((_resolve, reject) => {
+          closeTimer = setTimeout(
+            () => reject(new Error("SOURCE_BROWSER_CLOSE_TIMEOUT")),
+            this.#options.shutdownGraceMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (closeTimer !== undefined) clearTimeout(closeTimer);
     }
   }
 
@@ -1200,91 +1221,106 @@ export class SourceChromeCollector
     if (this.#context?.browser()?.isConnected() === false)
       await this.#closeBrowser();
     await this.#acquireProfileLock();
-    if (!this.#context) {
-      const executable = this.#options.executablePath;
-      const launchPersistentContext =
-        this.#options.launchPersistentContext ??
-        chromium.launchPersistentContext.bind(chromium);
-      let candidate: BrowserContext | null = null;
-      this.#launchInProgress = true;
-      try {
-        if (this.#options.cdpEndpoint) {
-          await ensureCdpBootstrapTarget(this.#options.cdpEndpoint);
-          const browser = await chromium.connectOverCDP(
-            this.#options.cdpEndpoint,
-            { timeout: NAVIGATION_TIMEOUT_MS },
-          );
-          candidate = browser.contexts()[0] ?? null;
-          if (candidate === null) {
-            await browser.close();
-            throw new Error("SOURCE_CDP_CONTEXT_MISSING");
-          }
-        } else {
-          candidate = await launchPersistentContext(
-            this.#options.profileDirectory,
-            {
-              acceptDownloads: false,
-              ...(executable
-                ? { executablePath: executable }
-                : { channel: "chrome" }),
-              headless: this.#options.headless,
-              serviceWorkers: "block",
-              timeout: NAVIGATION_TIMEOUT_MS,
-            },
-          );
-        }
-        this.#initializingContext = candidate;
-        candidate.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
-        if (!this.#options.cdpEndpoint) {
-          await candidate.route("**/*", (route, request) =>
-            this.#restrictRequest(route, request),
-          );
-        }
-        throwIfAborted(signal);
-        const activeContext = candidate;
-        activeContext.on("close", () => {
-          if (this.#context === activeContext) {
-            this.#context = null;
-            this.#page = null;
-            this.#permittedAuthorPageUrl = null;
-            this.#permittedFeedToken = null;
-            this.#permittedFeedUrl = null;
-          }
-        });
-        this.#context = candidate;
-        this.#operations = 0;
-      } catch (error) {
-        if (candidate) {
-          try {
-            const browser = candidate.browser();
-            if (browser) {
-              if (browser.isConnected())
-                await browser.close({ reason: "BROWSER_INIT_FAILED" });
-              if (browser.isConnected())
-                throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
-            } else await candidate.close();
-          } catch (closeError) {
-            this.#context = candidate;
-            this.#poisoned = toError(
-              closeError,
-              "Browser initialization cleanup failed",
-            );
-            throw this.#poisoned;
-          }
-        }
-        await this.#releaseProfileLock();
-        throwIfAborted(signal);
-        const cause = toError(error, "Browser launch failed");
-        throw new SourceBrowserError(
-          "SOURCE_BROWSER_LAUNCH_FAILED",
-          `Browser launch failed: ${cause.message.slice(0, 1_000)}`,
+    if (!this.#context) await this.#launchBrowserContext(signal);
+    return this.#readyBrowserPage();
+  }
+
+  async #launchBrowserContext(signal: AbortSignal): Promise<void> {
+    let candidate: BrowserContext | null = null;
+    this.#launchInProgress = true;
+    try {
+      candidate = await this.#openBrowserContext();
+      this.#initializingContext = candidate;
+      candidate.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
+      if (!this.#options.cdpEndpoint)
+        await candidate.route("**/*", (route, request) =>
+          this.#restrictRequest(route, request),
         );
-      } finally {
-        if (this.#initializingContext === candidate)
-          this.#initializingContext = null;
-        this.#launchInProgress = false;
+      throwIfAborted(signal);
+      this.#observeContextClose(candidate);
+      this.#context = candidate;
+      this.#operations = 0;
+    } catch (error) {
+      await this.#cleanupFailedBrowserLaunch(candidate);
+      throwIfAborted(signal);
+      const cause = toError(error, "Browser launch failed");
+      throw new SourceBrowserError(
+        "SOURCE_BROWSER_LAUNCH_FAILED",
+        `Browser launch failed: ${cause.message.slice(0, 1_000)}`,
+      );
+    } finally {
+      if (this.#initializingContext === candidate)
+        this.#initializingContext = null;
+      this.#launchInProgress = false;
+    }
+  }
+
+  async #openBrowserContext(): Promise<BrowserContext> {
+    if (this.#options.cdpEndpoint) {
+      await ensureCdpBootstrapTarget(this.#options.cdpEndpoint);
+      const browser = await chromium.connectOverCDP(this.#options.cdpEndpoint, {
+        timeout: NAVIGATION_TIMEOUT_MS,
+      });
+      const context = browser.contexts()[0];
+      if (context) return context;
+      await this.#awaitBrowserShutdown(() => browser.close());
+      throw new Error("SOURCE_CDP_CONTEXT_MISSING");
+    }
+    const launchPersistentContext =
+      this.#options.launchPersistentContext ??
+      chromium.launchPersistentContext.bind(chromium);
+    return launchPersistentContext(this.#options.profileDirectory, {
+      acceptDownloads: false,
+      ...(this.#options.executablePath
+        ? { executablePath: this.#options.executablePath }
+        : { channel: "chrome" }),
+      headless: this.#options.headless,
+      serviceWorkers: "block",
+      timeout: NAVIGATION_TIMEOUT_MS,
+    });
+  }
+
+  #observeContextClose(activeContext: BrowserContext): void {
+    activeContext.on("close", () => {
+      if (this.#context !== activeContext) return;
+      this.#context = null;
+      this.#page = null;
+      this.#permittedAuthorPageUrl = null;
+      this.#permittedFeedToken = null;
+      this.#permittedFeedUrl = null;
+    });
+  }
+
+  async #cleanupFailedBrowserLaunch(
+    candidate: BrowserContext | null,
+  ): Promise<void> {
+    if (candidate) {
+      const failedContext = candidate;
+      try {
+        const browser = failedContext.browser();
+        if (browser) {
+          if (browser.isConnected())
+            await this.#awaitBrowserShutdown(() =>
+              browser.close({ reason: "BROWSER_INIT_FAILED" }),
+            );
+          if (browser.isConnected())
+            throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
+        } else await this.#awaitBrowserShutdown(() => failedContext.close());
+      } catch (closeError) {
+        this.#context = candidate;
+        this.#poisoned = toError(
+          closeError,
+          "Browser initialization cleanup failed",
+        );
+        throw this.#poisoned;
       }
     }
+    await this.#releaseProfileLock();
+  }
+
+  async #readyBrowserPage(): Promise<Page> {
+    const context = this.#context;
+    if (!context) throw new Error("SOURCE_BROWSER_CONTEXT_MISSING");
     if (!this.#page || this.#page.isClosed()) {
       let page: Page;
       if (this.#options.cdpEndpoint) {
@@ -1294,16 +1330,16 @@ export class SourceChromeCollector
         // renderer tabs indefinitely. This profile is exclusively fenced by
         // the collector lock, so reclaim every pre-attach page before taking
         // ownership of the new routed page.
-        const orphanedPages = this.#context.pages();
-        page = await this.#context.newPage();
+        const orphanedPages = context.pages();
+        page = await context.newPage();
         await page.route("**/*", (route, request) =>
           this.#restrictRequest(route, request),
         );
         await reclaimCdpOrphanPages(orphanedPages);
       } else {
-        const [retained, ...extras] = this.#context.pages();
+        const [retained, ...extras] = context.pages();
         await Promise.all(extras.map((extra) => extra.close()));
-        page = retained ?? (await this.#context.newPage());
+        page = retained ?? (await context.newPage());
       }
       this.#page = page;
       page.on("crash", () => {
@@ -1345,61 +1381,46 @@ export class SourceChromeCollector
             false,
           );
         }
-        // eslint-disable-next-line no-await-in-loop -- Each recovery attempt must inspect the current owner after the failed exclusive create.
-        let existing = await readProfileLock(path);
-        if (existing?.pid !== undefined && processIsAlive(existing.pid)) {
-          throw new SourceBrowserError(
-            "SOURCE_PROFILE_LOCKED",
-            `Chrome profile is owned by live process ${String(existing.pid)}`,
-            false,
-          );
-        }
-        const recoveryToken = randomUUID();
-        // eslint-disable-next-line no-await-in-loop -- Recovery ownership must be acquired before re-reading or quarantining the primary lock.
-        const recovery = await acquireProfileRecoveryLock(
-          recoveryPath,
-          recoveryToken,
-        );
-        if (recovery === null)
-          throw new SourceBrowserError(
-            "SOURCE_PROFILE_LOCKED",
-            "Chrome profile ownership recovery is already in progress",
-            false,
-          );
-        try {
-          // eslint-disable-next-line no-await-in-loop -- Recovery revalidates ownership after acquiring its serialization lock.
-          existing = await readProfileLock(path);
-          if (existing?.pid !== undefined && processIsAlive(existing.pid)) {
-            throw new SourceBrowserError(
-              "SOURCE_PROFILE_LOCKED",
-              `Chrome profile is owned by live process ${String(existing.pid)}`,
-              false,
-            );
-          }
-          if (existing === null) {
-            throw new SourceBrowserError(
-              "SOURCE_PROFILE_LOCK_INVALID",
-              "Chrome profile lock is malformed or changed during recovery",
-              false,
-            );
-          }
-          // eslint-disable-next-line no-await-in-loop -- The stale owner must be quarantined before the next exclusive-create attempt.
-          await rename(path, `${path}.stale.${randomUUID()}`);
-        } finally {
-          // eslint-disable-next-line no-await-in-loop -- Recovery ownership is released before its token file is inspected.
-          await recovery.close();
-          // eslint-disable-next-line no-await-in-loop -- Cleanup verifies the exact recovery token after closing the handle.
-          const retained = await readProfileLock(recoveryPath);
-          if (
-            retained?.token !== undefined &&
-            constantTimeEqual(retained.token, recoveryToken)
-          )
-            // eslint-disable-next-line no-await-in-loop -- The serialized recovery token is removed before another acquisition attempt.
-            await unlink(recoveryPath);
-        }
+        // eslint-disable-next-line no-await-in-loop -- Recovery must finish before the next exclusive-create attempt.
+        await this.#recoverProfileLock(path, recoveryPath);
       }
     }
     throw new Error("Profile lock acquisition exhausted unexpectedly");
+  }
+
+  async #recoverProfileLock(path: string, recoveryPath: string): Promise<void> {
+    let existing = await readProfileLock(path);
+    assertProfileLockNotOwned(existing);
+    const recoveryToken = randomUUID();
+    const recovery = await acquireProfileRecoveryLock(
+      recoveryPath,
+      recoveryToken,
+    );
+    if (recovery === null)
+      throw new SourceBrowserError(
+        "SOURCE_PROFILE_LOCKED",
+        "Chrome profile ownership recovery is already in progress",
+        false,
+      );
+    try {
+      existing = await readProfileLock(path);
+      assertProfileLockNotOwned(existing);
+      if (existing === null)
+        throw new SourceBrowserError(
+          "SOURCE_PROFILE_LOCK_INVALID",
+          "Chrome profile lock is malformed or changed during recovery",
+          false,
+        );
+      await rename(path, `${path}.stale.${randomUUID()}`);
+    } finally {
+      await recovery.close();
+      const retained = await readProfileLock(recoveryPath);
+      if (
+        retained?.token !== undefined &&
+        constantTimeEqual(retained.token, recoveryToken)
+      )
+        await unlink(recoveryPath);
+    }
   }
 
   async #releaseProfileLock(): Promise<void> {
@@ -3210,6 +3231,17 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+function assertProfileLockNotOwned(
+  existing: Awaited<ReturnType<typeof readProfileLock>>,
+): void {
+  if (existing?.pid !== undefined && processIsAlive(existing.pid))
+    throw new SourceBrowserError(
+      "SOURCE_PROFILE_LOCKED",
+      `Chrome profile is owned by live process ${String(existing.pid)}`,
+      false,
+    );
+}
+
 async function acquireProfileRecoveryLock(
   path: string,
   token: string,
@@ -3235,18 +3267,21 @@ async function acquireProfileRecoveryLock(
     } catch (error) {
       if (!isFileExistsError(error)) throw error;
       // eslint-disable-next-line no-await-in-loop -- Each retry inspects the latest recovery owner after exclusive-create contention.
-      const existing = await readProfileLock(path);
-      if (existing && processIsAlive(existing.pid)) return null;
-      // eslint-disable-next-line no-await-in-loop -- Malformed recovery locks are age-checked before quarantine.
-      const pathStats = await stat(path);
-      if (!existing && Date.now() - pathStats.mtimeMs <= 60_000) return null;
-      try {
-        // eslint-disable-next-line no-await-in-loop -- Stale recovery ownership is quarantined before the next exclusive-create attempt.
-        await rename(path, `${path}.stale.${randomUUID()}`);
-      } catch (renameError) {
-        if (errorCode(renameError) !== "ENOENT") throw renameError;
-      }
+      if (!(await quarantineStaleRecoveryLock(path))) return null;
     }
   }
   return null;
+}
+
+async function quarantineStaleRecoveryLock(path: string): Promise<boolean> {
+  const existing = await readProfileLock(path);
+  if (existing && processIsAlive(existing.pid)) return false;
+  const pathStats = await stat(path);
+  if (!existing && Date.now() - pathStats.mtimeMs <= 60_000) return false;
+  try {
+    await rename(path, `${path}.stale.${randomUUID()}`);
+  } catch (error) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
+  return true;
 }

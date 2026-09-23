@@ -1351,10 +1351,22 @@ export class LedgerMigrator implements LedgerMigrationPort {
           `Ledger schema ${String(existingVersion)} is newer than supported schema ${String(CURRENT_SCHEMA_VERSION)}`,
         );
     }
-    if (objects.length === 0)
-      return this.#database
-        .transaction(() => this.#migrateInitialized(true))
+    if (objects.length === 0) {
+      // A second process can initialize this file while we wait for the
+      // writer lock. Inspect again inside the transaction before choosing the
+      // fresh bootstrap path, then use the ordinary upgrade path if we lost
+      // that race. The initial inspection alone is not an ownership fence.
+      const bootstrapped = this.#database
+        .transaction(() => {
+          if (this.#database.prepare(READ_USER_SCHEMA_OBJECTS).get())
+            return false;
+          this.#migrateInitialized(true);
+          return true;
+        })
         .immediate();
+      if (bootstrapped) return CURRENT_SCHEMA_VERSION;
+      return this.migrate();
+    }
     return this.#migrateInitialized(false);
   }
 
@@ -1385,6 +1397,16 @@ export class LedgerMigrator implements LedgerMigrationPort {
         `Ledger schema ${String(initialVersion)} is newer than supported schema ${String(CURRENT_SCHEMA_VERSION)}`,
       );
     }
+    this.#applyMigrations(initialVersion, fresh, readVersion);
+    this.assertConfiguredSourceIdentity();
+    return CURRENT_SCHEMA_VERSION;
+  }
+
+  #applyMigrations(
+    initialVersion: number,
+    fresh: boolean,
+    readVersion: () => number,
+  ): void {
     for (const migration of MIGRATIONS) {
       if (migration.version <= initialVersion) continue;
       if (!fresh) this.#database.exec("BEGIN IMMEDIATE");
@@ -1397,11 +1419,7 @@ export class LedgerMigrator implements LedgerMigrationPort {
           if (!fresh) this.#database.exec("COMMIT");
           continue;
         }
-        if (lockedVersion !== migration.version - 1) {
-          throw new Error(
-            `Ledger migration ${String(migration.version)} requires schema ${String(migration.version - 1)}; received ${String(lockedVersion)}`,
-          );
-        }
+        this.#assertMigrationPredecessor(migration.version, lockedVersion);
         if (migration.version === 35)
           this.#validateRuntimeOwnerMigration(initialVersion);
         new LedgerMigrationEngine(this.#database).apply(migration);
@@ -1411,8 +1429,13 @@ export class LedgerMigrator implements LedgerMigrationPort {
         throw error;
       }
     }
-    this.assertConfiguredSourceIdentity();
-    return CURRENT_SCHEMA_VERSION;
+  }
+
+  #assertMigrationPredecessor(version: number, lockedVersion: number): void {
+    if (lockedVersion === version - 1) return;
+    throw new Error(
+      `Ledger migration ${String(version)} requires schema ${String(version - 1)}; received ${String(lockedVersion)}`,
+    );
   }
 
   #validateRuntimeOwnerMigration(initialVersion: number): void {

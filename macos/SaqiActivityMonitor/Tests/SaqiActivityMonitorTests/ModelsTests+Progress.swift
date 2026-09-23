@@ -215,7 +215,7 @@ extension ModelsTests {
         let health = validHealth(observedAt: 1_000_000, runId: "process:1")
         let runtime = RuntimeStatus(
             configDigest: String(repeating: "a", count: 64),
-            observedAt: "ignored",
+            observedAt: "1970-01-01T00:16:40.000Z",
             ownerPid: 1,
             resourcePressure: ResourcePressureStatus(
                 nextProbeAt: 1_005_000,

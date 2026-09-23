@@ -97,7 +97,7 @@ extension RigStore {
             return "ETA starting"
         }
         guard service.actualState == "running" else { return "ETA unavailable" }
-        guard !paused else { return "ETA paused" }
+        guard currentSolProviderExecution()?.gates.operator.globalPaused != true else { return "ETA paused" }
         guard !healthRefreshFailed else {
             if let provider = currentSolProviderExecution(),
                let estimate = ProgressEstimator.eta(provider: provider)
@@ -164,7 +164,7 @@ extension RigStore {
         if currentService?.actualState == "starting" {
             return "Rate unavailable · starting"
         }
-        if paused {
+        if currentSolProviderExecution()?.gates.operator.globalPaused == true {
             return lastMeasured.map { "Last measured · \($0) · paused" } ?? "Rate paused"
         }
         if let currentPublished {
