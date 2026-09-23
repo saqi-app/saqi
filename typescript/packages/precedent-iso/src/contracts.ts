@@ -375,7 +375,8 @@ export const HTTP_CONTRACTS = [
       },
     ],
     service: "operations",
-    summary: "Read the deployed public sitemap through an internal service binding",
+    summary:
+      "Read the deployed public sitemap through an internal service binding",
   },
   {
     audience: "authenticated",

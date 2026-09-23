@@ -14,7 +14,9 @@ export async function GET(): Promise<Response> {
       { headers: NO_STORE_HEADERS, status: 502 }
     );
   }
-  const response = await PUBLIC_SITE.fetch("https://saqi.app/sitemap-index.xml");
+  const response = await PUBLIC_SITE.fetch(
+    "https://saqi.app/sitemap-index.xml"
+  );
   if (
     !response.ok ||
     !response.headers.get("content-type")?.startsWith("application/xml")
