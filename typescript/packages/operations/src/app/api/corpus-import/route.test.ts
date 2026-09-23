@@ -33,6 +33,12 @@ vi.mock("@/backend/get-services", () => ({
 import { GET, POST } from "./route";
 
 const HASH = "a".repeat(64);
+const DEFAULT_BODY = {
+  action: "promote",
+  bundleId: "bundle-1",
+  expectedPlanHash: HASH,
+  writerEpoch: 1,
+} as const;
 
 describe("corpus import route", () => {
   beforeEach(() => {
@@ -52,18 +58,16 @@ describe("corpus import route", () => {
       databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5",
     });
     getCloudflareEnv.mockReturnValue({
-      CF_CACHE_PURGE_TOKEN: "cache-token",
-      CF_ZONE_ID: "b".repeat(32),
+      PUBLIC_SITE: {
+        fetch: (input: string, init: RequestInit) => fetch(input, init),
+      },
+      SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
       DB: { prepare: () => ({ first: databaseFirst }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json({ errors: [], messages: [], result: {}, success: true })
-        )
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     );
   });
 
@@ -193,11 +197,9 @@ describe("corpus import route", () => {
 
       expect(response.status).toBe(200);
       expect(fetch).toHaveBeenCalledExactlyOnceWith(
-        `https://api.cloudflare.com/client/v4/zones/${"b".repeat(32)}/purge_cache`,
+        "https://saqi.app/internal/purge-publication-cache",
         expect.objectContaining({
-          body: JSON.stringify({
-            files: ["https://saqi.app/author/poet%20name/poem/poem%2F1"],
-          }),
+          body: JSON.stringify({ authorSlug: "poet name", poemId: "poem/1" }),
           method: "POST",
         })
       );
@@ -207,8 +209,8 @@ describe("corpus import route", () => {
   it("publishes with a warning when purge is fully unconfigured", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     getCloudflareEnv.mockReturnValue({
-      CF_CACHE_PURGE_TOKEN: undefined,
-      CF_ZONE_ID: undefined,
+      PUBLIC_SITE: undefined,
+      SAQI_PUBLIC_CACHE_PURGE_SECRET: undefined,
       DB: { prepare: () => ({ first: databaseFirst }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
@@ -227,8 +229,8 @@ describe("corpus import route", () => {
 
   it("fails before publication when purge configuration is partial", async () => {
     getCloudflareEnv.mockReturnValue({
-      CF_CACHE_PURGE_TOKEN: undefined,
-      CF_ZONE_ID: "b".repeat(32),
+      PUBLIC_SITE: undefined,
+      SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
       DB: { prepare: () => ({ first: databaseFirst }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
@@ -255,10 +257,8 @@ describe("corpus import route", () => {
         state: "already_current",
       });
     vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        Response.json({ errors: [], messages: [], success: false })
-      )
-      .mockResolvedValueOnce(Response.json({ result: {}, success: true }));
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const first = await POST(request({}, publicationAction()));
     const second = await POST(request({}, publicationAction()));
@@ -273,12 +273,7 @@ describe("corpus import route", () => {
 
 function request(
   overrides: Record<string, string> = {},
-  body: unknown = {
-    action: "promote",
-    bundleId: "bundle-1",
-    expectedPlanHash: HASH,
-    writerEpoch: 1,
-  }
+  body: unknown = DEFAULT_BODY
 ): Request {
   return new Request("https://ops.saqi.app/api/corpus-import", {
     body: JSON.stringify(body),

@@ -5,8 +5,7 @@ import process from "node:process";
 const validEnvironment = {
   CF_ACCESS_AUD: "a".repeat(64),
   CF_ACCESS_TEAM_DOMAIN: "https://example.cloudflareaccess.com",
-  CF_CACHE_PURGE_TOKEN: "cache-token",
-  CF_ZONE_ID: "b".repeat(32),
+  SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
   SAQI_SOURCE_BASE_URL: "https://source.example",
   SAQI_SOURCE_NAME: "source",
 };
@@ -29,7 +28,7 @@ assert.equal(validate().status, 0);
 for (const [name, value] of [
   ["CF_ACCESS_AUD", "not-an-audience"],
   ["CF_ACCESS_TEAM_DOMAIN", "https://example.com"],
-  ["CF_ZONE_ID", "not-a-zone"],
+  ["SAQI_PUBLIC_CACHE_PURGE_SECRET", "not-a-secret"],
   ["SAQI_SOURCE_NAME", "INVALID NAME"],
   ["SAQI_SOURCE_BASE_URL", "not-a-url"],
 ]) {

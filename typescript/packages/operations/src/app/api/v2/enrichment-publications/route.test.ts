@@ -134,12 +134,14 @@ describe("bound enrichment publication v2 route", () => {
     });
   });
 
-  it("acknowledges a committed publication when cache invalidation is deferred", async () => {
+  it("returns a retryable failure when a committed publication cannot be purged", async () => {
     const purge = vi.fn().mockRejectedValueOnce(new Error("timed out"));
     vi.stubGlobal("fetch", purge);
     getCloudflareEnv.mockReturnValue({
-      CF_CACHE_PURGE_TOKEN: "cache-token",
-      CF_ZONE_ID: "b".repeat(32),
+      PUBLIC_SITE: {
+        fetch: (input: string, init: RequestInit) => fetch(input, init),
+      },
+      SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
       DB: {
         prepare: (query: string) => ({
           bind: () => ({
@@ -160,23 +162,23 @@ describe("bound enrichment publication v2 route", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-saqi-cache-invalidation")).toBe("deferred");
-    await expect(response.json()).resolves.toMatchObject({
-      results: [{ status: "published" }],
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("30");
+    await expect(response.json()).resolves.toEqual({
+      error: "PUBLIC_CACHE_PURGE_UNAVAILABLE",
+      ok: false,
+      retryable: true,
     });
     expect(log).toHaveBeenCalledWith(
-      "[ops] Public cache invalidation deferred",
+      "[ops] Bound enrichment publication rejected",
       expect.objectContaining({
-        code: "PUBLIC_CACHE_PURGE_UNAVAILABLE",
-        maximumNaturalStalenessSeconds: 360,
-        publicationIntentId: HASH_D,
+        code: "PUBLICATION_UNAVAILABLE",
       })
     );
     log.mockRestore();
   });
 
-  it("attempts cache purge only once after a transport failure in a batch", async () => {
+  it("stops the batch after a transport failure so it can be replayed", async () => {
     const purge = vi.fn().mockRejectedValue(new Error("timed out"));
     vi.stubGlobal("fetch", purge);
     getCloudflareEnv.mockReturnValue(cacheEnabledEnvironment());
@@ -185,16 +187,12 @@ describe("bound enrichment publication v2 route", () => {
 
     const response = await POST(request(3));
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-saqi-cache-invalidation")).toBe("deferred");
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      results: [
-        { status: "published" },
-        { status: "published" },
-        { status: "published" },
-      ],
+      error: "PUBLIC_CACHE_PURGE_UNAVAILABLE",
+      retryable: true,
     });
-    expect(publishBoundEnrichment).toHaveBeenCalledTimes(3);
+    expect(publishBoundEnrichment).toHaveBeenCalledOnce();
     expect(purge).toHaveBeenCalledOnce();
     expect(getAuthorSlugForPoem).toHaveBeenCalledExactlyOnceWith(
       publicationReceipt().poemId
@@ -253,7 +251,7 @@ describe("bound enrichment publication v2 route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("x-saqi-cache-invalidation")).toBeNull();
     await expect(response.json()).resolves.toEqual({
-      error: "PUBLIC_CACHE_PURGE_INVALID_RESPONSE",
+      error: "PUBLIC_CACHE_PURGE_REJECTED",
       ok: false,
       retryable: true,
     });
@@ -263,7 +261,7 @@ describe("bound enrichment publication v2 route", () => {
   it("keeps exact purge success on the synchronous success path", async () => {
     const purge = vi
       .fn()
-      .mockResolvedValueOnce(Response.json({ success: true }));
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", purge);
     getCloudflareEnv.mockReturnValue(cacheEnabledEnvironment());
     publishBoundEnrichment.mockResolvedValueOnce(publicationReceipt());
@@ -281,8 +279,10 @@ describe("bound enrichment publication v2 route", () => {
 
 function cacheEnabledEnvironment() {
   return {
-    CF_CACHE_PURGE_TOKEN: "cache-token",
-    CF_ZONE_ID: "b".repeat(32),
+    PUBLIC_SITE: {
+      fetch: (input: string, init: RequestInit) => fetch(input, init),
+    },
+    SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
     DB: {
       prepare: (query: string) => ({
         bind: () => ({

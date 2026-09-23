@@ -13,7 +13,7 @@
     "deploy:www": "wrangler deploy --config wrangler.www.jsonc",
     "dev": "astro dev",
     "preview": "astro preview",
-    "test": "astro build --silent && node --import tsx --test tests/canonical-request.test.ts tests/catalog.test.ts tests/catalog-d1-adapter.test.ts tests/insights.test.ts tests/json-for-html.test.ts tests/metadata.test.ts tests/poem-translations.test.ts tests/response-headers.test.ts tests/routes.test.ts tests/www-worker.test.ts && node --test tests/build-output.test.mjs tests/search-normalization.test.mjs",
+    "test": "astro build --silent && node --import tsx --test tests/canonical-request.test.ts tests/catalog.test.ts tests/catalog-d1-adapter.test.ts tests/insights.test.ts tests/json-for-html.test.ts tests/metadata.test.ts tests/poem-translations.test.ts tests/public-cache-purge.test.ts tests/response-headers.test.ts tests/routes.test.ts tests/www-worker.test.ts && node --test tests/build-output.test.mjs tests/search-normalization.test.mjs",
     "validate:build": "node --test tests/build-output.test.mjs"
   },
   "dependencies": {

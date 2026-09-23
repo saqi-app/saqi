@@ -33,4 +33,38 @@ void describe("withResponseHeaders", () => {
     );
     assert.equal(response.headers.get("Cache-Tag"), "saqi-corpus");
   });
+
+  void it("caches poem HTML for a day and tags affected views", () => {
+    const poem = withResponseHeaders(
+      new Response("poem"),
+      "GET",
+      true,
+      "/author/poet/poem/id-1",
+    );
+    const author = withResponseHeaders(
+      new Response("author"),
+      "GET",
+      true,
+      "/author/poet/page/2",
+    );
+    const insights = withResponseHeaders(
+      new Response("insights"),
+      "GET",
+      true,
+      "/insights",
+    );
+    assert.match(
+      poem.headers.get("Cloudflare-CDN-Cache-Control") ?? "",
+      /max-age=86400/u,
+    );
+    assert.equal(poem.headers.get("Cache-Tag"), "saqi-corpus,saqi-poem-id-1");
+    assert.equal(
+      author.headers.get("Cache-Tag"),
+      "saqi-corpus,saqi-author-poet",
+    );
+    assert.equal(
+      insights.headers.get("Cache-Tag"),
+      "saqi-corpus,saqi-insights",
+    );
+  });
 });

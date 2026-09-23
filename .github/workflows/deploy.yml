@@ -114,6 +114,7 @@ jobs:
         working-directory: typescript/packages/site
         env:
           SAQI_WRANGLER_CONFIG: wrangler.production.jsonc
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
 
       - name: Validate application Worker artifact
         if: steps.changes.outputs.app == 'true'
@@ -174,8 +175,7 @@ jobs:
         if: steps.changes.outputs.app == 'true'
         run: node scripts/configure-ops-secrets.mjs
         env:
-          CF_CACHE_PURGE_TOKEN: ${{ secrets.CF_CACHE_PURGE_TOKEN }}
-          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
           CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
           CF_ACCESS_TEAM_DOMAIN: ${{ secrets.CF_ACCESS_TEAM_DOMAIN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -183,12 +183,16 @@ jobs:
           SAQI_SOURCE_BASE_URL: ${{ secrets.SAQI_SOURCE_BASE_URL }}
           SAQI_SOURCE_NAME: ${{ secrets.SAQI_SOURCE_NAME }}
 
-      - name: Deploy authenticated operations
-        if: steps.changes.outputs.app == 'true'
-        run: yarn workspace @saqi/operations deploy:artifact
+      - name: Configure public cache purge secret
+        if: steps.changes.outputs.site == 'true'
+        run: >-
+          printf '%s' "$SAQI_PUBLIC_CACHE_PURGE_SECRET" |
+          yarn workspace @saqi/site wrangler secret put SAQI_PUBLIC_CACHE_PURGE_SECRET
+          --config dist/server/wrangler.json
         env:
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
 
       - name: Deploy the public catalog
         if: steps.changes.outputs.site == 'true'
@@ -198,6 +202,13 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Deploy authenticated operations
+        if: steps.changes.outputs.app == 'true'
+        run: yarn workspace @saqi/operations deploy:artifact
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
 
       - name: Deploy the canonical-host redirect
         if: steps.changes.outputs.www == 'true'
