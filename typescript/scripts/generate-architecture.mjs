@@ -45,6 +45,21 @@ function imports(file, source) {
   return found;
 }
 
+function readsD1(file, source) {
+  const content = file.endsWith(".astro") ? source.match(/^---\s*\n([\s\S]*?)\n---/)?.[1] ?? "" : source;
+  const ast = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found = false;
+  function visit(node) {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === "fromD1"
+      && ts.isIdentifier(node.expression.expression)
+      && node.expression.expression.text === "CatalogRepository") found = true;
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  return found;
+}
+
 const packageSourceEntries = await Promise.all(packages.map(async (name) => {
   const files = await sourceFiles(join(packagesRoot, name, "src"));
   return Promise.all(files.map(async (file) => [relative(root, file), imports(file, await readFile(file, "utf8"))]));
@@ -68,8 +83,9 @@ const site = "site";
 const siteFiles = await sourceFiles(join(packagesRoot, site, "src", "pages"));
 const routeFiles = siteFiles.filter((file) => file.endsWith(".astro") || file.endsWith(".ts"));
 const routeRows = [];
-const routeDiagram = ["flowchart LR", '  browser["Reader"]', '  d1[("Cloudflare D1")]'];
+const routeDiagram = ["flowchart LR", '  browser["Reader"]'];
 for (const [index, file] of routeFiles.entries()) {
+  const source = await readFile(file, "utf8");
   const route = relative(join(packagesRoot, site, "src", "pages"), file).replace(/(?:\/index)?\.astro$|\.ts$/, "").replaceAll(/\[(\w+)\]/g, ":$1");
   const path = route === "index" ? "/" : `/${route}`;
   const id = `route${index}`;
@@ -81,8 +97,8 @@ for (const [index, file] of routeFiles.entries()) {
     const label = module.split("/").at(-1).replace(/\.(?:astro|tsx?|m?js)$/, "").replaceAll(/[^a-zA-Z0-9]/g, "");
     const moduleId = `module_${label}`;
     routeDiagram.push(`  ${moduleId}["${label}"]`, `  ${id} --> ${moduleId}`);
-    if (label === "catalog") routeDiagram.push(`  ${moduleId} --> d1`);
   }
+  if (readsD1(file, source)) routeDiagram.push('  d1[("Cloudflare D1")]', `  ${id} --> d1`);
 }
 const routesMermaid = `${[...new Set(routeDiagram)].join("\n")}\n`;
 
@@ -101,7 +117,7 @@ const packagePreview = preview("Workspace dependencies", packages.map((name) => 
 const routePreview = preview("Public routes and imports", routeRows.map((row) => ({ label: row.path, targets: row.imports.map((specifier) => specifier.split("/").at(-1).replace(/\.(?:astro|tsx?|m?js)$/, "")) })));
 
 const document = {
-  generatedFrom: "TypeScript AST imports, Astro route frontmatter, and workspace package manifests",
+  generatedFrom: "TypeScript AST imports and D1 calls, Astro route frontmatter, and workspace package manifests",
   packages: packages.map((name) => ({ name, description: manifests.get(name).description ?? "", source: `typescript/packages/${name}/package.json` })),
   diagrams: [
     { title: "Workspace dependencies", file: "/docs/diagrams/packages.mmd", image: "/docs/diagrams/packages.svg" },

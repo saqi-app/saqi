@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "provenance": {
-    "bundleVersion": "7.29.0",
-    "consumerBaseSha": "41dbfec7d924eb6bc0edcf1acaaaf3579d67342e",
-    "catalogDigest": "0af35f4c68e41f52cdd4b6faf23f1de761c635b1eeeae825c726b75741350521"
+    "bundleVersion": "7.31.0",
+    "consumerBaseSha": "b305db11ec53dd0d279a1d66f4fa9d7a84408057",
+    "catalogDigest": "c4a15fb82b0e514464afec36bd0458471c3170929f39d662edc97eba95130bf7"
   },
   "diagnostics": [
     {
@@ -770,6 +770,2981 @@
       "count": 1
     },
     {
+      "fingerprint": "55b98a6dd0128a6c5dd1c198e71c05e413d2c7b64119770ab3caa26c489170d9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "03615ba0538cd6bf99127343b2370bfbf67b644f1a2e5cc2bf69ade9dffdc8fa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/app/src/app/api/v2/source-admissions/route.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "80f290cf6a9b6b7eedf6510cf213ae7be986275d4387b92fec458b5a2bf5ddf8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/app/src/lib/__tests__/access.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "77daa7e2ee8709509dc4723798f2ad0d400c98cf6d761ccdb10e44a2f1a7ecf0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/app/src/lib/__tests__/production-deployment-identity-repository.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "90bbeb725358c663685143467d551cc99ca067fa01aeff4836a9178e20a036cd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/app/src/lib/access.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "d5f2010a56ab56040816d666ec867819caf6ffe6ab87bc262541d1169db1f19e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/author-inventory-collector.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "343aa0fb74f752f905619a62e7b7793653fac3ca3c20e665fad34688cfcc0530",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/author-inventory-lane.test.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "123b732a5118be91e2a636e28b52e56d00ecfc3f2095d69dd25032fcb41ebf1a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1627ee8f0e9a77b9d401e4af4859cfe2640fc20720ea56edcf7bf9e671a47f0f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "22bbf12146e599fcc59c59c3cf30efd0bce47608362151b54a3dbfe215b39e37",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "30a15e1ed0a3a088b3517acf9dd9822c3ac9911f7ce7d1aa74896dbd619b453a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4847a21a46b13ccf29b82ea40c47a86815433e7254b17316a57ca67629a5f3ca",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4df556b98ca1390bc2b2dccd9983d5708af7c4a813770c22275f14d2033cca56",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5d8b72adc5da1f91c679ba2900304fd1edcfd0e711106775ea5ee5ba994c05e1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a062f8ddb34cf899f438a0249b8075ae48255a79180cead76ee7457cb40223e8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "b4fab417030f2af9f5286b15faf8dfbac4dce070974f86154a77dc283cf65559",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cebaf6d1915263b65db0c243bea7513ff89b46b38af5cb18a5483be7aa9544b7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f3d0d370cedb734f63b610eb927de7bd85f1cad51fb4f9359fb1e013b119b3d1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b5a7b3e63c5d849510ac1902b6dc28bb776b0348e9f247baecb1b54f24fcf601",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/cli-readonly-status.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "259f36b0cb897216e937b3e1ea0ea0ae40270675d5aa00befe21df3e9b4f9a02",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "7879f9c320d2d66f8dd02b3550587f5dc9301945348ca316894ed59a634062aa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "e37ac21ae097c52042b8364e4278f093ed0e33f6da6e5160723a6f34d70f377d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "0714f675e24a966edfe41917050f3c86cb53cc223596d275f7d40e84353fccc7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/fanout-reconciler.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c1667daad1a04684a2603a83552cc52767c833f23ac70e30db955d61697b7499",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/fanout-reconciler.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "069fd9c76093f1d1d42bf3449add1939cd677866069ec7fedc8a86403fe12191",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/launchd-startup-stop.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "04eec4114b4ed8b12ea7117c4d404bf56f2ea1a5cc27ac1939511106a797bb17",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2a4873db61849a5c3eb089015be7054a13db59c8f8e197bf22cf912744defd1f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2ba9ef3c7719d3cbbe277ab1ae4d0630b8b27c2de3a21ff8898b7df521935035",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "50560be2519e6ff9c92561c3c189bc38cbe2fdcf382142be26506cf5c9a4754c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5853fc5bb1d0350a3497c4e744cd242643df37cf83402cec19aff104c3e3a936",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "647e3029b2af664a1ad7c62463ca7db30d2879cbf79af4e037dc1858ae3c6764",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b9b0dad6bcae89fe7933a5178065ea20430c65f35a27844b2a23e996e06c4131",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c5723c318c359a628d15bb26a3a99122babc574e31a5a681acc67fbc22f68707",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "e682bf3756b1a944d6ba4a9c8e1d0518481f16c9d6984090ec6f6f7da86029b5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f26e19bd6f911440e8db23bee05eb63daa5a5425fd1f171e5d8d9866ae28ea38",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fc9cd621540ab4b0a8d200a85ac48ae717d707fdff49268a97492a9622f57d8d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ff9747dadba5300aae726525a0be2d2268b4a52893263af672502863c83799f7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "ffcb977129c5f3bedd23bc63a4967e069acf9b861921b2aff843ad80437910d4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "58a66a745e9f9d009b822e144b60fbcf59369242aa3dd33dba09a3ba5311a480",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5e0a1c7a164d8b1f273ae25c67b4b6b40954878e19871ade55b8fb025e4f90b6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "998b3375889b69ad4482eca7027116b29146a1f674891014be645a0ff1f0727e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "af6d619675de374b1ee4f1611e0edde214b1e4aef8d989333cf94573abb7053d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c7338c9528b174bdf667d17d4289d8251d6d7c8b12c0d35fc0e4b33fd5feaab3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cfbae87b20a3b2e440720e364e2327f68f20e3a93b537ab65a045c2a081615a6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fca8b0501f397638ac30d69f37ae48fcc72c4b2e1a6c96fe6774de6f46d8f558",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/legacy-operation-staging.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0b6f867cb093d3f219c6f120a02e7fa5cf9ce1ad9709bc737165a90a2f49d988",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e41d61f0a3fc19e4308c4a1961cd614f7214b983c910cf32bee7cc6eb0d009a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0ea4a14ef4801505086480ae207220a7d5913369d90cc8cdf056a04f166af88f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1dbede79d519715fa147b3899dc719527d75cc114a70494f989a86e583351e4c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2605b3d330c0b968c06edadc39c6510ccc7c2f883976d21b4951d5b2470323d6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "2c142dc32aab329ed50ead0e0b417d99cd7cb54a91f28eada5ee1662e5b3debe",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "2ede303c720bee3a9f61ebe8ecba71d8ace8dd1cc7cec65d43accc466d74cefc",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "51896eb9847dd1549572c57a16c467d425dc52c00d8f2b39b3f453a3d0ff588e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6cb3a991547eb7df02dd653799422ca02e0657f906dd1c62166063adcaa3d15e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "9899f5080f7cdfce327108033629ec1784e43ba5954269e80c3988cc3b6af6f8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9eaca86ff047b92e9f471e3e3793a837880d9fdaecfb8d9a82b1f04645d594e4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a0b9f081cbf012e23478fd58d07259d0d44bbe7c7194669266e843d826f05db1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "cba243fa816e2f34eae890ef6f1c309bf49579396848454dc4d4b70fff63506d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "10884d0fb3387a4534d1d2a2e03ff9a4fde45596e5df31e196544370f68f3c13",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "27b1404808c9d89b83ae531c8beddddfb78be9cca6b90b21461d5c32b05849ce",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "458c5c499ba1c4d20a0e0ea7fcfd4db5d292b42ea6b55ec6778bdd1657b66fb1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4693d3a90d4035e4a2b8ebcd1e19b8901869d4d89d903220217e9227f3c5662e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6520648db0de9e72c3d3efa1afdb06b63f1be3d5d1dfe7b9e28af0b2bf1b135b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6d766b00e84f730e20873cc0ef9982aef4220388c18f504f9c7d65d65d914637",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 18
+    },
+    {
+      "fingerprint": "6f50d80dd3c01655c68a5fc980da71f1efcdb99207ae88d22b9bb359615f2f1b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "7019f46085bb2721077c51a70f29eac8aa8e8aecc1213dc7f6631d51744e16f9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "9da9108a031bd99012dd38c4189de9bd95e214a33fc92ecd22a75d477d2f0b5b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c6bd7a6662a7362e0108b00da572a5c35115c22ff7cd592a6e25ba0a678a3b06",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "00d5983ecd916d27f82d135804fced58eec68f0cfde3402dd16fa9b8507791f2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-detail-recovery-cli.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "35bc9b70e73239a6835c116c9bcc4f603da95a25136c22722ee93e0e131f44b8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-detail-recovery-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "94830ecfd6541af41347e983a4a22591c2e4256d91550b7014bc5b070e762972",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-detail-recovery-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b8ff8c3629c4863adfd217b90393d9f1b5db1e02c50b63546fa56aa21ee9d4dd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-detail-recovery-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bbebaa238f79bccc3a69178e333dda5cf2da8cdc7e6dc07b74974c37021d9eac",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-detail-recovery-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1cc52466d5e6dbb1a32803f64ba7ff9d0ebf3b362dd23b5783145b83d3c81d15",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3b37cff1d3dd955475a058e23d1592751e142fe0151e7b9a201d97f92fd6c83b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "63690fc6c8da50ccddaaa35f86ed8072b4d468bef22f7f09d895a46595779967",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6f7a5ca87252edc0b2f4c3e2bf85baa5d1179c95f50f6a2dff98bc97b8d8308d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "80b9fd20b9af266d737d60aa13ded2fcb6ade5a07e00ee880a1e541b9afe6557",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8a8d5ed6a058705325c7bdd4432b7c453ed588e2f76d237ec321aeabad22614a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8e80f2da8c9ab5a66e7aac8e137f0851915aac244c2c5c0bbed6fcbcee4f2312",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b7a20a4539586fe9fab5c71945a123a9820015d2961bfd623fdbc870cacc1be0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "de067c41edbad6e64300dfb78fe530e9b475ca50ba5009f1539f47f626cf3376",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e92d91ffd71915cfe64b2dce46f1847b547a723d7840f7489b42cc62727a50c9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5620b692ffb0e5a515e068ae08e4ad6ac2f08581501b5efa611eb269d0634fd0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/provider-credential-generation.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8ab6b1609261fabd595ee596203b6ed56d22c8c21eccef0a0b5d7a7a0f405f6a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/provider-credential-generation.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9320b08ba96d81abe6b6dd2b640fbac169d333b4c98c47e2d67ff3de6d6c8a1a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/provider-credential-generation.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ea67caafeb2cfea66ed3c9204e955d9d2c201cd8ced47bc69076fbcc5afa69b6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/runtime-owner-migration.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6a50bbd7633dab5c85604b802db0629108d3498aa2badb658d8eb2a19fcba150",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-operation-import-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "de70e96f58d0371ca4cf32d8631dc48d96200d6cf6cef43309bf37f9075f6f16",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-operation-import.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "35e1e14a77f5e42128f9dba53cc06f2d9431b65d1701d34e6d98e32f6d0f8fb5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "93555f1284e86cfa96021b8f0f20d609f0844770e01c56a73488f26f4e309070",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a4c06283e0b86a0231a43e9de672a77b4a658d79187d8412cf543f1b524b23e6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "028150f0a17b1e9c541b96b0b8bcd7e19868d0882f21e8f21d5f29007bf9ed06",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/source-identity-migration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a8db6685cf739e35dd58c4731885e472317ba243bc0a67a175df172f75e473e9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/source-identity-migration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "12d0a5001251953631d63130a7fb2473a7f557579f5431383dfb73f4afcf326b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "37e7d827ec941153e27a066c56fb199de7f29bd5ca551e9a73914b8fcfe4159e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3fc3a6014e0cff25b914734c3e65181768128e892e55b2e1e1224156e8c9214f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 12
+    },
+    {
+      "fingerprint": "e118d5b0649a1eca05dc9642a0ced3f6b5c18bc1696cb52e6f36135b728c2746",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 13
+    },
+    {
+      "fingerprint": "713ba0cd9bd56298b8534276a32e5552196d974fb7acb5e65cf9f3bafef3a335",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "983ca756369059a34a8c9a660e1adf38fea2e231e01c682c241c743cffdd29d7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a0d3ffdea4fb147a974b1ea3c25f7600689a6dc5021015c06c56d4f21ad9b041",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "a28816b5ed0c5534419f5124d065a7edfdbecee1b58f4720710fd0798175d0b4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f04c6498a368e4f934276bfefee02fe8e95709ef461c6209f63c39e0438853bd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0cc11998b475df1219f453c86c57e08c113bdb935a7e6f057f266c43c7cb4d56",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-integration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "71cc68fb77fd0f16d070aecda97690e58a390ce9a0b82512fb54111d012d0702",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-integration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f0aae4cc57976cfb41d43f10053b99e36ddee15a6b2b8b854a18410d297e6781",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-integration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "528cbf826101c7b71b62e2d37caf74d043b5fca5d87e261133522aeaabb811c4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/collection/author-inventory-lane.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3e96d1ee07849fdaab7ce15717cb60c73c95806076b775d1f5bdec94a484bb0f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "39a83d756f08bbe52a7a9d3e342977be0c8374c179a50832efc5d32ad605d6fa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-generation.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b5709061887b5a8f1d6a13439f29be4582be29417a382ace53ccd22c1d80ac3c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-generation.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cd6a6cb645f6a24360835229c89e5b51d80e9be49395b8fe526581bea7e6637a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-generation.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "109d7e5cea0852934dda7be060c7c983de02976a3a95c5ba79ecbb2cecec5708",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "494e61de760b7737f82279272f91830d7fbf3e9be5c4b125fb6712452dbcd8ec",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b0c61d7b562ce26fb0d46bbdd271386c8493751fecbf336c2425601567f6db98",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b696f9dc1d18b74c697b786c88d071b1251b548ec015a9aebc6d5fee60e33a19",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d94be14a851a4d26379ed60e6308b0c6b72e539871d765087343a83ba6a074eb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d99e79118878a57c5b082eed1fa84730fcf8cee7ba88ad64b629558beac32bc6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fa78dcc27571c3223fc887bc8cdf397398082b4751c981a0544714eebdd76997",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c6034612a19ea87e808bbf90bfa3e224bc8b3f4ec37aaf35b89fd00548afbee7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "078c3efadd43b78acd17e89ba402d093b1328b12c757559ee45c28874afdddba",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "54af301b0e72b0ce02368a10a421ddab862501dbad36ee53c540e9b3a6c08713",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "784cf92532f24d4447c0fbcd831a7bdff2c13d0b590d44853c03b481ac54ecbf",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bc17d13ab9754715f8f26c0c8feac82e0daedcd73021bc0e1e34596e721094b6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "eb4d44c6d1e7f13f63372e8248bee03af5d94c284edb79e12d549934bbe83fe6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1790cf26146edc29a12d8a3d14ccbab062e0aa736bb9aaf4ea11cccb6b6da921",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "2ec9d1169ac73271c95022dfd57f04d0ee00dcfc74eb358cb8a81067a817c430",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "4fe6c5faa56a0db538d074202bf143e38540578fc6be4f883d51fa1094ed3906",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "6b7d5d0bd9edcf0c22a74965289f12ca3f6abed0d49f00e652ad62a31e5e791a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "90761dac749aed99736ddb02bf0ec8106f84d656dcd921fcd5ba014b2bd9764a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "af2778def20c76b2ff2513fd552d327cc5fb8f405f5cb7bf17d321e15ae7a57b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "c98082c607ce67c58e856954fa75cf8cb7204a155e8d65dd2a994f2c46fa7eef",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "cd6f897ab2bdf252af9b1edf13d009cf51d4ff3c3984a11dd335f2e307ac75fe",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "deb5b09135e6f0294b9469385c31f225a789c238a09053c3a43e4d84d03986bb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e70c430553df4266ee93f961b3dc0584dca82d32e0bca1e1a74eeb069a7e5dd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "17cf8640146f419438116682deb69380fa275a0161775489d64257e4b6686a0c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1dcc30d7fb09dba6da659e2f6edf2cbd6d6086afc544986115209d03b08cd46a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "1f06b41246131e4ec99dbc7e1f0557e18cc0e58c369f3a75f651394734d52761",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "2088331a4706cc0201b308f9fe28ea64f46a5ffe4f459c63504bb1dffc3bc91a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "2700043ab83d7b05b3b4c237e6d8bb2a35aceb4150a28337a0d3573d04daae96",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "2a54473eece3de5f8732a22d7dc0fe27cafb9cbb986a6b2d766de0f36671779d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "2ce82730ba30fa195e00617481a165b9820adfb8fc871a992cf56734d2bfbd5d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3145e7681f62f51c4d0889d6e4e22f029ba1a50740a979351d4ac0cbd0f82cce",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "34dfd9ca32c8c2afc1544920ddde382dda3a4d05b05f48199ce33d8b9c205eb5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "391f25207384f3c3cbd0d0f2e18218739bc897193df733e79a80a27622865825",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3f446ce202da181efbaf8e0b721c332512c2f3d408713f5fdd64334cae9f1777",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "41fcfad77393c6935647af42a3fda7792d79302af736588693abe8c70c43f598",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "42a54b3ceeb8e37bdba9a645e0c462b25b8902a571c007cd6b23ee7fec06fe2f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "42c11ac83af48a286cf91660bd5253cd4a46efeefbb64b43a26acf3e422dfa2e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "4367822d1d5fa709b62cadd2cc7d5fba65830ec531a7902736c3b6a89d7bfe1c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "46c2ad52c4835cb3c87b8879d9a6bb98510077bd0daf310dd404eec2d3dd7116",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "47118fc269415f113bbdeccb24458c1349ef79afa8d6cd4632fafae2c084965c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4920b4e9d0a8ad55c8243aa3dce1859d7d3ae4b3d8d4a09a96b40b813b875243",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "4a693d9acdaf2de9d48e7b3f66d728c024edced389862cdf36b74bd7943fff90",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 17
+    },
+    {
+      "fingerprint": "4b9e7952c4b7884330815081a541c1793d20509f7dcf4bd800171673890eff46",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "4f638a9f60568f705ac0b72369ee8f757a015bda07be3b9aed5fb32148a20ca3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5214540fc486263f18f6e8403fac388a1ec96c152d9ee7af698d2c6ef22beb22",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "5c8b93401076d86f80c811797395c26e26dbc41395d3a2a9c8fb88eb293b33cf",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "61a15ef57d1d3bf159b6202cf58ee4d4132df115d2457772711a038d3fc99748",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 10
+    },
+    {
+      "fingerprint": "671abc65d1ef4f2596b1e2d07fc019e1df3f5146d4cc8d25b1989c26816807db",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "6b05acc7f73238801ed808902d40a7cbe3bb558fe90094dc891caf671d4c1514",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 12
+    },
+    {
+      "fingerprint": "6e54d4ac7abc1769821d0dfe449dd71cd17bf4f86cd38218d1ee29f9a6f0936a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "703c1395c21e92be493740ce28a619e6aa7bd9ebc93f6aaa0fd40fc21e3fd34f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 16
+    },
+    {
+      "fingerprint": "70ec24ccbde12eaf3bc5102e5716dd67c67d1e9352c0ede3b7256df85625a706",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "76cd5059bb9990f11e596cbc3ef3739f119cb33374c2e8bbbd67193a6e148475",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "774723d6612b6222abd33fb5425c9fc4dac87695dae5058785c256e87e7f9660",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "7f7db3837e69b6f64ab85a3bf9620d98c4d59c8890bdb95e7d0e3248c31fd485",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "82689d91097ee299380f4c208507f980075ca00e8bb2479e1bd0191a0ba2c1df",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "83ce0ebeab09b5e423b8cf935247bae303f65987f049261de2d9362dc6ce31d4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "8419cc460ff2f59d7d0a0d1197ea99cfb852abcd883240064175bfd066726698",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8818dca51f0f80e50eb2f638a966bdd329c6bd94b42229ec533cc50a2b67155b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "899eba8e9b3e170d66b3ffda34baf17e63ffb33a68d089ce1389fe58cb26dfdb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8d4d6f25a34295e0fa3a84ff187ae4f464e1a9442f8e20ad9b88213f6f47cb81",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 50
+    },
+    {
+      "fingerprint": "8d6951a1b5bfd06b2f0039cab410edb4c8ca88861cf362e04290cf041eafe2d1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "910b6f877034ab0317187aabbbe0f0e378c278bb7c98b727bc6b035010b51261",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9afe95b76f85c3559a4540e1e4c8b32991e3bba9c2eebeef3f0d7cb44a485b37",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "9c9d4b969b647b990dd1676b57d17fbf1da018cc25e5304459499a9857ff73f1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9f7b7c5a1ecd22022b1c9b2fd2e54be3886cb2041858e62ca72922bdeee6c9c7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "a3824706ff815a42eb1d0a3f0dfdaa8f33cbc0ad1c9eab23142f3e28d5c446fa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a75d316ed19a05b6eb28d46672d5684d208803abcfe5881b7432a66f970dc4f6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a82b37d856e389e7ceab423ed5984873a5dc4ddf0660ad6d4ae57ba420b6f01f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "a8e502fae813269a1332ed85ba98e60436bbd874266b07a4540dd66392d09bbb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ae95b43708208705c6dfff7065f384fc8b320685cb82577213cdb74ec93de397",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "b0ace82ded0d29a7fdab55d899c24415bd37f37ea7f7dad3569c17b3e88f168a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 9
+    },
+    {
+      "fingerprint": "b731d6da9dd626292fe63355fcf0adf45c2f9a0588ce40f51310217ff13f7ca9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "b88f6a9dc90796ac2af1bd54a12857d7dcc8d1ee6de01e50aa0e658c84e7163d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "b8bcb2822f84ce4d1f1772ee547fd821bc5cad31093f5b1fae1185535aae70e8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "be4c0b99e86ea804a1c17b91be3fc7d1f98e7ef1f090a336d157760dcf92837e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "bec734c60a4c754a4d28e5227ceec968e03fab4af6732f87695a1f1cf7e680de",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c81876ab4eb1c000bfce5fceeff71b3fe13e25c515d912e8213d8e1d20e4979f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "c9f73b13e931bfb23633d82e08c09619cc059360ed48fe77d4b2776368d0f1e4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "cb3764ee84f75ef872886cc13f7fbee52d0a3fc8698cd5f1d085271189103a65",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "cca33dcaf0f36b201e57f937b72e6ca2b14036874c5f337423b2035abc63ce41",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "d3dda0b59227b6a87ba70f1b2ad8a7b381648e832b186cadcb84bd929c57f90a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "d3f2cca5af37cf062b5d62c58f0e200d17495b8302142d3c22767de3f50ad8e6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 10
+    },
+    {
+      "fingerprint": "d51e622bcfc96e1ddc53bfdeb442774bf94877fd63cbd5505e6d744ed0474517",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "da639e7377816492a2d78b9cc0c839b2c8f3d7618d6a20c35820c5642d82c22f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "dd0606816a93f11ec962f0d4839dcd5d39c6ab5cc9cea0350790c55eea3ed2b8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "e205af14234975073b794ee99262eb5d962c93d493aabad1974d4f5a098f9413",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "eb64019ac8088c199f91920aee8d3ad3e2e243a459feb4395d91d0a83940f9da",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "ed514b023e5c7c1d3bbf9eea489242248931a17af2f8a9d7d28fc78232441fcf",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "ee3a8a0bfa2af655ae2e107a4f8038fe831e37ee58ce6fa68aa45139e4181147",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "ef1baff57c41f92c64aa9c57208c74dce771ecef6e3d56cef36a0ab17a4e98ea",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f4ce52367019d6d53747f08466136c4231f6359cce180262e6703e9be0bdf898",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 14
+    },
+    {
+      "fingerprint": "fa0066a4f0b5ed83c7a16ebfa0cbc45391f0821cbba6383206c26f7e6ad207f3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "fa2268b064a5fb61cb8980b55ad7da961fa29435660fd9eb2f95da1f6b126fa1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "fde86a6c91a863a64d48ceec7ad1b6d9b94d1e7b3bd1497ef8facdcecd8f7ab8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "fdfa699d48ff5bcc100caa1fb3d0565e0ded6161df19ee11d133f21016d6ff6f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "47a577db4a0e1d1bcf2390e3b6d884050300c2229886a7609835a9936d787b50",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4d6866ef54b2cde6b65ea479d84996a8536c16a4e4d9179e28721cd5e08dccd4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "65a23022610cf35d2e8857e1faea7c9fcba962133ad3c34018d4ff1d8eec9823",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "94f3cc7628c5e725a21b5d75d52ca256b1cd939fc644a06b3e72799af8c338e9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "c6454c2c8b254f2be8770e0e497d250bb9e8114716f96f15fa162389bacd864a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "d8a733f34fcf148e100c4655b0c2fcfba775b955388b17d55fd21487692608e5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "2f11b48f62221af4910148781ffdec873399d5fb6b26925256f1a22996fd73ac",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/pause-controls.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f3a3105944d41cc7195587bcc23a0a13b14e854533e49dc160d08bd825cfc7a8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/pause-controls.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "07f795bcfa804963b07f000518704e1a4690fe2532abd97cc174e5878ca745c1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "10c7093cd733205a872353293d7e9a42c39bbefb824f810675c3d33b7201cf4c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "2083ad9c79ba7bc8e292e0f59b88b01ddf3f0fc8807bb865115b07353763cd7e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "42e07a9704740d25fc9c5d79a272ea64c6f752a4a69f83c4c7174d3698ad173f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "60ded7b9ba15e0179e3c4201d31d4fbca40107082f95f642c6f63c463b79849b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "6dea5ed86d92b8e46839e51e179bbf7378f693538f60ed733ac202c96437d4f0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7431265735bf9372035191dfd2002be4a8990beeec47ea75ea20194b469ceeb9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "7dc2f9b1480a61e8e697bbdba0b9359ddb6db0aad1862d0b84202ff4efda4840",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8cc0163eec10ab32c3a501ee99497cb5ae9dd18ac510d1dadae362f990daf6cd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 9
+    },
+    {
+      "fingerprint": "e0ac96aebd097a1ac13cca7410fd0597ae368adf88e19fa049e44a25e2d3802f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f49d4193cb71d2e73eb504c19028b5f94cfff1593275c5720cfbddb6effbcb98",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f7128fbead0220ab4068e85e9008de76697bcfb8093db3631f431842001ef1b3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "0197ab3635048d59706c0ca54c12b0b4eddca45eafdf95ac38c14125605e25a0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 13
+    },
+    {
+      "fingerprint": "13541d0201622cafe110549b3c4c7466b9320bd134a4aa0d2bd4f21762a4bdc6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 14
+    },
+    {
+      "fingerprint": "33666bcfa9d7cf597307e351625af4fc5bc534d975a2f590fe50ea0b0660d5ae",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 16
+    },
+    {
+      "fingerprint": "360be8fc5a92f59c88ab5a17875f00f355aaf4c5b02e07885411bbf5114acebb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "3f53356432b7d06c615e2275f63f1b7a8bde9a3047cfe6737f4ec8557f72a71a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "48a406df564f891438e5f69c00d5c72745ae943b65d65387dfc32a9cf975c872",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "5472a438c62fadd11a9e4159233db44e432e113e9172fdd2f853f908f5aac5f8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "58364e543066182c5742363b53dd9544836905fb84c872fdb88a57b4874d1d93",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "5ab97f0dff2de13450e385f6d854f11ad6789a0bf9d5984dae5385fde1f60fe0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "5ac91de164db8ac244f43721a8c60b95a6fe53fdbf84f7a083be1ee00c58d954",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "74c246c477188cc2232911bc024725c26f6459e0733465e7d050610de28a1139",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7521fd3d4d8d1189d869e511947d6234da65b2ddd04a3483c4f9a391f1ed44fa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "88c86f379fa3f2e265d2929c18907fe91c02f5d88b6e212d19ab671c5daaeae2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "8d96dbcebcb38b713e4e847ddfff91de9a3cb305dadd753ce67a0bcc0ac8eb79",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8f295eb08dab5b84a211bbce05685f827c679d1839bda44daa50cd33d5b1e7d7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "904493f7f34700b3499ad4663a94336fe0f5addf8e1448352ee218c55736535a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9b9083f0287837e127184099c587053f018753521da2f2a836def2be8b12ea14",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9f53ee6804f8eb9674705219becf486d1744d93a27945c9da8d99eee56dd5fc9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 9
+    },
+    {
+      "fingerprint": "a0cdf69d4dc08d604956da4b114059df970431a992cc4196c8bc65e296239b75",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "a54d7fe681fddb1d02921b75d412b41b29d89658fb1f4cffcea6374c9e39afe7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "c72280ac60b0a2408693c619a7263b294f322526bd53e6ef9f6cd31563feb9d1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "c9471fbabc3fcc413b3f32558df9f717c6376f8aebd2c97c5ae2db3947b671cc",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c9f351f129a9dc255484878d52c9e7fb37a075955e40fa5c80f762e9127b2cb6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "cfd3d86c7083efb524a46af57e859cd5522a9850614da63cbc63865e04872bc4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "df1b99cabc857eb081d7ea65c5aa8e55c32861d11ad019b17d5447fed55e0e13",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "e2c626e7c18028e2a129fb45b90f9842359b98d491e5307a4ac37e35fe7e2e56",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "e2fbf8966e001eec563f44d1f2c8cda9aafeda10861206bd18d24ddd3e0bf84f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e76b49b897e6c2f0d97bf3ab0e2d61ca8e8953f5f054a64966dcd0d445e61aa5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "f28f435e39a7d99f0766cd0c72090176f94b2ebfa566cf38482714df6e5cee7f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f836f51ff54b03b48846cfa45321ff03efece8cc5b288b70e72bc6bdde88dc2c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "00890f8756b75021d9a788b62ffb613378f49eebdf71d4bb7551eea8fab576ee",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "014511b5a7bfdad05eed4e53bf5c94f8c0c3cad7e2108fdfd19193c904074449",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "098c69b79b9d9944ad045778ae269692f0a87c5273dc8282120f3adaedf5957d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "09a661fceda6251791ad7f0aba65ef35d80add9cd826d044063c273c4a65bc31",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0e1ea66f63ae233bfa6ab9849916b07b9d547071ced2479415ac8669b90655a3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "0ec3c14984bfbb437865b11c8cbaba4f573de3ec952d629f1c3e9761a0db9931",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "295b321cf9d987b752ae45d280486d143f40a8a34d85354924ceeac0c25b73d1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "2c6868613b53b59ecfc48ab82398edac152e9fb463660407cb4b85063892147d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "6ea4de23b0189496a5bf376704ee4263390ab4660414c021a6d02270bbfba1ba",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "78040511640a55c699fbf1a5aacb4c8cca161f0e1b1cae7aa8f25561299c0bad",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "8557256cf48d709dcedd4a5f89bbaf5a46fb572b3d1683e6fd698f85bb115ae4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8aa5d07f6a4445b33bf91072e627a01b0c725f493448d27f7c285783c12627a7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "901ef9af6c76f6575db9486a55c42a695519f46392ba519fd57c5548857ad19e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "90795c46668aceb8b410ddbfc0a64ac6779fff97326738c1c0fdf21bd431719f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9a99b9f7f394daf0c675e670bddff9c82fdec2e6e27a07bb076c16eeff634ef1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "b29cc4420a65ff10c47c0bd12831123191a6378e162c706c85d7b6f2b1a22b2a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "b34983d4530ea227ee636361c44bed6ed730f12cd9299cd12ce5c1b9300a97ff",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "b4d5302d39012c7e321cc7be0231a05f2d5e545dcf6bc56703558386e6ec1092",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "bb1a04a49d45203374a7e92b0d08c9b95882dc09a20911c95471aff62339c0f1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "cf0ed8d2994ef8a28718d161cdb0f379da98ddfab297018f6c164f7d8d631a43",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "e8c7158ce1702df35c9099aa443a4d8ae099e5b8614f667346f034d67c4ab741",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "ebd26dba38d72c721d18a4a09e5964772d9fc55768167d76c6e7faba542fc241",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "95bdc5cdb14fa2bf24372238046c3a92529b379d8ecc295ec6314fae59ff64c5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-schema.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "e9f54e7f0ca858b3dde65268aa7c25754274d931c9a7e864ca0ed49086deb616",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-schema.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "eb61af98bb7253a95515cbfbc6665dff2524d7670b3571ac54da9d5e67cb0f00",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-schema.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ff2c7681112fdc64627c76cc853ed040af971a6bf1a5afc8224bc285b1cb56c8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-schema.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "183591a2b67efc71a8aa6383f68cc1fb972120b7f7e6c950783b4ade1f463570",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3d824e276f78c18c8ef44f3745085fb00c50bae60b66f426cb984c776465392e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b86e05542e00d9e582499c689fdc85f646391896214e403ae51b88b4e8e37fdf",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0a9f25d82c8151d7ef36a7da91b98797e4bc2e1d5303af38f1fe89143e2ea73b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0e1321f5ddbee08d86bfad4800c5f47149b606960c73e803497cf7bb5a4556c1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "15154038c01e7911acd1bd16b4ab2264b7a12441a7050cbeb408d91ad59697ee",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "348debec2bfbba921aad37171be92de086b316cbf9292671dfce537990914796",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "3570bbc9d7b695bf087375e2171951eff2d52dd5666ea1a7d9223168c7fd963e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3bd39ef0890d024bb5d8bbeb50c8a890f098366e5a9e72030fa3c285781362a5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "612b7bd883dcea7c5934b647f6b62be644c10b5cbe3b0ba9bc804c56dc523bd1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "769adac1196444c9059b1820878e36f99a69048379850afdbcddf34cbf2fefd1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "94b2948f9e593f74c23c06e1e1378070c7711f7b2f05931c1585372d918918d4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9a85b0696efa6efd7cfb2da1268e62a0a9e9428e7c3e5051f7579a8a95eafdc2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a0106f93333b175f965cbf7886051bbf76c495b70b19bdb024afff7485a40f2e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a0caa76c44176ba3643e8ed7c408c866abe22874bbfa50ff2fc35924ab0971be",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a175e75a438fed4534d9821162e29128230d675f5864a7e37c84412437b6e67e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a31f1b3632bbb8f0251cad839e21ea8764150512ff8be1af7e9cfbd5a682c0d0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b899268fef62d6187738b97bd3c7c682d0de8b3409686d1083bd7e788be35006",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "c16783e8b28f9d0c28baf4380d6cf38cf6132e6dc71cc2ad00ce40abdc340d2e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "e0884c71efec076a675789c092b9f78fbc443fd6319d845a5bd34a580c911a90",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "e8bc54bdd2338890ecf25e5698db36718632dd610428b498f341159e598dff12",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ef018293bf9d65022ab78af408d3a074e729e00477216683be52d0dc57d853dd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "276095e394ed601d901678a5b9a2f010118de6ff20692f756b3dc7b4aec0b7fd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-operation-legacy-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "05f12728d28892b288992c57f11573ae3d69d8c9d9455c35397278892a9f2ea2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/doctor-report.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "58d36d48fe6bf76face6e8bf62ddbc3a6420d197efbabaad4270129e916a44b5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/doctor-report.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "b3c531b44d75d49bbb251965d3a75c45edb7be428ee77168748503a8b7ab9701",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/doctor-report.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "190a548f59cf18cf5c5b99c939812da268e896a5fa37e91bce6766567882cad1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "daecd11b84e43a2ac052d6f79b403b9b907f1a84a01a381165e8eb8c0930e61c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "e264fbc5a63160b7662a6226ae807e7cbec4c28326c2707d75563428012eef40",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "2e977a1d9b7c2e9d93fecf60c6a0b3f87efd432ac5fe0fd3437ecc7a66b17a62",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3015d102532f25fb5d473c60c08b6d3bb8395622111b37a614d73efde42cb690",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "303600430703c115fd5d62fd16d99a7a14e8011661bc6f63840f0a4587e3df59",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3c80e21aa4af4402bbfeca2e46148ee67b02a741b985d5fb468497982861b77e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "433c810fa065e8f6ac728be74a843666106f01a26b68a0067d57db75ee03a632",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "445207c92ba60a8c71dbc8603cd37c810ae57893f535048091de1ea9501f6739",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "45c94e2945a4b253e165000fd5a4d728fd407100dc3d67834172ffec497c8c2e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "57e14c30fca64418fb6ce14d818027503ec6dbc14648cf6ca83cbaa8c3139695",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "79504199992f7395ea32474b3618a6df1539467b5c3b0c7079686eebb432f603",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "7feae57ddeb1a65770072492ebe5fae04a2bef02dec092f4930c72bc7b8d7b2c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "812ba4ecda521d21679b148474232729267c9fc1218b77c31e795b637cc9a428",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "908befc76f8aa5631481e31b137af54471c6fac0d9bcc122de234db87b970611",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b05b56dbce8ff1adf434519aa07c4ce9e4a664d393b64e7529b047ffadb4696c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b1b59002387cca812649f06e1653739e8795d6116799a64ba64a1a31860c71e1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b2c2ddc68568bd679f704b1d5e6229dac710e8e22ff869b795a39054d763621e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "da82a8945e4919101853094eaa9e00733a787e225081f2303bb240b8313daa38",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "de2561db74a934ad88ffb2de3f17cb5b75896a3a56922f2106f0661e63d0be49",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fc17388aa002c1ae94670124b4083a4a0ba89813d6d2dada24fb3d2d886c9378",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0c3b027356b40b0fda38016ebe2123c9bfd019f2ff705a8d0f1e0ea4e9f94ca4",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e91405c40fdc4ff03fc84e8b6786f805ea622661b7d84a315eb1cb7ac12835b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1a911a11431184955acf3c80f2d5b2c319388ce59b6580efe1422d70e96ca039",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6d0b78444ff2da120242dc6e31c92bb6dfae63e7fe4e32c2c67b14758183b377",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c52595e4c7a58871157ee80aa8f501e9f362f0ba89fe12639ffc702f8ab169f1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "faf241ab0d6bc1ce32404335c28ceb29735dee35f8046fe12d2bb9ca3b8df4ff",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/migration-compatibility.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0f40a5d94e1398fac5651cf5dbac457a7932386fd4c1555608d3cd584cb543a2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "272c70244ae0cffc53a405b70b29e96b4dddc41c5d193cc335ba049adfe51549",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "38ad99f766294d8caf964a5060f252ff58e971806b396eefcdc198d8afbe92b6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "75963f41a6a345d0a1a9f91f8a5a6dd0bb2e154b55e5d26143289e509709b241",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "7eb479b11ef5cc497ca060063d1bfd8088b13ba16353598fa68bce611d801ce0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "8e71db01cf9def550cbe20b6b0da4cac385263a60208d0a167a7a1af42d5e31f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "9cb617d474ab3f82a35d9f806ca8a2ca2e1b3bcd7f4b5ca4b63c01d203aad58d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "9f4dd648bca31c1d2b83ca47c7229240664dd1e42bdb6656a7fc20bb6ca6b736",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a3f0be0380b9846fe0df905546de130779b9253041b6396b595d7ce551985a52",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b1f0beefdfd0da4ad4480d6b2e58d6b2fcf274ed9a810c1a09af0c92a6742f98",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b845cab4bb9d9cb87d03f6545419d4437386e3516381e8103ec6e749ed3a60e3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e05ad8277ff3027835b1b7cd516d113f66d2c3fa85e336c3693cd7cd7c643e5d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "e778967e1f4d25e83efc56bf4d574df6a31f979603715e1d1dc30d201fae259f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/model-profile-governance.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1c7a069a6d897ef76701c54fe51c96ede5ffab75b4dd9d343100ff338200581b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4fd904478a23a51d44c5c02641ae51c82926cc42d00f313242ee0383840238f3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a394be6c46fe6e02cac6958425eda091789f99f144a63e5bdf1d8652ff7299ae",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b14640de5a49ea3f19399e3247f5383c8f3fc67d253f54edb169fb9bfe1b94f7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "eb2d9235f7d4462f701b0964f300e615b777fa88fded3c699064e017594dbf84",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f25e119cf5b1760216ab8bb906d783a318111bb451c81473554aa42257a6f42d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f42b8294894a846cdb7b1ce000272d2683540f45c6e13b896529a379bbbf753d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/poem-store.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "1b6272dce6a0ae3e6e32b06902161f385e8e44f123450112c83f28382928b8fb",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1d46ddfd87c76a070ecbaf14ee15a458800deed2eefe006a865b03f7a95559af",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "1dfa51621ec0febfa178ec0fec3f32a4973fa6c7218f9c438d88f312ce1aff50",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "1e07407d4e2783af6f94dbca20c7322cda7d21cd9d94b71ec73934608e9ef5f7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1f5fd666be33747e3cd947ec3fa74741638aa4d7adb3327f44b2cf91fb49d25a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "2095c1761c97d5004ef4bce5ab691faf53839d8eb06bbe6278903c0e63f8f850",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "20fc665758c2644d0bdd559e959345ca494f587e07bb7d9297efd2cf6702a81d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "28c8d6e12b3f5ea932eddba27cad2f3b1f22e30a4ff42726f30882d2c2462798",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3ca3306f85f6ddd917acbc5da5fcc9de9b309cacb9ec78999273a709448a2e1a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "40f64e1124c236c55a57ffcad96f960899a9563e323e6491ad180443fcdef8a8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "56ad3800d0b845b326940ec15a2d456649ab0b94413e48f8299648ae4e7e0a74",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "5713bb845175e02e6f66d1c4edc17329f88116bf9bd12417595305815822f4b2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5da999013f099a257acdf5f8407d783dc3fc12070cb48cee2800214ec28d1df1",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "67ded2ab998a01069186d0d7e0c16f0280a4c9934b0eeed53a495a1029e8f315",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "7874f01dd2a8bb53d02e3b351b1a609f91dcf2d71c735ceb06649ce0e1a8a6c7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "796253b6c287f326240da67a263c7d673bc51bd1ab2fb4eea01371235f4d6a83",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7fcb0ff843c7b134678f3967e57ca0634e1ada5c1063ba847b7c62f10a3a78c9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8022f08214310f5fefb0875b55976320f11efcf8e6dba5149995ad9852127f93",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "8474a8247477a335da81ec178f15fc416860c52bca8b24436f9830db07109bbe",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8679e5a565d3fa04df1f4000e6da1d26e17985c2841d4c3e96dd4424e8130095",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "c789e7330f5aaa1b68291e1de84f06c2fcb77338a748ff327e6e3cf72b532fa0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "d4d16f086978f3d7576c5d3798ab54f2e0b711a7bf7bbcddd9c48bacf8d78678",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 10
+    },
+    {
+      "fingerprint": "d5193b13abfc68b79e59dbd830cb5621b819b2e7901a63fe9953e2e793f51a8d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "d57058df9a664feddcde4ed61cd17e763a3870516f4f5734b39ad79a89b11f9f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "da3bb84eb3a769f445386ddda6f6fa104a0cb296330455688e997bb7450393e8",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "dbb7d802689f79e93bdfc79be3787c173548e10e2d885d85f4d6103903e53883",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "e68d85eb8b05f8bf12f564e48482d7c9cc74a6e17e1caf21a2f575c9b8da9a63",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ea5ceb647be31ba6a689fac98cd59c910f42d00773fb9b72b735de5778bcf2b0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "ee45f3d46afacf0d1e81c6c3c5b0cffa753865e55701e628011b8843ec0654fa",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "ee78f14354cc63222ff4162d53410be0c81d152629872a225f682f7e64b26127",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f59e2a4871da83680f7aabdf8353f8a3e866851b9807311ad395040ff68ae716",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "fc152135b7c3f269580468c442e0c27a52cec439859fe202f5457c210e017d27",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ff9eb923edf8bf6e8c7b1f8d0266a04f54edea78413c9b0a65e7cf7c06fe76b9",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "184489a7e24b71a1c383d5e53670fed7dc942f6a3998894648cef3c2ac045987",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4a2ce37587bd5ef062c753f6740247565f03ac43f2ccd24251bbd8c56faeabc6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c8505a0a3cb745fd3464398056b5e1df2d8934380e8cfe18a7199bafafee353e",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "07b90669794170ffb526dc9b90e7c727dbb15fa2d70982a021b90e56b07d182b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "094837f46b894c455a764b6310d114b99aaf55978cca243d58811bbb73e70c07",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "1a94ff9cb67a8005313c151cb7537c2fef04d9a2844aa856ad9ea7abdfd168ef",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "22ee6b79a712575c8b271c681e13b31015f357cd29108eaf13cb6e898db78f9f",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "29156c46d2bf9d2f36a7ac4e8d132f78d2b4d64ed70bf57a34482f1c03924eab",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4f436329a28009d3ab1986a3e7d4c5b642143dbe14f2d511e84db362bb6a6336",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "5108bda014b1c6045f12240c721e8abfa5a8dd974053b3f836c7b92a2597df77",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "55c744a9fd2c26e2afccf65c606c078b2c51fa0313e904706ceccbcb029fe4d7",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "6031adbd1d663903f40fd530a75023258c4d1bf047db049a4991a74fbf73ce83",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "62cec29249137e1c3693ab36e5f2895ce87620b7354403327cbef10628331d85",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "798866eb5c7a119d4bfdfa71e8295528ce2e1ab7f3525c54234078bc9774f29a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "798d9529357df7332858a0895b221081677817c8d18d1f10fa868a9cec48bab5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "7f2538f9c7e461da8d247b0a3b597117b403149bf20e535f2605289f47c753bd",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8d23370e8dc6ac4fb35de83d0ebfd07c54bcdb838c6ef4e4c79d773e5d09b28a",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "9693c5588edf6f5b8588a4155dfcba5c133dfd40d5e40fd3519dd2e438076126",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "9f964511f9b2e3d5afbdecea35fc6543e8c98809ac39adb0dc9ff109ae3aa34d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "a3927324bffaa25152c0d4ba529138071fd8f09a840ea5baf97c140dde0498d3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b83f61830fcfd0b02794de73b596a2aa9b46f90df46bfc5456d51db60cf0d8a5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "b962979e37d3d8d6abf1a86025df6eae0b5e6fea8eaf8c6729475f985cb1756c",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "c31b4316c3afadf7d0d9343e33c1deb69d101cddb2befbb8155b9396a998855b",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ced1920d64f24bdcd5a9328ec52a019024711e54852441f5fe8d592e8822fed0",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "cf5ebcf033c02cd8ec4e6a8bdc54edbd1270470bdab7e1a094efa2698c5e4bb2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "d8e76cc15b34ba36d5dc56293bf07f84e63525fe360a172b6d8e78acd812f93d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "f6d4cba7d6399315682a88de3e2ee8ab0124ef4d10d9eda041bf8b12e3da0840",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "ffdec0567f4ab7bd1631c8c84fd91b875e7a5d284aa463cc34435d2a36cebd10",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "2c70061eaae73f85ced1faedefbb61f5ecd1aefa39fcd84ee5f73d1fddf445e3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/build-output.test.mjs",
+      "count": 1
+    },
+    {
+      "fingerprint": "395e4f4d4b9d026af1fafc86e2040ea74b3cc711440e5affe99bc8030d99654d",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/build-output.test.mjs",
+      "count": 2
+    },
+    {
+      "fingerprint": "5044118c752338c64d5abf2d6cc0f4ab9a4e9945ef772b9ad62c4d347ab74d42",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/build-output.test.mjs",
+      "count": 1
+    },
+    {
+      "fingerprint": "21ad50deb92e66f6c0114c22c08afbdefb6726d2dea9de4442c92794842a8acf",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/catalog-d1-adapter.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3221612ef809c50de4f2e34ccad72bc4282fef7b45066387d1b50de2e0d52032",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/catalog-d1-adapter.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "48ad2a5f7c1e087f452538f8352a4714bdcc1b5da2aa10fce35d3844bc3b82e5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/catalog-d1-adapter.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6dff2aed1760d947d6b22a28531a510e43126b9750d862cf80ce4ad4acc3db68",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/catalog-d1-adapter.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f4030f3b2fa20e3223b208bd79947bf0a64fa56aa257a75989970129df19c3a3",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/site/tests/catalog-d1-adapter.test.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "564dbba298695ec3f245de2eef3b1bf6444af4ff8922c97fe9a46adde86da8db",
       "source": "eslint",
       "ruleId": "@typescript-eslint/consistent-type-imports",
@@ -1141,6 +4116,118 @@
       "count": 2
     },
     {
+      "fingerprint": "56aa01f3b0f3f2b26ded03d975ad56a4408d5e58228a7ffc91d6d5b0635f5f33",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/no-meaningless-void-operator",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d36896adafb0e2f4295ec45d7dd7801b670bbfe55be793c9f6d0cf04345da1b8",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/cdp-diagnostics-client.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "523c65f819ea45b735e8099d131cda8ad3ac0c7674ace66da3155f83890d2955",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/fanout-reconciler.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9ed23436bd13bf04de0e87957d257791de43a33a5e00946b6f5676a6ce50f0bd",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/fanout-reconciler.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3100053a62d24069d9d6e3a82a346a4d069036fe5755fe9bbebb934cc4d57262",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/fresh-cli-owner-bootstrap.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "84674ec1edfd00f738a1a3182a8d385871fd96871339995968879645b85fc235",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-operation-import-cli.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a01134fe28de0ea1f2cc126aebb7cec56cbca0e3a0ed5a3447bdc5e6b88436b5",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-operation-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d7fa0d750079979aaf5870ba4174f2efc60edb186d912c29c58faa140c78ddd1",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/supervisor.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "14a1abcd33681e23682e7992a16564c9345582c8b9c9d15e0e2f57fa15a2efb5",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/tracked-test-root.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "636fe3200bfa0291daaa38e37382465190ef66622d81eb743c005c83bfd21283",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-integration.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ea7b608b9b3fe0a2aed776016aef196e330d8ef6b547ddfeff679447158736df",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-generation.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a6d42f3c11aadcd7446af2495658bc91ea3a71209a78cf63d5ff2b8857215ca6",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/runtime/cdp-diagnostics-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f4d76fffbc8f216ee94ef830bdba9cf16dbba15cc17182a73a62e3c04378c820",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "04ff9469237dd7c9fb3243d1a2bfe2fea3b26332b84d7d0f21238b162ad14e92",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/runtime/resource-pressure.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "85bc9d18f7329d698535a756a766c6b2de63aff1e751f69854b1d4c715f3deb1",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/runtime/source-keychain.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9054f4d29fb2f93cb9b86f19405a90e7b651a5f44637b483efd7c26ff3e968e1",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/strict-void-return",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "ac7142cffe732551ef52fc152ea71f8fcebc71b83ef245386eb67c19a193bbe6",
       "source": "eslint",
       "ruleId": "arrow-body-style",
@@ -1167,6 +4254,342 @@
       "ruleId": "eslint/file",
       "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
       "count": 2
+    },
+    {
+      "fingerprint": "0a3cbae564e460f064d01ee9d27577d57f84602c1057e127dcb75dedf9b9c29c",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cc23de0468042eb4990ebb96aa70318717fc778090b8f1195e184b410c0d3271",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/historical-migration-engine.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e1b8b0b4dab1abcbba17ff2cde647b43868f8774b11dd86caf30a81f4caadb11",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/import-empty-test-operations.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6e066ca15934adc43840035e0e74fa0246368d63abe12b1cc22c3ef8742b12a9",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/legacy-ledger-schema.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2a3affb68d83239789c332029c3b923433fa1243bb0ab7ef3ab2e2fc71461408",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/tracked-test-root.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d17bfb5a4d4bba24abbe47309cad47fbc81ecb8a5614009da867c21bc2b6f06a",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/collection-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c105406bafd52587fb0dda04e01391a689d85c5044154da51e39ab6be3ab4cfb",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7fce61d19f2743dcb4d287daed685e59a7acaff5c1c6763e623a48632fc22eab",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0a3c6271cfdcf679bfbeb7a140fd3c9d5654865fd7e054268e2e0b7d5ec0d3fd",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/completion-plan.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0daddff9eeba3c568d50dd89c00924ee9dc514d3ff8fd2f353efd5fd1caaf4bb",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-generation.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "49f3ceff35130ffca0f17dc7dbc5dd3a99976c4ac2439962270db72ddebbef74",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a80b80b2f38a4623283195b2cc15e9d8c8e8128d2e83853ceb9d31e5b3d9e4a9",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "54b7356c48520a00a2d0c5c44528a90ae559eacf3c56f052df9385c00a55b62b",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4ecb6a82f5be90c77c03fda564ae798c6db7a416148fea8b99e051f3a7ac28ec",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cef0901aa874530f0ea5f9c4358f1efd3c67eed0d565ccd9a596859f3979aecd",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 30
+    },
+    {
+      "fingerprint": "0354e47a236e1e3ec6a17b9fd272234a1cc72744be950800faebf4b7f011406e",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/pause-controls.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "543167c3d99a3d471974dca340fb05d5fb0e72fc7f2eb7e3c87c1c11d678a137",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "078550b0562a56d0c2cdf7ef3301869fcb5d9466603d9306fe73fa90a9f8f6b4",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "e9a56f5e19aab48ede91749c7665bd2556e5d4691938fdd95029ba4338736608",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6c86bdbb4fe901850b80200b8b992d13b2ac5996132cd4027674c07c7fe4d6fa",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/read-ledger-source-identity.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "68613315fac41aec29c24891bae5a07840c658181dc9fc760dc6cb17bc15c4ce",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "ac9f578d9f7677b422d9a093736f5b17ae89d9c9935b3ae4b2e637299d313ecc",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-legacy-intent.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "66e4bc8859c4c6b92c8dd0c950567c2768076f47747fe669201abf8158f5285e",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-operation-import.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e1d1731ae2648892211587ae0b698da0a86ffca06260c28a5efc70cc47344d04",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-operation-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "4556727688e9f6011bdab55fc9fcb3b40fcfd8031e8262ab8a4b371fa8afa821",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/sqlite-query.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "90970921d12651014037e60d53c8948acb24c7949ff2fa1e4e1e6c53b8a62441",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/stage-legacy-operation-schema34.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4703a86ad4b5b1b6e9db3ead8a018446f1888d3de9443f6719bdd4f1513f9a31",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/publication/corpus-import-actions.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7b32c8209e6cd58cdd0f93509259649a4a341a1d44df1b70321c397da289837f",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/publication/demand-driven-production-resolution-refresher.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c8380d19d38ae8cf58fb858156fc8969a910d63b8b1d041ebbc882642d9dcac1",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/acquire-legacy-maintenance-lock.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "227e2f11f4d74c01719e475e721988fcea7386973d2f73b5dfbc521a3fa37dde",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/cdp-diagnostics-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bf67a95b1eabe01a26eb54c180d919f32ceddfb6d6879b9ac15b22951d2c077a",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/chrome-cdp-launchd-service.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "132948310cb3016f2205d48bc0dd0b23afeb236c6ed5e2862dba13031d15f89a",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/cli-source-policy.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "53c5fad9d9dd9ccffc2a9839c1d25497e9fdd6deda963295c5ce0d918398979a",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/concurrency-control.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1c36bb2d0822f234124191246d96ad54b99a60c77a9b6a6865b1e54c73e700bd",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "4b6f79f73b5c987fafdd94de3d80f19e2cf7b1bde62d0f5a45932c713c8b08d7",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "545d847c925f4973c0b322c97a1d9fc8c0f158c6c4686d452cbb13b529e4470b",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/network-resilience.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9b6411a512d58abb61cedabbd47c675cd7a6118fa9a1e173f34f1a4ca8ce9302",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/operations-contract.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "76a5e0fb326c6c830cc446e0a96d0fca280d47ce0034a8cec641f599ee3880fa",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/run-lock.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "757accc294bc66e55bfe00f58da58a9fc7b3cfb9a7d333f87a15f63bddb09d48",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/runtime-installer.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "89f4a00054454745f7d2329e7bef6b30f3223636553de749f23aade1a187c236",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/service-enabled-control.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "65c4e9d1651ab404bcf9d5c0c37c34d9eb12c595de243e28a8e1a338df710b55",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/service-status-inspection.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ea1266340f4270adff3d25835cc56406bb4ccc84a6dd87391758b6d7653246a0",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/source-keychain.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "afa01eb3dc59b11b5314dd9ca36630e3e4329cf21895a6e635ce7e9d2e61466e",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "600e62a1495cdea6e262dfa747392ca529cce4c3182e656d6c0f829bd9b6afb1",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/corpus-import.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ec18dbcd618df980b8bdea67b4e5b0b9090ca44e90299bb3a7be1236d9e8c86e",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/enrichment.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "40ac44144f357188252451aaa783ab4b5c8c77a712e5c8f1b4315c7c14090d7a",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/sitemap.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8b94dec5671dbbe930d58f8834f62d1d590eba802b742ec26734034f296bb068",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/source-bound-publication.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "27730e208babf5fb53fa4d84b090ef8038ddd0c26c76c895ff8a43f85b2b9177",
+      "source": "eslint",
+      "ruleId": "no-await-in-loop",
+      "path": "typescript/scripts/generate-architecture.mjs",
+      "count": 1
     },
     {
       "fingerprint": "5ceda1cea3aad80f94472ce38e04fab6038f7f9a4c03412d369b950efcf10e29",
@@ -1701,14 +5124,14 @@
       "count": 1
     },
     {
-      "fingerprint": "414501a82fc6b4d4d5a5d5a2db34b10915549db1e646119762688c2b1918e9c5",
+      "fingerprint": "c58d6589d93d823f101c01034d9ffa30d07ed7ee5892718e161328830c70757c",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/app/src/lib/public-cache.ts",
       "count": 1
     },
     {
-      "fingerprint": "7d2ec8cb6becbe3e08c8446e36b8ac597f80bb3593cf808db7d47bb74a83ea4b",
+      "fingerprint": "35caf93c55e15227827e7af8487fe531846213f47754359f69ae432ffa8f9fa7",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
@@ -1716,13 +5139,6 @@
     },
     {
       "fingerprint": "615d0c8846d9ca81dea882e89683537b6bf2aa6ffba8a59987b6032618936ddd",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "9961afbff24b412e05ca58515fa299ca807a4dc98f9450abda809f93398e4a32",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
@@ -1743,49 +5159,49 @@
       "count": 1
     },
     {
-      "fingerprint": "b70b58c747f8652bf1109ac6e13f0057f04cd9dadfc3ed7d7227f6ad669911f9",
+      "fingerprint": "dc9663ebf2dafdbdea0f91ff2009ae4789065a062e7cf306c8ab73f6a6032e83",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b901b914655f162336fa950fecec60a5320471f37e4136e8d0c9dc4759388be8",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
       "count": 1
     },
     {
-      "fingerprint": "3c650a8c7af2355dca8b46ecbfeb39823dde1d780393079bc670424e823915ca",
+      "fingerprint": "f93d294720196822ad13ad981ba90429f247a3ea8a6d2850e3e649030b866ab6",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
       "count": 1
     },
     {
-      "fingerprint": "9f3ecb0edfe8421aa59fe75e9b5c8a8ff4684e9ee291aeb1872e3663a49c5b49",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "fda95f448ecfd54d4cb0cd028b14c821dce41952fb52600d36249e9b57580766",
+      "fingerprint": "c80ab70a49e9327a573b72333b812839a125441c1e26bbc4359cb3b673a5bb29",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-store.ts",
       "count": 1
     },
     {
-      "fingerprint": "32225b9a66742d713f27000463f311125ba504d1127160b153a3046ed22d03dc",
+      "fingerprint": "f34dcc9e632290388a1c8111d3c40c32fd4aea1737f0476a39ce54f5544f7ffa",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/persistence/sqlite-query.ts",
       "count": 1
     },
     {
-      "fingerprint": "0e3fa2f74f0ff40d526504a2162cdea3eb1bb9744648920d28506ab1582fe7ea",
+      "fingerprint": "f227576ec6df989c623e10e294e0cb39a7b6063d51cae1ac66cedd70cb5fe1e6",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
       "count": 1
     },
     {
-      "fingerprint": "9535333d0d3101b7c9b7243950c61b87498a34460f8430ee8c974309871face5",
+      "fingerprint": "fec4aee1e8f95e7e369aa7d05b8551de2daeb0dff188fc858c8e09d455caffe6",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
@@ -1817,13 +5233,6 @@
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "c8a2c7a35814aebe68d11416d95734c5611d1cbea84798c5d90e1a2e35b052ae",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/source-adapter/src/parse.ts",
       "count": 1
     },
     {
@@ -1887,6 +5296,69 @@
       "source": "eslint",
       "ruleId": "unicorn/no-object-as-default-parameter",
       "path": "typescript/packages/precedent-node/src/services/__tests__/production-resolution-reader.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "16c0ef1d91b731dc7e0d9aff93ab354e2f5271d4fc1968315134be2d09b89eb6",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/crawler-local/src/__tests__/support/tracked-test-root.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3f81386430db62f27425ae8d1930edbf44a1210d87c154b976111b8f944d484b",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6226ca6d42313cd36f502eeff93aad7c7174dd8d8ee9cd1b4117b6aacba9d8e3",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "6d98fdecd271e192fe3c954ddf4fad33ef7bd044b93edb2713ddf3eccc7da26b",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9201ffcfbb6a6ed8a3259e137908b6ae6c57525459282f2178d9f71e2a2f3315",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b6c90d4273ae2312de295afc646b4a8fd95c29efaec22be85c276941c7f2f90a",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "260bc95eb130ec5c7747b841e77f4b227dcb81b7f871881449443ef78b68f4fd",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-combined-guards",
+      "path": "typescript/packages/site/src/lib/poem-translations.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8d4b8d63e6d985eafed0d47e4cfb525afa20abc971289ef4bb855f3639c168ec",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-group-by",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "327ecf4a5cdc02bfeeb608c8a3d4ba14ce00be18100ca3e628d9050059eb4c58",
+      "source": "eslint",
+      "ruleId": "unicorn/prefer-logical-operator-over-ternary",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {

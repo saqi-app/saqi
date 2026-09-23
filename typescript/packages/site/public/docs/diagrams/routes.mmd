@@ -1,6 +1,5 @@
 flowchart LR
   browser["Reader"]
-  d1[("Cloudflare D1")]
   route0["/404"]
   browser --> route0
   module_BaseLayout["BaseLayout"]
@@ -14,11 +13,13 @@ flowchart LR
   route2 --> module_AuthorCatalogPage
   module_catalog["catalog"]
   route2 --> module_catalog
-  module_catalog --> d1
+  d1[("Cloudflare D1")]
+  route2 --> d1
   route3["/author/:authorSlug/page/:pageNumber"]
   browser --> route3
   route3 --> module_AuthorCatalogPage
   route3 --> module_catalog
+  route3 --> d1
   route4["/author/:authorSlug/poem/:poemId"]
   browser --> route4
   route4 --> module_BaseLayout
@@ -33,6 +34,7 @@ flowchart LR
   route4 --> module_poemtranslations
   module_routes["routes"]
   route4 --> module_routes
+  route4 --> d1
   route5["/authors/page/:pageNumber"]
   browser --> route5
   route6["/docs"]
@@ -45,6 +47,7 @@ flowchart LR
   module_AuthorIndexPage["AuthorIndexPage"]
   route7 --> module_AuthorIndexPage
   route7 --> module_catalog
+  route7 --> d1
   route8["/robots.txt"]
   browser --> route8
   route9["/sitemap-index.xml"]
@@ -57,8 +60,10 @@ flowchart LR
   route10 --> module_catalog
   route10 --> module_routes
   route10 --> module_xml
+  route10 --> d1
   route11["/sitemaps/poems-:shard.xml"]
   browser --> route11
   route11 --> module_catalog
   route11 --> module_routes
   route11 --> module_xml
+  route11 --> d1
