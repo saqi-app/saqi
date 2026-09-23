@@ -21,13 +21,10 @@ import {
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
 import {
   publicCacheConfig,
+  type PublicCacheConfiguration,
   PublicCacheInvalidationError,
   purgePublishedPoem,
 } from "@/lib/public-cache";
-
-// Keep this aligned with the public site's 300-second edge max-age plus its
-// 60-second stale-while-revalidate window.
-const MAXIMUM_NATURAL_CACHE_STALENESS_SECONDS = 360;
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
 export async function POST(request: Request): Promise<Response> {
@@ -48,81 +45,16 @@ export async function POST(request: Request): Promise<Response> {
     const cache = publicCacheConfig(env);
     const { corpusImport, poemStore } = getServices();
     const results = [];
-    let cacheInvalidationDeferred = false;
     for (const item of input.items) {
-      try {
-        // eslint-disable-next-line no-await-in-loop -- Per-item commits and cache invalidations retain request order and replay identity.
-        const receipt = await corpusImport.publishBoundEnrichment(item);
-        if (cache.state === "enabled") {
-          if (!cacheInvalidationDeferred) {
-            try {
-              // eslint-disable-next-line no-await-in-loop -- Exact purges are intentionally serialized with their receipts.
-              const authorSlug = await poemStore.getAuthorSlugForPoem(
-                receipt.poemId
-              );
-              if (!authorSlug)
-                throw new PublicCacheInvalidationError(
-                  "PUBLIC_CACHE_ROUTE_INVALID"
-                );
-              // eslint-disable-next-line no-await-in-loop -- Exact purges are intentionally serialized with their receipts.
-              await purgePublishedPoem(cache.config, {
-                authorSlug,
-                poemId: receipt.poemId,
-              });
-            } catch (error) {
-              if (!(error instanceof PublicCacheInvalidationError)) throw error;
-              if (error.message !== "PUBLIC_CACHE_PURGE_UNAVAILABLE")
-                throw error;
-              cacheInvalidationDeferred = true;
-              // Publication is committed durably before invalidation begins. A
-              // transient purge outage must not make the caller replay committed
-              // work forever. It also opens a request-scoped circuit breaker so
-              // one purge outage cannot add the same timeout to every item in a
-              // batch; the public site's bounded cache policy will revalidate
-              // each route independently.
-              console.error("[ops] Public cache invalidation deferred", {
-                code: error.message,
-                maximumNaturalStalenessSeconds:
-                  MAXIMUM_NATURAL_CACHE_STALENESS_SECONDS,
-                poemId: receipt.poemId,
-                publicationIntentId: item.publicationIntentId,
-              });
-            }
-          }
-        } else {
-          console.warn("[ops] Public cache purge skipped", {
-            code: "PUBLIC_CACHE_PURGE_NOT_CONFIGURED",
-            poemId: receipt.poemId,
-          });
-        }
-        results.push({ receipt, status: "published" as const });
-      } catch (error) {
-        if (error instanceof PublicCacheInvalidationError) throw error;
-        if (
-          !(error instanceof LostPromotionClaimError) &&
-          !(error instanceof CorpusRevisionConflictError)
-        ) {
-          // A partially committed batch is safe to replay because publication
-          // intents are idempotent. Do not misclassify transient D1 or runtime
-          // failures as terminal binding defects on otherwise valid work.
-          throw error;
-        }
-        results.push(rejectedResult(item.publicationIntentId, error));
-      }
+      // eslint-disable-next-line no-await-in-loop -- Per-item commits and cache invalidations retain request order and replay identity.
+      results.push(await publishItem(item, cache, corpusImport, poemStore));
     }
     const body = EnrichmentPublicationV2ResponseSchema.parse({
       results,
       schemaId: ENRICHMENT_PUBLICATION_SCHEMA_ID,
       schemaVersion: ENRICHMENT_PUBLICATION_SCHEMA_VERSION,
     });
-    return Response.json(body, {
-      headers: {
-        ...NO_STORE_HEADERS,
-        ...(cacheInvalidationDeferred
-          ? { "x-saqi-cache-invalidation": "deferred" }
-          : {}),
-      },
-    });
+    return Response.json(body, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error(
       "[ops] Bound enrichment publication rejected",
@@ -147,6 +79,47 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
+async function publishItem(
+  item: Awaited<ReturnType<typeof parseRequest>>["items"][number],
+  cache: PublicCacheConfiguration,
+  corpusImport: ReturnType<typeof getServices>["corpusImport"],
+  poemStore: ReturnType<typeof getServices>["poemStore"]
+) {
+  try {
+    const receipt = await corpusImport.publishBoundEnrichment(item);
+    await invalidatePublicationCache(cache, poemStore, receipt.poemId);
+    return { receipt, status: "published" as const };
+  } catch (error) {
+    if (error instanceof PublicCacheInvalidationError) throw error;
+    if (
+      !(error instanceof LostPromotionClaimError) &&
+      !(error instanceof CorpusRevisionConflictError)
+    ) {
+      // A partially committed batch is safe to replay because publication intents are idempotent.
+      throw error;
+    }
+    return rejectedResult(item.publicationIntentId, error);
+  }
+}
+
+async function invalidatePublicationCache(
+  cache: PublicCacheConfiguration,
+  poemStore: ReturnType<typeof getServices>["poemStore"],
+  poemId: string
+): Promise<void> {
+  if (cache.state === "disabled") {
+    console.warn("[ops] Public cache purge skipped", {
+      code: "PUBLIC_CACHE_PURGE_NOT_CONFIGURED",
+      poemId,
+    });
+    return;
+  }
+  const authorSlug = await poemStore.getAuthorSlugForPoem(poemId);
+  if (!authorSlug)
+    throw new PublicCacheInvalidationError("PUBLIC_CACHE_ROUTE_INVALID");
+  await purgePublishedPoem(cache.config, { authorSlug, poemId });
+}
+
 type PublicationFailureDiagnostic = Readonly<{
   causeCode:
     | "D1_BUSY"
@@ -158,7 +131,7 @@ type PublicationFailureDiagnostic = Readonly<{
   code: "PUBLICATION_UNAVAILABLE";
 }>;
 
-/**
+/*
  * Classify database failures without logging the underlying error. Drizzle's
  * error message can contain SQL and bound parameters, while a nested D1 cause
  * can contain request metadata. Keep both fields fixed and low-cardinality so
@@ -215,7 +188,9 @@ function errorCauseSignal(error: unknown): string {
   return parts.join("\n");
 }
 
-class InvalidPublicationRequestError extends Error {}
+class InvalidPublicationRequestError extends Error {
+  override readonly name = "InvalidPublicationRequestError";
+}
 
 async function parseRequest(request: Request) {
   try {

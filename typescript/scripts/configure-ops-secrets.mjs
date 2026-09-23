@@ -4,8 +4,7 @@ import { URL } from "node:url";
 
 // These are the Worker bindings consumed by the active public deployment.
 const SECRET_BINDINGS = [
-  ["CF_CACHE_PURGE_TOKEN", "CF_CACHE_PURGE_TOKEN"],
-  ["CF_ZONE_ID", "CF_ZONE_ID"],
+  ["SAQI_PUBLIC_CACHE_PURGE_SECRET", "SAQI_PUBLIC_CACHE_PURGE_SECRET"],
   ["SAQI_ACCESS_AUDIENCE", "CF_ACCESS_AUD"],
   ["SAQI_ACCESS_TEAM_ORIGIN", "CF_ACCESS_TEAM_DOMAIN"],
   ["SAQI_SOURCE_BASE_URL", "SAQI_SOURCE_BASE_URL"],
@@ -47,7 +46,7 @@ if (!/^[\da-f]{64}$/u.test(secrets.SAQI_ACCESS_AUDIENCE))
   invalid("CF_ACCESS_AUD");
 if (!cleanHttpsOrigin(secrets.SAQI_ACCESS_TEAM_ORIGIN, true))
   invalid("CF_ACCESS_TEAM_DOMAIN");
-if (!/^[\da-f]{32}$/u.test(secrets.CF_ZONE_ID)) invalid("CF_ZONE_ID");
+if (!/^[\da-f]{64}$/u.test(secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET)) invalid("SAQI_PUBLIC_CACHE_PURGE_SECRET");
 if (!/^[a-z][a-z0-9_-]{1,63}$/u.test(secrets.SAQI_SOURCE_NAME))
   invalid("SAQI_SOURCE_NAME");
 if (!cleanHttpsOrigin(secrets.SAQI_SOURCE_BASE_URL))

@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 function routeFileCount(directory: URL): number {
   return readdirSync(directory, { recursive: true, encoding: "utf8" }).filter(
     (path) =>
-      /(?:\.astro|\.txt\.ts|\.xml\.ts|route\.ts|page\.tsx|not-found\.tsx)$/u.test(
+      /(?:\.astro|\.txt\.ts|\.xml\.ts|route\.ts|purge-publication-cache\.ts|page\.tsx|not-found\.tsx)$/u.test(
         path
       )
   ).length;
@@ -49,6 +49,7 @@ describe("contract registry", () => {
       "public.author",
       "public.author-page",
       "public.poem",
+      "public.cache-purge",
       "public.not-found",
       "public.server-error",
       "public.robots",
@@ -70,7 +71,7 @@ describe("contract registry", () => {
   it("covers every deployed Worker boundary", () => {
     expect(CLOUDFLARE_WORKER_CONTRACTS).toEqual([
       expect.objectContaining({
-        bindings: ["ASSETS", "DB"],
+        bindings: ["ASSETS", "DB", "PUBLIC_SITE"],
         id: "operations",
       }),
       expect.objectContaining({

@@ -1,17 +1,21 @@
-import { z } from "zod";
+import type { Fetcher } from "@cloudflare/workers-types";
 
 import type { CloudflareEnv } from "./cloudflare";
-import { readBoundedJsonBody } from "./read-bounded-json-body";
 
-const MAXIMUM_PURGE_RESPONSE_BYTES = 64 * 1_024;
 const PURGE_TIMEOUT_MS = 10_000;
-const ZoneIdSchema = z.string().regex(/^[a-f\d]{32}$/i);
-const PurgeResponseSchema = z.object({ success: z.literal(true) });
+type PurgeTransport = (
+  url: string,
+  init: {
+    body: string;
+    headers: Record<string, string>;
+    method: "POST";
+  }
+) => Promise<{ status: number }>;
 
 export interface PublicCacheConfig {
-  readonly apiToken: string;
   readonly publicOrigin: string;
-  readonly zoneId: string;
+  readonly publicSite: Pick<Fetcher, "fetch">;
+  readonly purgeSecret: string;
 }
 
 export type PublicCacheConfiguration =
@@ -20,8 +24,8 @@ export type PublicCacheConfiguration =
 
 type PublicCacheEnvironment = Pick<
   CloudflareEnv,
-  "CF_CACHE_PURGE_TOKEN" | "CF_ZONE_ID" | "SAQI_PUBLIC_ORIGIN"
->;
+  "SAQI_PUBLIC_CACHE_PURGE_SECRET" | "SAQI_PUBLIC_ORIGIN"
+> & { PUBLIC_SITE: Pick<Fetcher, "fetch"> | undefined };
 
 export interface PublishedPoemRoute {
   readonly authorSlug: string;
@@ -38,10 +42,9 @@ export class PublicCacheInvalidationError extends Error {
 export function publicCacheConfig(
   env: PublicCacheEnvironment
 ): PublicCacheConfiguration {
-  const apiToken = env.CF_CACHE_PURGE_TOKEN;
-  const rawZoneId = env.CF_ZONE_ID;
-  if (!apiToken && !rawZoneId) return { state: "disabled" };
-  const zoneId = ZoneIdSchema.safeParse(env.CF_ZONE_ID);
+  const publicSite = env.PUBLIC_SITE;
+  const purgeSecret = env.SAQI_PUBLIC_CACHE_PURGE_SECRET;
+  if (!publicSite && !purgeSecret) return { state: "disabled" };
   let origin: URL;
   try {
     origin = new URL(env.SAQI_PUBLIC_ORIGIN ?? "");
@@ -49,8 +52,9 @@ export function publicCacheConfig(
     throw new PublicCacheInvalidationError("PUBLIC_CACHE_CONFIG_INVALID");
   }
   if (
-    !apiToken?.trim() ||
-    !zoneId.success ||
+    !publicSite ||
+    !purgeSecret ||
+    !/^[\da-f]{64}$/iu.test(purgeSecret) ||
     origin.protocol !== "https:" ||
     origin.username ||
     origin.password ||
@@ -61,11 +65,7 @@ export function publicCacheConfig(
     throw new PublicCacheInvalidationError("PUBLIC_CACHE_CONFIG_INVALID");
   }
   return {
-    config: {
-      apiToken,
-      publicOrigin: origin.origin,
-      zoneId: zoneId.data,
-    },
+    config: { publicOrigin: origin.origin, publicSite, purgeSecret },
     state: "enabled",
   };
 }
@@ -84,49 +84,38 @@ export function publishedPoemUrl(
 export async function purgePublishedPoem(
   config: PublicCacheConfig,
   route: PublishedPoemRoute,
-  transport: typeof fetch = fetch
+  transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
 ): Promise<string> {
   const url = publishedPoemUrl(config.publicOrigin, route);
-  let response: Response;
+  let response: { status: number };
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    response = await transport(
-      `https://api.cloudflare.com/client/v4/zones/${config.zoneId}/purge_cache`,
-      {
-        body: JSON.stringify({ files: [url] }),
+    response = await Promise.race([
+      transport(`${config.publicOrigin}/internal/purge-publication-cache`, {
+        body: JSON.stringify({
+          authorSlug: route.authorSlug,
+          poemId: route.poemId,
+        }),
         headers: {
-          authorization: `Bearer ${config.apiToken}`,
+          authorization: `Bearer ${config.purgeSecret}`,
           "content-type": "application/json",
         },
         method: "POST",
-        signal: AbortSignal.timeout(PURGE_TIMEOUT_MS),
-      }
-    );
+      }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Purge timed out")),
+          PURGE_TIMEOUT_MS
+        );
+      }),
+    ]);
   } catch {
     throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_UNAVAILABLE");
+  } finally {
+    clearTimeout(timeout);
   }
-
-  let payload: unknown;
-  try {
-    payload = await readBoundedJson(response, MAXIMUM_PURGE_RESPONSE_BYTES);
-  } catch {
-    throw new PublicCacheInvalidationError(
-      "PUBLIC_CACHE_PURGE_INVALID_RESPONSE"
-    );
-  }
-  if (!response.ok || !PurgeResponseSchema.safeParse(payload).success) {
+  if (response.status !== 204) {
     throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED");
   }
   return url;
-}
-
-async function readBoundedJson(
-  response: Response,
-  maximumBytes: number
-): Promise<unknown> {
-  const contentLength = response.headers.get("content-length");
-  if (contentLength && Number(contentLength) > maximumBytes) {
-    throw new Error("Response too large");
-  }
-  if (!response.body) throw new Error("Missing response body");
-  return readBoundedJsonBody(response.body, maximumBytes, "Response too large");
 }

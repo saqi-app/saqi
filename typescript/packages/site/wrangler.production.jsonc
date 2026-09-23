@@ -20,6 +20,9 @@
     "enabled": true,
     "cross_version_cache": false
   },
+  "secrets": {
+    "required": ["SAQI_PUBLIC_CACHE_PURGE_SECRET"]
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

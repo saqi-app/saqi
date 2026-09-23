@@ -38,6 +38,10 @@ export const AuthorPageRouteParamsSchema = AuthorRouteParamsSchema.extend({
 export const PoemRouteParamsSchema = AuthorRouteParamsSchema.extend({
   poemId: ResourceIdSchema,
 });
+export const PublicCachePurgeRequestSchema = z.strictObject({
+  authorSlug: z.string().min(1).max(128),
+  poemId: z.string().min(1).max(128),
+});
 export const SitemapRouteParamsSchema = z.strictObject({
   shard: PositiveIntegerSegmentSchema,
 });
@@ -219,6 +223,22 @@ export const HTTP_CONTRACTS = [
     responses: [HTML_RESPONSE, NOT_FOUND_RESPONSE],
     service: "public-site",
     summary: "Render a published poem and its available translations",
+  },
+  {
+    audience: "authenticated",
+    body: PublicCachePurgeRequestSchema,
+    id: "public.cache-purge",
+    method: "POST",
+    params: EmptyHttpPartSchema,
+    path: "/internal/purge-publication-cache",
+    query: EmptyHttpPartSchema,
+    responses: [204, 400, 404, 415, 503].map((status) => ({
+      body: null,
+      contentType: "text/plain; charset=utf-8",
+      status,
+    })),
+    service: "public-site",
+    summary: "Purge published poem, author listing, and insights cache tags",
   },
   {
     ...EMPTY_INPUT,
@@ -470,16 +490,20 @@ export const HTTP_CONTRACTS = [
 
 export const CLOUDFLARE_WORKER_CONTRACTS = [
   {
-    bindings: ["ASSETS", "DB"],
+    bindings: ["ASSETS", "DB", "PUBLIC_SITE"],
     handlers: ["fetch"],
     id: "operations",
-    requiredVariables: ["SAQI_ACCESS_AUDIENCE", "SAQI_ACCESS_TEAM_ORIGIN"],
+    requiredVariables: [
+      "SAQI_ACCESS_AUDIENCE",
+      "SAQI_ACCESS_TEAM_ORIGIN",
+      "SAQI_PUBLIC_CACHE_PURGE_SECRET",
+    ],
   },
   {
     bindings: ["ASSETS", "DB"],
     handlers: ["fetch"],
     id: "public-site",
-    requiredVariables: [],
+    requiredVariables: ["SAQI_PUBLIC_CACHE_PURGE_SECRET"],
   },
   {
     bindings: [],

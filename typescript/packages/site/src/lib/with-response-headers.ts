@@ -1,9 +1,12 @@
+import { cacheTags } from "./cache-tags";
 import { isReadMethod } from "./canonical-request";
 
 const CLIENT_CACHE_CONTROL =
   "public, max-age=60, stale-while-revalidate=300, stale-if-error=86400";
 const EDGE_CACHE_CONTROL =
   "public, max-age=300, stale-while-revalidate=60, stale-if-error=86400";
+const POEM_EDGE_CACHE_CONTROL =
+  "public, max-age=86400, stale-while-revalidate=60, stale-if-error=86400";
 const ERROR_EDGE_CACHE_CONTROL = "public, max-age=15";
 
 const SECURITY_HEADERS = {
@@ -25,6 +28,7 @@ export function withResponseHeaders(
   response: Response,
   method: string,
   production: boolean,
+  pathname = "/",
 ) {
   const result = new Response(response.body, response);
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
@@ -50,8 +54,13 @@ export function withResponseHeaders(
     result.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
   } else {
     result.headers.set("Cache-Control", CLIENT_CACHE_CONTROL);
-    result.headers.set("Cloudflare-CDN-Cache-Control", EDGE_CACHE_CONTROL);
-    result.headers.set("Cache-Tag", "saqi-corpus");
+    result.headers.set(
+      "Cloudflare-CDN-Cache-Control",
+      /^\/author\/[^/]+\/poem\/[^/]+\/?$/u.test(pathname)
+        ? POEM_EDGE_CACHE_CONTROL
+        : EDGE_CACHE_CONTROL,
+    );
+    result.headers.set("Cache-Tag", cacheTags(pathname).join(","));
   }
   return result;
 }
