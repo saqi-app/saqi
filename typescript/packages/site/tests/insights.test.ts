@@ -104,7 +104,8 @@ void test("monthly insight rollups track writes and replay without double counti
     const restored = await loadCollectionInsights(asD1(sqlite));
     assert.equal(restored.poemCount, 10);
     sqlite.exec("DELETE FROM author WHERE id = 'author-unknown'");
-    assert.equal((await loadCollectionInsights(asD1(sqlite))).authorCount, 1);
+    const afterAuthorDelete = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(afterAuthorDelete.authorCount, 1);
   } finally {
     sqlite.close();
   }

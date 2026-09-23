@@ -133,12 +133,6 @@ main {
   color: var(--accent);
 }
 
-.collection-insights-link {
-  margin-block: 0 1.5rem;
-  font-size: 0.875rem;
-  color: var(--muted);
-}
-
 .insights-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
