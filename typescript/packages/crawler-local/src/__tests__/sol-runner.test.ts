@@ -1113,6 +1113,16 @@ describe("CodexSolRunner", () => {
     expect(tokenSchema.properties.parts.anyOf.at(-1)).toEqual({ type: "null" });
   });
 
+  it("lists each distinct nonblank source line once in the notable-line enum", () => {
+    const schema = solGenerationWireJsonSchema({
+      ...INPUT,
+      linesArabic: ["بيت مكرر", "", "بيت مكرر", "بيت آخر"],
+    });
+    expect(
+      schema.properties.insights?.properties.notableLines.items.properties.line,
+    ).toMatchObject({ enum: ["بيت مكرر", "بيت آخر"] });
+  });
+
   it("materializes translation, glosses, and insights into the strict public v3 schema", () => {
     expect(materializeGenerationOutput(INPUT, OUTPUT)).toEqual(OUTPUT);
   });
@@ -3521,11 +3531,13 @@ describe("SolEnrichmentCoordinator", () => {
     const attemptId = "44444444-4444-4444-8444-444444444444";
     const root = mkdtempSync(join(tmpdir(), "saqi-sol-failed-retention-"));
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
+    const now = Date.now() + 1_000;
     const runner = {
       generate: () =>
         Promise.resolve({
           errorCode: "CODEX_RATE_LIMITED",
           metadata: { attemptId },
+          retryAt: now + 1_000,
           state: "retry_wait",
         }),
       review: () => Promise.reject(new Error("Unexpected review")),
@@ -3537,11 +3549,15 @@ describe("SolEnrichmentCoordinator", () => {
       ledger,
       runner,
     });
-    coordinator.seed(INPUT);
-    const now = Date.now() + 1_000;
+    const seeded = coordinator.seed(INPUT);
     await expect(
       coordinator.run(undefined, { maximum: 1, now: () => now }),
-    ).resolves.toMatchObject({ retried: 1, schedulerOutcome: "rate_limited" });
+    ).resolves.toMatchObject({
+      retried: 1,
+      retryAt: now + 30_000,
+      schedulerOutcome: "rate_limited",
+    });
+    expect(ledger.get(seeded.workKey)?.availableAt).toBe(now + 30_000);
     const retention = ledger.attemptRetentionEligibility(
       SOL_ENRICHMENT_WORK_KIND,
       SOL_PIPELINE_VERSION,

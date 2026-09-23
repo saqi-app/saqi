@@ -374,14 +374,16 @@ export class QuotaAwareSolLaneScheduler implements SolLaneScheduler {
 
   async snapshot(
     gates: SolSchedulerGates,
-    now = this.#now(),
+    now?: number,
   ): Promise<SolSchedulerSnapshot> {
     return this.#serializeMutation(async () => {
       await this.#ready;
       await this.#refreshAuthoritativeState();
       await this.#observeCredentialTransition();
       await this.#recoverAfterCredentialChange();
-      return this.#snapshot(gates, now);
+      // Read the clock after queued mutations and credential checks. A
+      // snapshot may spend time waiting for either before it evaluates gates.
+      return this.#snapshot(gates, now ?? this.#now());
     });
   }
 

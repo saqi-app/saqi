@@ -187,11 +187,9 @@ export class DemandDrivenProductionResolutionRefresher {
         PUBLICATION_WAKEUP_DELIVERY_LIMIT,
       );
       const terminalCanonical =
-        batch === 0
-          ? this.#options.cache.listTerminalCanonicalWakeups(
-              PUBLICATION_WAKEUP_DELIVERY_LIMIT,
-            )
-          : [];
+        this.#options.cache.listTerminalCanonicalWakeups(
+          PUBLICATION_WAKEUP_DELIVERY_LIMIT,
+        );
       const fingerprint = this.#options.cache.listFingerprintWakeups(
         PUBLICATION_WAKEUP_DELIVERY_LIMIT,
       );
@@ -231,6 +229,7 @@ export class DemandDrivenProductionResolutionRefresher {
         return { progressed, remaining: true };
       const remaining =
         this.#options.cache.listPublicationWakeups(1).length > 0 ||
+        this.#options.cache.listTerminalCanonicalWakeups(1).length > 0 ||
         this.#options.cache.listFingerprintWakeups(1).length > 0;
       if (!remaining) return { progressed, remaining: false };
     }
@@ -238,6 +237,7 @@ export class DemandDrivenProductionResolutionRefresher {
       progressed,
       remaining:
         this.#options.cache.listPublicationWakeups(1).length > 0 ||
+        this.#options.cache.listTerminalCanonicalWakeups(1).length > 0 ||
         this.#options.cache.listFingerprintWakeups(1).length > 0,
     };
   }

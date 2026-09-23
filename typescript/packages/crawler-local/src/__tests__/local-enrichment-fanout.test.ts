@@ -6,7 +6,7 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler";
 import {
@@ -61,6 +61,23 @@ const MAPPING = {
 };
 
 describe("local enrichment fanout", () => {
+  it("does not write a cursor artifact on each empty poll", async () => {
+    const fixture = createFixture();
+    const fanout = createFanout(fixture, "sol-5.6");
+    const put = vi.spyOn(fixture.artifacts, "put");
+    let now = Date.now() + 1_000;
+
+    for (let poll = 0; poll < 3; poll += 1) {
+      await expect(
+        fanout.cycle({ maximum: 1, now: () => now }),
+      ).resolves.toMatchObject({ cursor: 0, scanned: 0 });
+      now += 31_000;
+    }
+
+    expect(put).not.toHaveBeenCalled();
+    fixture.ledger.close();
+  });
+
   it("binds its control schema after a nondefault source is configured", () => {
     const originalSource = currentSource();
     configureSource({ name: "archive", origin: "https://source.invalid" });

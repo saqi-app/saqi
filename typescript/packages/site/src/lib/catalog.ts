@@ -12,6 +12,10 @@ import {
 import { z } from "zod";
 
 import {
+  type CatalogDatabase,
+  catalogDatabaseFromD1,
+} from "./catalog-database";
+import {
   LEGACY_GEMINI_ATTRIBUTION_NOTE,
   LEGACY_GEMINI_MODEL_ESTIMATE,
   LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
@@ -398,15 +402,7 @@ const LegacyModelAttributionRowSchema = z.object({
   vendorKey: ProviderVendorSchema,
 });
 
-interface CatalogStatement {
-  all(): Promise<{ results: unknown[] }>;
-  bind(...values: unknown[]): CatalogStatement;
-}
-
-export interface CatalogDatabase {
-  batch(statements: CatalogStatement[]): Promise<{ results: unknown[] }[]>;
-  prepare(query: string): CatalogStatement;
-}
+export type { CatalogDatabase } from "./catalog-database";
 
 export interface IndexedAuthor {
   author: Author;
@@ -969,30 +965,7 @@ export class CatalogRepository implements CatalogReader {
   }
 
   static fromD1(database: D1Database): CatalogRepository {
-    const session = database.withSession();
-    const nativeStatements = new WeakMap<
-      CatalogStatement,
-      D1PreparedStatement
-    >();
-    const wrapStatement = (native: D1PreparedStatement): CatalogStatement => {
-      const statement: CatalogStatement = {
-        all: () => native.all<unknown>(),
-        bind: (...values) => wrapStatement(native.bind(...values)),
-      };
-      nativeStatements.set(statement, native);
-      return statement;
-    };
-    return new CatalogRepository({
-      batch: (statements) =>
-        session.batch(
-          statements.map((statement) => {
-            const native = nativeStatements.get(statement);
-            if (!native) throw new Error("CATALOG_FOREIGN_D1_STATEMENT");
-            return native;
-          }),
-        ),
-      prepare: (query) => wrapStatement(session.prepare(query)),
-    });
+    return new CatalogRepository(catalogDatabaseFromD1(database));
   }
 
   async listAuthors(): Promise<IndexedAuthor[]> {

@@ -17,13 +17,10 @@ import { getCloudflareEnv } from "@/lib/cloudflare";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
+  NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
-
-const NO_STORE_HEADERS = {
-  "cache-control": "private, no-store, max-age=0",
-} as const;
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
 export async function POST(request: Request): Promise<Response> {

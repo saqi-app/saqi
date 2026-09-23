@@ -5,14 +5,12 @@ import { getCloudflareEnv } from "@/lib/cloudflare";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
+  NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
 
 const MAXIMUM_REQUEST_BYTES = 1_024;
-const NO_STORE_HEADERS = {
-  "cache-control": "private, no-store, max-age=0",
-} as const;
 const RequestSchema = z.strictObject({
   cursor: z
     .strictObject({

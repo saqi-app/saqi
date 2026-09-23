@@ -389,6 +389,33 @@ describe("demand-driven production resolution refresher", () => {
     fixture.cache.close();
   });
 
+  it("drains terminal canonical wakeups beyond one bounded page", async () => {
+    const fixture = await createFixture();
+    const terminal = Array.from({ length: 501 }, (_, index) => ({
+      workKey: sha256(`terminal-canonical:bulk-${String(index)}`),
+    }));
+    vi.spyOn(fixture.cache, "listTerminalCanonicalWakeups").mockImplementation(
+      (limit = 100) => terminal.slice(0, limit),
+    );
+    vi.spyOn(fixture.cache, "retirePublicationWaiter").mockImplementation(
+      (workKey) => {
+        removeAcknowledged(terminal, [workKey]);
+      },
+    );
+    const delivered: string[][] = [];
+    const refresher = fixture.refresher({
+      wakePublications: (workKeys) => {
+        delivered.push([...workKeys]);
+        return { acknowledge: workKeys };
+      },
+    });
+
+    await expect(refresher.runOnce()).resolves.toMatchObject({ state: "idle" });
+    expect(delivered.map((batch) => batch.length)).toEqual([500, 1]);
+    expect(terminal).toEqual([]);
+    fixture.cache.close();
+  });
+
   it("delivers pending wakes before pruning an expired scope during an idle cycle", async () => {
     const fixture = await createFixture();
     const waiter = {

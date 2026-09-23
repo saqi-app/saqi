@@ -708,9 +708,12 @@ export class SolAttemptRetention {
     if (purgeArchivedDiagnostics && archive) {
       this.#verifyPurgeLayout(directory, archive);
     }
-    const files =
-      archive?.files.map(({ name }) => name) ??
-      DIAGNOSTICS.filter((name) => this.#diagnosticPath(directory, name));
+    const diagnosticPaths = (
+      archive?.files.map(({ name }) => name) ?? DIAGNOSTICS
+    ).map((name) => ({ name, path: this.#diagnosticPath(directory, name) }));
+    const files = diagnosticPaths
+      .filter(({ path }) => archive !== null || path !== null)
+      .map(({ name }) => name);
     if (files.length === 0) return null;
     if (rootFiles.length === 0 && archive && !purgeArchivedDiagnostics) {
       return null;
@@ -724,21 +727,18 @@ export class SolAttemptRetention {
     ) {
       return null;
     }
-    const diagnosticBytes = files.reduce((sum, name) => {
-      const path = this.#diagnosticPath(directory, name);
-      return sum + (path ? lstatSync(path).size : 0);
-    }, 0);
+    const diagnosticBytes = diagnosticPaths.reduce(
+      (sum, { path }) => sum + (path ? lstatSync(path).size : 0),
+      0,
+    );
     const quarantinedBytes = files.reduce(
       (sum, name) =>
         sum +
         [QUARANTINE, PURGE_PENDING].reduce((containerSum, container) => {
           const path = join(directory, container, name);
-          return (
-            containerSum +
-            (existsSync(path) && lstatSync(path).isFile()
-              ? lstatSync(path).size
-              : 0)
-          );
+          if (!existsSync(path)) return containerSum;
+          const metadata = lstatSync(path);
+          return containerSum + (metadata.isFile() ? metadata.size : 0);
         }, 0),
       0,
     );

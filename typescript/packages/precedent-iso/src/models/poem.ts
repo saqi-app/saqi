@@ -46,13 +46,7 @@ export const PoemModelEnrichmentSchema = z.strictObject({
 });
 export type PoemModelEnrichment = z.infer<typeof PoemModelEnrichmentSchema>;
 
-export const LoadedPoemSchema = z.object({
-  id: RouteSegmentSchema,
-  slug: RouteSegmentSchema,
-  authorId: IdentityTextSchema,
-  verses: z.number().int().positive().max(1_000),
-  nameArabic: IdentityTextSchema.optional(),
-  nameEnglish: IdentityTextSchema.optional(),
+export const LoadedPoemSchema = PoemSchema.extend({
   linesArabic: z.array(ContentLineSchema).max(2_000),
   linesEnglish: z.array(ContentLineSchema).max(2_000).optional(),
   linesEnglishGemini: z.array(ContentLineSchema).max(2_000).optional(),

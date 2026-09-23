@@ -1,4 +1,3 @@
-export { type AuthorStore, D1AuthorStore } from "./services/author-store.js";
 export {
   CorpusImportCoordinator,
   type CorpusImportPipeline,

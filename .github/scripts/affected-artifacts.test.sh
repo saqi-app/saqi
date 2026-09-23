@@ -45,11 +45,8 @@ assert_case() {
 
 assert_case ci typescript/packages/crawler-local/src/cli.ts \
   'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false'
-assert_case ci typescript/packages/source-adapter/src/index.ts \
+assert_case ci typescript/packages/crawler-local/src/source-adapter/index.ts \
   'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false'
-assert_case ci typescript/packages/crawler-local/src/cli.ts \
-  'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false' \
-  typescript/packages/source-adapter/src/index.ts
 assert_case ci typescript/packages/precedent-node/src/index.ts \
   'app=true migrate=false site=false www=false crawler_only=false dependency_audit=false deployment_required=true'
 assert_case ci typescript/packages/precedent-iso/src/index.ts \

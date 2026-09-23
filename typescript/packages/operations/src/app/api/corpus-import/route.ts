@@ -14,6 +14,7 @@ import { getCloudflareEnv } from "@/lib/cloudflare";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
+  NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
@@ -22,10 +23,6 @@ import {
   PublicCacheInvalidationError,
   purgePublishedPoem,
 } from "@/lib/public-cache";
-
-const NO_STORE_HEADERS = {
-  "cache-control": "private, no-store, max-age=0",
-} as const;
 
 // Cloudflare Access protects this operations origin. This read-only canary
 // proves that publication credentials reached the exact protected service

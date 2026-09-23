@@ -2,8 +2,12 @@ import { readBoundedJsonBody } from "./read-bounded-json-body";
 
 export const OPS_ORIGIN = "https://ops.saqi.app";
 
-const RESPONSE_HEADERS = {
+export const NO_STORE_HEADERS = {
   "cache-control": "private, no-store, max-age=0",
+} as const;
+
+const RESPONSE_HEADERS = {
+  ...NO_STORE_HEADERS,
   "content-security-policy":
     "base-uri 'none'; connect-src 'self'; default-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; manifest-src 'self'; media-src 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
   "cross-origin-opener-policy": "same-origin",

@@ -30,7 +30,6 @@ for (const root of document.querySelectorAll("[data-filter-root]")) {
   const itemName = root.dataset.filterItemName ?? "items";
   let animationFrame;
   let announcementTimer;
-  let filterGeneration = 0;
 
   const ensureSearchIndex = () => {
     if (indexReady) return;
@@ -47,13 +46,11 @@ for (const root of document.querySelectorAll("[data-filter-root]")) {
 
   const applyFilter = () => {
     ensureSearchIndex();
-    const generation = ++filterGeneration;
     const query = normalizeSearch(input.value);
     const matches = searchableItems.map(
       ({ haystack }) => !query || haystack.includes(query),
     );
     let visible = 0;
-    if (generation !== filterGeneration) return;
     list.hidden = true;
     for (const [index, searchable] of searchableItems.entries()) {
       searchable.item.hidden = !matches[index];
@@ -71,7 +68,6 @@ for (const root of document.querySelectorAll("[data-filter-root]")) {
   const scheduleFilter = (event) => {
     globalThis.clearTimeout(announcementTimer);
     if (event instanceof InputEvent && event.isComposing) return;
-    filterGeneration += 1;
     globalThis.cancelAnimationFrame(animationFrame);
     animationFrame = globalThis.requestAnimationFrame(applyFilter);
   };

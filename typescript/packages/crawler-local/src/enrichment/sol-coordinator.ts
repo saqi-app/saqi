@@ -1294,17 +1294,13 @@ export class SolEnrichmentCoordinator
         this.#ledger.deadLetter(claim, result.errorCode, now);
         summary.deadLettered += 1;
       } else {
-        this.#ledger.retry(
-          claim,
-          result.errorCode,
-          Math.max(
-            result.retryAt ?? now,
-            now + transientBackoffMs(claim.work.attemptCount),
-          ),
-          now,
+        const retryAt = Math.max(
+          result.retryAt ?? now,
+          now + transientBackoffMs(claim.work.attemptCount),
         );
+        this.#ledger.retry(claim, result.errorCode, retryAt, now);
         summary.retried += 1;
-        summary.retryAt = result.retryAt ?? null;
+        summary.retryAt = retryAt;
         summary.schedulerOutcome =
           result.errorCode === "CODEX_RATE_LIMITED" ? "rate_limited" : "error";
       }

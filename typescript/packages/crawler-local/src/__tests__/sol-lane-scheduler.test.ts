@@ -76,6 +76,36 @@ async function complete(
 }
 
 describe("quota-aware Sol lane scheduler", () => {
+  it("evaluates an implicit snapshot time after asynchronous credential checks", async () => {
+    let now = 1_000;
+    let pendingGeneration: null | Promise<null> = null;
+    const entered = Promise.withResolvers<undefined>();
+    const generation = Promise.withResolvers<null>();
+    const root = mkdtempSync(join(tmpdir(), "saqi-scheduler-snapshot-clock-"));
+    const target = new QuotaAwareSolLaneScheduler({
+      ceiling: 2,
+      configDigest: CONFIG_DIGEST,
+      credentialGeneration: () => {
+        if (pendingGeneration !== null) entered.resolve(undefined);
+        return pendingGeneration;
+      },
+      now: () => now,
+      stateKey: "provider:test",
+      stateStore: schedulerStore(join(root, "scheduler.json")),
+    });
+    await complete(target, { kind: "quota_wait", retryAt: 1_500 }, now);
+
+    pendingGeneration = generation.promise;
+    const snapshot = target.snapshot(OPEN);
+    await entered.promise;
+    now = 2_000;
+    generation.resolve(null);
+    await expect(snapshot).resolves.toMatchObject({
+      blockReason: null,
+      quotaUntil: 1_500,
+    });
+  });
+
   it.each(["ancestor-file", "symlink", "directory", "oversized"])(
     "rejects unsafe legacy input %s without initializing authority",
     async (kind) => {

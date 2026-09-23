@@ -15,6 +15,7 @@ import { getCloudflareEnv } from "@/lib/cloudflare";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
+  NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
@@ -24,9 +25,6 @@ import {
   purgePublishedPoem,
 } from "@/lib/public-cache";
 
-const NO_STORE_HEADERS = {
-  "cache-control": "private, no-store, max-age=0",
-} as const;
 // Keep this aligned with the public site's 300-second edge max-age plus its
 // 60-second stale-while-revalidate window.
 const MAXIMUM_NATURAL_CACHE_STALENESS_SECONDS = 360;

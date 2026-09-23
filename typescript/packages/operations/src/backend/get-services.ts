@@ -1,6 +1,5 @@
 import {
   CorpusImportCoordinator,
-  D1AuthorStore,
   D1CorpusRevisionStore,
   D1PoemStore,
   D1ProductionResolutionStore,
@@ -13,7 +12,6 @@ export function getServices() {
   const { DB, SAQI_SOURCE_BASE_URL, SAQI_SOURCE_NAME } = getCloudflareEnv();
   const db = drizzle(DB);
 
-  const authorStore = new D1AuthorStore(db);
   const poemStore = new D1PoemStore(db);
   const productionResolution = new D1ProductionResolutionStore(db, {
     sourceName: SAQI_SOURCE_NAME,
@@ -24,7 +22,6 @@ export function getServices() {
   });
   const corpusImport = new CorpusImportCoordinator(corpusRevision);
   return {
-    authorStore,
     corpusImport,
     corpusRevision,
     poemStore,
