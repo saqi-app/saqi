@@ -62,7 +62,7 @@ function catalogRepository(database: Database.Database): CatalogRepository {
 
 function createDatabase() {
   const database = new Database(":memory:");
-  const migrations = new URL("../../app/migrations/", import.meta.url);
+  const migrations = new URL("../../operations/migrations/", import.meta.url);
   for (const fileName of readdirSync(migrations)
     .filter((name) => name.endsWith(".sql"))
     .toSorted()) {

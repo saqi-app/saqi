@@ -57,7 +57,7 @@ if (process.argv[2] === "--validate-only") process.exit(0);
 
 const result = spawnSync(
   "yarn",
-  ["workspace", "@saqi/app", "wrangler", "secret", "bulk"],
+  ["workspace", "@saqi/operations", "wrangler", "secret", "bulk"],
   {
     cwd: new URL("../", import.meta.url),
     input: JSON.stringify(secrets),

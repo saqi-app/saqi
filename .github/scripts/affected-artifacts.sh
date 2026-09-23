@@ -91,12 +91,12 @@ else
       typescript/packages/crawler-local/*|typescript/packages/source-adapter/*)
         # Local runtime packages do not produce a Cloudflare artifact.
         ;;
-      typescript/packages/app/migrations/*)
+      typescript/packages/operations/migrations/*)
         app=true
         migrate=true
         site=true
         ;;
-      typescript/packages/app/*)
+      typescript/packages/operations/*)
         app=true
         ;;
       typescript/packages/site/www-worker.ts|typescript/packages/site/wrangler.www.jsonc)

@@ -14,7 +14,7 @@
   "bin": {
     "saqi-crawler": "./dist/cli.js"
   },
-  "packageManager": "yarn@4.16.0",
+  "packageManager": "yarn@4.18.0",
   "private": true,
   "sideEffects": false,
   "scripts": {
@@ -34,14 +34,14 @@
     "@saqi/source-adapter": "workspace:^",
     "better-sqlite3": "^13.0.3",
     "playwright-core": "1.63.0",
-    "zod": "4.5.4"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "eslint": "10.10.0",
-    "prettier": "^3.9.6",
-    "typescript": "^6.0.3",
-    "vite": "8.2.2",
-    "vitest": "5.0.0"
+    "eslint": "10.11.0",
+    "prettier": "^3.9.9",
+    "typescript": "6.0.3",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
   }
 }

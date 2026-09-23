@@ -21,7 +21,7 @@
     "packages/source-adapter": {
       "project": ["src/**/*.ts"]
     },
-    "packages/app": {
+    "packages/operations": {
       "entry": ["src/app/**/*.{ts,tsx}", "open-next.config.ts"],
       "project": ["src/**/*.{ts,tsx}", "*.{ts,mjs}"]
     },

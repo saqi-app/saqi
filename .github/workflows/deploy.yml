@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: typescript/.yarn/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml', 'typescript/.yarn/releases/yarn-4.16.0.cjs') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml', 'typescript/.yarn/releases/yarn-4.18.0.cjs') }}
           restore-keys: yarn-${{ runner.os }}-
 
       - name: Install dependencies
@@ -106,7 +106,7 @@ jobs:
 
       - name: Build application Worker
         if: steps.changes.outputs.app == 'true'
-        run: yarn workspace @saqi/app opennext:build
+        run: yarn workspace @saqi/operations opennext:build
 
       - name: Build and validate the public Worker
         if: steps.changes.outputs.site == 'true'
@@ -120,7 +120,7 @@ jobs:
         env:
           OPEN_NEXT_DEPLOY: "true"
         run: >-
-          yarn workspace @saqi/app wrangler deploy --dry-run
+          yarn workspace @saqi/operations wrangler deploy --dry-run
           --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/ops-dry-run"
 
       - name: Validate public artifact
@@ -147,7 +147,7 @@ jobs:
       - name: Verify the production D1 identity
         if: steps.changes.outputs.deployment_required == 'true'
         run: >-
-          yarn workspace @saqi/app db:execute --remote --json
+          yarn workspace @saqi/operations db:execute --remote --json
           --command "SELECT database_id AS databaseId FROM production_deployment_identity WHERE scope = 'production'"
           | node scripts/verify-production-d1-identity.mjs
         env:
@@ -156,7 +156,7 @@ jobs:
 
       - name: Require the staged legacy translation retirement
         run: >-
-          yarn workspace @saqi/app db:execute --remote --json
+          yarn workspace @saqi/operations db:execute --remote --json
           --command "SELECT COUNT(*) AS applied FROM d1_migrations WHERE name = '0037_retire_legacy_translation_tasks.sql'"
           | node scripts/verify-retirement-migration.mjs
         env:
@@ -165,7 +165,7 @@ jobs:
 
       - name: Expand the production schema
         if: steps.changes.outputs.migrate == 'true'
-        run: yarn workspace @saqi/app db:migrate:remote
+        run: yarn workspace @saqi/operations db:migrate:remote
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
@@ -185,7 +185,7 @@ jobs:
 
       - name: Deploy authenticated operations
         if: steps.changes.outputs.app == 'true'
-        run: yarn workspace @saqi/app deploy:artifact
+        run: yarn workspace @saqi/operations deploy:artifact
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}

@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 const DIRECTORY = fileURLToPath(
-  new URL("../../../../app/migrations/", import.meta.url),
+  new URL("../../../../operations/migrations/", import.meta.url),
 );
 const MIGRATION_LEDGER = `
   CREATE TABLE d1_migrations (
@@ -17,7 +17,7 @@ const MIGRATION_LEDGER = `
   ) STRICT;
 `;
 const PRODUCTION_IDENTITY_SOURCES = {
-  app: new URL("../../../../app/wrangler.jsonc", import.meta.url),
+  app: new URL("../../../../operations/wrangler.jsonc", import.meta.url),
   sitePreview: new URL("../../../../site/wrangler.jsonc", import.meta.url),
   siteProduction: new URL(
     "../../../../site/wrangler.production.jsonc",

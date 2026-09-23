@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "provenance": {
     "bundleVersion": "7.31.0",
-    "consumerBaseSha": "b305db11ec53dd0d279a1d66f4fa9d7a84408057",
+    "consumerBaseSha": "7eb1ed6e81c87ccf2113739819f47f593a817927",
     "catalogDigest": "c4a15fb82b0e514464afec36bd0458471c3170929f39d662edc97eba95130bf7"
   },
   "diagnostics": [
@@ -33,20 +33,6 @@
       "ruleId": "@sarj/no-broad-return-type",
       "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
       "count": 2
-    },
-    {
-      "fingerprint": "9aa3191480530f554029aa684e829f94bc588044a160942b737a3879e1bf9b36",
-      "source": "eslint",
-      "ruleId": "@sarj/no-conditional-empty-object-spread",
-      "path": "typescript/packages/app/src/app/api/corpus-fingerprint-backfill/route.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "b490d326960f13d43273eb6bde89af7c3acfc2e4eaa881948e23e81e41c9ca0f",
-      "source": "eslint",
-      "ruleId": "@sarj/no-conditional-empty-object-spread",
-      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
-      "count": 1
     },
     {
       "fingerprint": "8221f229a3417fc3ccd83208218d25eeea6acf0e269f77c4b5b47978927e32ef",
@@ -252,6 +238,20 @@
       "count": 9
     },
     {
+      "fingerprint": "baa9002e56966d677bd7ea26331f2da533870c690160236123745bc62066a630",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/operations/src/app/api/corpus-fingerprint-backfill/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "eedd785657b6fc3552f19e385d85594a1ce8db49f5fdb030e5fc912ee1073025",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "8c1e3da536edf6ceeef6f5e75d8f1aedc1c8e180ab3be19d1052948e02e628fa",
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
@@ -278,13 +278,6 @@
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/site/src/lib/poem-translations.ts",
       "count": 3
-    },
-    {
-      "fingerprint": "5ea94d9c23fd0b4f7279bc145f1934b0c7edb66eb6e7eeb66265202b97715ba6",
-      "source": "eslint",
-      "ruleId": "@sarj/no-excessive-cognitive-complexity",
-      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
-      "count": 1
     },
     {
       "fingerprint": "872953f4d17a5dd50b87e6d2bc3a715456ad9a366b2486a47e4df90634f641b2",
@@ -693,6 +686,13 @@
       "count": 1
     },
     {
+      "fingerprint": "ffdd52e9aaf3e98f42458a857a2d1ea11de4b43a9c3e17b7dc334172363d31a2",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "606b047be0f22b9c5ca549dd7b66410735d3007104050cbcda9ee84fec3ee6b0",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
@@ -768,41 +768,6 @@
       "ruleId": "@sarj/prefer-zod-parse-output-type",
       "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
       "count": 1
-    },
-    {
-      "fingerprint": "55b98a6dd0128a6c5dd1c198e71c05e413d2c7b64119770ab3caa26c489170d9",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.test.ts",
-      "count": 2
-    },
-    {
-      "fingerprint": "03615ba0538cd6bf99127343b2370bfbf67b644f1a2e5cc2bf69ade9dffdc8fa",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/app/src/app/api/v2/source-admissions/route.test.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "80f290cf6a9b6b7eedf6510cf213ae7be986275d4387b92fec458b5a2bf5ddf8",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/app/src/lib/__tests__/access.test.ts",
-      "count": 2
-    },
-    {
-      "fingerprint": "77daa7e2ee8709509dc4723798f2ad0d400c98cf6d761ccdb10e44a2f1a7ecf0",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/app/src/lib/__tests__/production-deployment-identity-repository.test.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "90bbeb725358c663685143467d551cc99ca067fa01aeff4836a9178e20a036cd",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/app/src/lib/access.ts",
-      "count": 3
     },
     {
       "fingerprint": "d5f2010a56ab56040816d666ec867819caf6ffe6ab87bc262541d1169db1f19e",
@@ -2954,6 +2919,41 @@
       "count": 6
     },
     {
+      "fingerprint": "a0d8664c83575f27d9022ea4a6fc1b5a38c5eed92300be369307b0379ef13a29",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "cf0888e283bc135c35da843c45a9c24822a7eef82fabf916dc538f790667e3a5",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/operations/src/app/api/v2/source-admissions/route.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "677211b4f93d1c2e6e1555aef173d67de6d0d4797fcd62acdaf1af3c60a23d86",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/operations/src/lib/__tests__/access.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "88ba7debbe6b09b267729c4a53d31ac0f0f78e9460514c2bae7025c2c86ea4f6",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/operations/src/lib/__tests__/production-deployment-identity-repository.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "73703efb3fff369acd4c68a4fb3aa0bba92b2428a4323a1ef394e2c848ed5cf2",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/operations/src/lib/access.ts",
+      "count": 3
+    },
+    {
       "fingerprint": "2e977a1d9b7c2e9d93fecf60c6a0b3f87efd432ac5fe0fd3437ecc7a66b17a62",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
@@ -3745,17 +3745,10 @@
       "count": 1
     },
     {
-      "fingerprint": "564dbba298695ec3f245de2eef3b1bf6444af4ff8922c97fe9a46adde86da8db",
+      "fingerprint": "df178bdd9c335a51be73cb3308f661e565273dd1ccd195d1d10bd8ce0d8582a1",
       "source": "eslint",
       "ruleId": "@typescript-eslint/consistent-type-imports",
-      "path": "typescript/packages/app/cloudflare-env.d.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "f977bced6e758ba2a2021668285b5ffd250e5f6c8dcd0e064acb07bd385917e8",
-      "source": "eslint",
-      "ruleId": "@typescript-eslint/naming-convention",
-      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "path": "typescript/packages/operations/cloudflare-env.d.ts",
       "count": 1
     },
     {
@@ -4095,6 +4088,13 @@
       "count": 1
     },
     {
+      "fingerprint": "1ec76fd36dd946ce320bec8fe5303da2e554f6ac1835fe510ea69c1e83e76553",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/operations/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "d6e403881bcc9d0e3fbffd65c9fbab75c347343d8844b4ba285779e2a7a5d175",
       "source": "eslint",
       "ruleId": "@typescript-eslint/naming-convention",
@@ -4102,10 +4102,10 @@
       "count": 1
     },
     {
-      "fingerprint": "73784a8344e09264aac04f9a7d9767623dd5e20594d8e77480e3c8654c228d6d",
+      "fingerprint": "132b244db133522685d2e970fd3fecdc00a7e1a22a3fb531dfb24b76ff4d9dbd",
       "source": "eslint",
       "ruleId": "@typescript-eslint/no-empty-object-type",
-      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "path": "typescript/packages/operations/cloudflare-env.d.ts",
       "count": 2
     },
     {
@@ -4254,13 +4254,6 @@
       "ruleId": "eslint/file",
       "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
       "count": 2
-    },
-    {
-      "fingerprint": "0a3cbae564e460f064d01ee9d27577d57f84602c1057e127dcb75dedf9b9c29c",
-      "source": "eslint",
-      "ruleId": "jsdoc/no-restricted-syntax",
-      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
-      "count": 1
     },
     {
       "fingerprint": "cc23de0468042eb4990ebb96aa70318717fc778090b8f1195e184b410c0d3271",
@@ -4557,6 +4550,13 @@
       "count": 2
     },
     {
+      "fingerprint": "8e1cc31b00c1e27eba46f292cab71b439c7f1c103c87493097ee9ee0b71ddfd4",
+      "source": "eslint",
+      "ruleId": "jsdoc/no-restricted-syntax",
+      "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "600e62a1495cdea6e262dfa747392ca529cce4c3182e656d6c0f829bd9b6afb1",
       "source": "eslint",
       "ruleId": "jsdoc/no-restricted-syntax",
@@ -4645,20 +4645,6 @@
       "source": "eslint",
       "ruleId": "no-control-regex",
       "path": "typescript/packages/site/src/lib/snapshot-contract.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "1f12eff0a55c480f1b605884e1e9546990411bd12ffe8f336473c1211b929027",
-      "source": "eslint",
-      "ruleId": "no-restricted-syntax",
-      "path": "typescript/packages/app/cloudflare-env.d.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "97e8217c330fdd1ba17a18fc2638b6f7b7c790f186d3bd0a1ee8cb2022f45c4e",
-      "source": "eslint",
-      "ruleId": "no-restricted-syntax",
-      "path": "typescript/packages/app/src/lib/cloudflare.ts",
       "count": 1
     },
     {
@@ -4856,6 +4842,20 @@
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 3
+    },
+    {
+      "fingerprint": "c76ed78e307756b0ef8f42f2c64fe2ee12fc05e5415a751d7802306e62dd4841",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/operations/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "aec768ac8b8ee8c535296d789a7cbc412befda78a648025c7dfd0a2c9cfcc258",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/operations/src/lib/cloudflare.ts",
+      "count": 1
     },
     {
       "fingerprint": "16d96fde52d5111b99e33d0b8065bcec4ab1f05a0f1b74b0da99a0af0d433e2e",
@@ -5068,10 +5068,10 @@
       "count": 1
     },
     {
-      "fingerprint": "2e3ae5b0cdf304c2755c2ec7187d43e3515a97587564905f3d49259f0de0051f",
+      "fingerprint": "b503126a7ebabcf3ec20256d147dadad11426b5a16beae001d41eb5e85023468",
       "source": "eslint",
       "ruleId": "perfectionist/sort-interfaces",
-      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "path": "typescript/packages/operations/cloudflare-env.d.ts",
       "count": 1
     },
     {
@@ -5115,20 +5115,6 @@
       "ruleId": "preserve-caught-error",
       "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
       "count": 2
-    },
-    {
-      "fingerprint": "74e189740f90f6438cb184b58d6670c62ba56610bc90e4ca71fc069f7f01b4b5",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "c58d6589d93d823f101c01034d9ffa30d07ed7ee5892718e161328830c70757c",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/app/src/lib/public-cache.ts",
-      "count": 1
     },
     {
       "fingerprint": "35caf93c55e15227827e7af8487fe531846213f47754359f69ae432ffa8f9fa7",
@@ -5208,6 +5194,20 @@
       "count": 1
     },
     {
+      "fingerprint": "fccaed9455aedee67808b3c06a51271b5e0ef1c823f55d867fbedba8c086c867",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e41917bd0d1f2e13c33a3f993489830607ad45e5f3605cf7b8bb7178a533d7e9",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/operations/src/lib/public-cache.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "4c04fedb4115d38ac35d60c2362156ef4f5ae52da19592343a66b7d20775bb75",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
@@ -5271,13 +5271,6 @@
       "count": 2
     },
     {
-      "fingerprint": "8afe2c23f6ca3d0dc5bb0f939e15cc76404486f4b1e1d3999b93560d24222b5c",
-      "source": "eslint",
-      "ruleId": "unicorn/no-object-as-default-parameter",
-      "path": "typescript/packages/app/src/app/api/corpus-import/route.test.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "7ac418e3bf12e3beaf42d2ad55965ae8b7f5984b1113bae6825ad03a5bd131ec",
       "source": "eslint",
       "ruleId": "unicorn/no-object-as-default-parameter",
@@ -5289,6 +5282,13 @@
       "source": "eslint",
       "ruleId": "unicorn/no-object-as-default-parameter",
       "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7cef15fa0c5486ad3bdbd564d16664a893c8202b0e3f906bbf6a0424087d6c80",
+      "source": "eslint",
+      "ruleId": "unicorn/no-object-as-default-parameter",
+      "path": "typescript/packages/operations/src/app/api/corpus-import/route.test.ts",
       "count": 1
     },
     {
@@ -5362,10 +5362,10 @@
       "count": 1
     },
     {
-      "fingerprint": "cb7794dbb9fa82bc4af222b6c9b3a8022ea3bdc3c306ab721482abb111788c34",
+      "fingerprint": "c75305123e8407e81755dce7dc3d86393895497e214d48c61a2ee1f59b525fb9",
       "source": "sarj-sql-lint",
       "ruleId": "no-duplicate-index",
-      "path": "typescript/packages/app/migrations/0037_retire_legacy_translation_tasks.sql",
+      "path": "typescript/packages/operations/migrations/0037_retire_legacy_translation_tasks.sql",
       "count": 1
     }
   ]
