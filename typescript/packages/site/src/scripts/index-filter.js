@@ -47,16 +47,13 @@ for (const root of document.querySelectorAll("[data-filter-root]")) {
   const applyFilter = () => {
     ensureSearchIndex();
     const query = normalizeSearch(input.value);
-    const matches = searchableItems.map(
-      ({ haystack }) => !query || haystack.includes(query),
-    );
     let visible = 0;
-    list.hidden = true;
-    for (const [index, searchable] of searchableItems.entries()) {
-      searchable.item.hidden = !matches[index];
-      if (matches[index]) visible += 1;
+    for (const { haystack, item } of searchableItems) {
+      const matches = !query || haystack.includes(query);
+      const shouldHide = !matches;
+      if (item.hidden !== shouldHide) item.hidden = shouldHide;
+      if (matches) visible += 1;
     }
-    list.hidden = false;
     if (emptyState instanceof HTMLElement) emptyState.hidden = visible !== 0;
     announcementTimer = globalThis.setTimeout(() => {
       const visibleItemName =
