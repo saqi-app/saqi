@@ -2110,11 +2110,7 @@ export function extractFeedConfigurationFromDocument(
 ): FeedConfiguration {
   const scripts: string[] = [];
   let bytes = 0;
-  for (const match of documentHtml.matchAll(
-    /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/giu,
-  )) {
-    const attributes = match[1] ?? "";
-    const source = match[2] ?? "";
+  for (const { attributes, source } of inlineScriptCandidates(documentHtml)) {
     if (/(?:^|\s)src\s*=/iu.test(attributes) || !source.includes("poems-feed"))
       continue;
     bytes += new TextEncoder().encode(source).byteLength;
@@ -2131,6 +2127,43 @@ export function extractFeedConfigurationFromDocument(
     scripts.push(source);
   }
   return extractFeedConfigurationFromInlineScripts(scripts, authorHref);
+}
+
+function isTagBoundary(character: string | undefined): boolean {
+  return (
+    character === undefined ||
+    character === ">" ||
+    " \t\r\n\f/".includes(character)
+  );
+}
+
+function* inlineScriptCandidates(
+  html: string,
+): Generator<{ attributes: string; source: string }> {
+  const lower = html.toLowerCase();
+  let position = 0;
+  while (position < html.length) {
+    const start = lower.indexOf("<script", position);
+    if (start < 0) break;
+    if (!isTagBoundary(lower[start + 7])) {
+      position = start + 7;
+      continue;
+    }
+    const openEnd = lower.indexOf(">", start + 7);
+    if (openEnd < 0) break;
+    let closeStart = lower.indexOf("</script", openEnd + 1);
+    while (closeStart >= 0 && !isTagBoundary(lower[closeStart + 8])) {
+      closeStart = lower.indexOf("</script", closeStart + 8);
+    }
+    if (closeStart < 0) break;
+    const closeEnd = lower.indexOf(">", closeStart + 8);
+    if (closeEnd < 0) break;
+    yield {
+      attributes: html.slice(start + 7, openEnd),
+      source: html.slice(openEnd + 1, closeStart),
+    };
+    position = closeEnd + 1;
+  }
 }
 
 function extractInlineValue(
@@ -2427,7 +2460,7 @@ export function classifyCloudflareChallengeEvidence(
   const challengeTitle =
     title.includes("just a moment") ||
     title.includes("attention required") ||
-    /<title[^>]*>\s*(?:just a moment|attention required)/u.test(content);
+    htmlTitleIndicatesChallenge(evidence.html ?? "");
   const challengePhrase =
     content.includes("verify you are human") ||
     content.includes("performing security verification") ||
@@ -2438,7 +2471,7 @@ export function classifyCloudflareChallengeEvidence(
     content.includes("/cdn-cgi/challenge-platform/");
   const turnstile =
     evidence.hasTurnstileElement === true ||
-    content.includes("challenges.cloudflare.com") ||
+    hasCloudflareChallengeScript(evidence.scriptSources) ||
     content.includes("cf-turnstile");
   const challenged =
     challengeConfirmed ||
@@ -2449,6 +2482,34 @@ export function classifyCloudflareChallengeEvidence(
     (challengeTitle && (challengeResource || turnstile));
   if (!challenged) return null;
   return turnstile ? "turnstile" : "managed_challenge";
+}
+
+function htmlTitleIndicatesChallenge(html: string): boolean {
+  const lower = html.slice(0, INLINE_SCRIPT_MAX_BYTES).toLowerCase();
+  const start = lower.indexOf("<title");
+  if (start < 0 || !isTagBoundary(lower[start + 6])) return false;
+  const openEnd = lower.indexOf(">", start + 6);
+  if (openEnd < 0 || openEnd - start > 512) return false;
+  const closeStart = lower.indexOf("</title", openEnd + 1);
+  if (closeStart < 0 || closeStart - openEnd > 512) return false;
+  const text = lower.slice(openEnd + 1, closeStart).trimStart();
+  return (
+    text.startsWith("just a moment") || text.startsWith("attention required")
+  );
+}
+
+function hasCloudflareChallengeScript(sources: string | undefined): boolean {
+  return (sources ?? "").split("\n").some((source) => {
+    try {
+      const url = new URL(source);
+      return (
+        url.protocol === "https:" &&
+        url.hostname === "challenges.cloudflare.com"
+      );
+    } catch {
+      return false;
+    }
+  });
 }
 
 export async function resolveCloudflareChallenge(

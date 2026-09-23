@@ -2143,7 +2143,7 @@ function codexOAuthFailureCode(result: InvocationResult): null | string {
   for (const line of result.stderr.split("\n")) {
     if (
       !line.includes("codex_models_manager::manager") ||
-      !line.includes("https://chatgpt.com/backend-api/codex/models")
+      !hasCodexModelsEndpoint(line)
     )
       continue;
     const rawCode =
@@ -2152,6 +2152,20 @@ function codexOAuthFailureCode(result: InvocationResult): null | string {
     if (mapped) return mapped;
   }
   return null;
+}
+
+function hasCodexModelsEndpoint(line: string): boolean {
+  const candidates = line.match(/https:\/\/[^\s"'<>]+/gu) ?? [];
+  return candidates.some((candidate) => {
+    const normalized = candidate.replace(/[),.;]+$/u, "");
+    if (!URL.canParse(normalized)) return false;
+    const url = new URL(normalized);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "chatgpt.com" &&
+      url.pathname === "/backend-api/codex/models"
+    );
+  });
 }
 
 function mapCodexOAuthCode(code: string | undefined): null | string {

@@ -1708,6 +1708,18 @@ if (process.argv[2] === "login") {
     });
   });
 
+  it("does not trust a Codex model endpoint on a lookalike host", async () => {
+    const failure =
+      "ERROR codex_models_manager::manager: failed, url: https://chatgpt.com.evil.example/backend-api/codex/models, auth error code: token_revoked";
+    const result = await createRunner(
+      fakeCodex({ stderrFailure: failure }),
+    ).generate(INPUT);
+    expect(result).toMatchObject({
+      errorCode: "CODEX_PROCESS_FAILED",
+      state: "retry_wait",
+    });
+  });
+
   it("preserves exact OAuth rejection during the login preflight", async () => {
     const failure =
       "ERROR codex_models_manager::manager: failed, url: https://chatgpt.com/backend-api/codex/models?client_version=test, auth error code: token_invalidated";

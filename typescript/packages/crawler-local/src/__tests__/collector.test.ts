@@ -1132,6 +1132,15 @@ describe("Cloudflare challenge recovery", () => {
         hasTurnstileElement: true,
       }),
     ).toBeNull();
+    expect(
+      classifyCloudflareChallengeEvidence(
+        {
+          scriptSources:
+            "https://challenges.cloudflare.com.evil.example/turnstile.js",
+        },
+        true,
+      ),
+    ).toBe("managed_challenge");
   });
 
   it("does not classify an ordinary poem document as a challenge", () => {
@@ -1637,6 +1646,14 @@ describe("author feed protocol", () => {
       endpoint: "https://source.invalid/cat-435/poems-feed",
       token: "token-raw",
     });
+    expect(
+      extractFeedConfigurationFromDocument(
+        `<script>var poemsEndpoint="/cat-435/poems-feed";
+          var nextPoemsCursor="cursor-raw";
+          const headers={"X-Feed-Token":"token-raw"};</script\t\n data-end>`,
+        "https://source.invalid/cat-poet-Mutanabi",
+      ),
+    ).toMatchObject({ cursor: "cursor-raw", token: "token-raw" });
   });
 
   it("accepts exact feed JSON and treats only protocol exhaustion as terminal", () => {

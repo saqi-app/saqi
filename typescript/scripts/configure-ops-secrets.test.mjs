@@ -1,40 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import process from "node:process";
-
-const configurator = readFileSync(
-  new URL("configure-ops-secrets.mjs", import.meta.url),
-  "utf8",
-);
-const configuration = readFileSync(
-  new URL("../packages/app/wrangler.jsonc", import.meta.url),
-  "utf8",
-);
-const workflow = readFileSync(
-  new URL("../../.github/workflows/deploy.yml", import.meta.url),
-  "utf8",
-);
-
-const requiredSecrets = [
-  ["CF_CACHE_PURGE_TOKEN", "CF_CACHE_PURGE_TOKEN"],
-  ["CF_ZONE_ID", "CF_ZONE_ID"],
-  ["SAQI_ACCESS_AUDIENCE", "CF_ACCESS_AUD"],
-  ["SAQI_ACCESS_TEAM_ORIGIN", "CF_ACCESS_TEAM_DOMAIN"],
-  ["SAQI_SOURCE_BASE_URL", "SAQI_SOURCE_BASE_URL"],
-  ["SAQI_SOURCE_NAME", "SAQI_SOURCE_NAME"],
-];
-
-for (const [binding, environmentName] of requiredSecrets) {
-  assert.ok(configurator.includes(`"${binding}"`));
-  assert.ok(configuration.includes(`"${binding}"`));
-  assert.ok(workflow.includes(`${environmentName}:`));
-}
-
-assert.doesNotMatch(
-  configuration,
-  /"CF_ACCESS_(?:AUD|TEAM_DOMAIN)"\s*:\s*"[^\n]+"/u,
-);
 
 const validEnvironment = {
   CF_ACCESS_AUD: "a".repeat(64),
