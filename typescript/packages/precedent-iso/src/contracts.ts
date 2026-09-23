@@ -357,6 +357,27 @@ export const HTTP_CONTRACTS = [
     summary: "Render the authenticated operations not-found page",
   },
   {
+    ...EMPTY_INPUT,
+    audience: "authenticated",
+    id: "operations.public-sitemap",
+    method: "GET",
+    path: "/api/public-sitemap",
+    responses: [
+      {
+        body: z.strictObject({ xml: z.string() }),
+        contentType: "application/json",
+        status: 200,
+      },
+      {
+        body: ErrorResponseSchema,
+        contentType: "application/json",
+        status: 502,
+      },
+    ],
+    service: "operations",
+    summary: "Read the deployed public sitemap through an internal service binding",
+  },
+  {
     audience: "authenticated",
     body: LegacySourceLineageAdoptionRequestSchema,
     id: "operations.legacy-source-lineage-adoption",
