@@ -43,9 +43,15 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
     file.pathname.includes("/docs/diagrams/"),
   );
   assert.ok(readerFiles.length <= 10, "public reader artifact must stay tiny");
-  assert.equal(
-    diagramFiles.length,
-    4,
+  const architecture = JSON.parse(
+    await readFile(new URL("src/generated/architecture.json", siteRoot), "utf8"),
+  );
+  assert.deepEqual(
+    diagramFiles.map((file) => file.pathname.split("/docs/diagrams/", 2)[1]).toSorted(),
+    architecture.diagrams
+      .flatMap((diagram) => [diagram.file, diagram.image])
+      .map((file) => file.split("/").at(-1))
+      .toSorted(),
     "architecture ships Mermaid sources and SVG previews",
   );
   assert.doesNotMatch(entry, /_next\/|elevenlabs|favorite/iu);

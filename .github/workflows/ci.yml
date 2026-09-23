@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'typescript/**'
+      - 'macos/**'
       - '.github/scripts/**'
       - '.github/workflows/*.yml'
 

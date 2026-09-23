@@ -1344,6 +1344,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@binclusive/tree-sitter-swift-wasm@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@binclusive/tree-sitter-swift-wasm@npm:0.1.0"
+  checksum: 10/7c19cde7f8f1aae6b7c1e485ba320d3d37e4b2c431e587dd536d9773d9e3bc8976241946abd184d27e6c248d32a2bd39cceed7b057c2d7d4be65d3c36e7d3310
+  languageName: node
+  linkType: hard
+
 "@bruits/satteri-darwin-arm64@npm:0.10.5":
   version: 0.10.5
   resolution: "@bruits/satteri-darwin-arm64@npm:0.10.5"
@@ -11060,6 +11067,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "saqi@workspace:."
   dependencies:
+    "@binclusive/tree-sitter-swift-wasm": "npm:0.1.0"
     "@eslint-community/eslint-plugin-eslint-comments": "npm:4.8.1"
     "@eslint/compat": "npm:2.1.1"
     "@eslint/js": "npm:10.0.1"
@@ -11088,6 +11096,7 @@ __metadata:
     tailwindcss: "npm:^4.3.3"
     typescript: "npm:6.0.3"
     typescript-eslint: "npm:8.70.1"
+    web-tree-sitter: "npm:0.26.11"
   languageName: unknown
   linkType: soft
 
@@ -12862,6 +12871,13 @@ __metadata:
   version: 4.0.0-beta.3
   resolution: "web-streams-polyfill@npm:4.0.0-beta.3"
   checksum: 10/dcdef67de57d83008f9dc330662b65ba4497315555dd0e4e7bcacb132ffdf8a830eaab8f74ad40a4a44f542461f51223f406e2a446ece1cc29927859b1405853
+  languageName: node
+  linkType: hard
+
+"web-tree-sitter@npm:0.26.11":
+  version: 0.26.11
+  resolution: "web-tree-sitter@npm:0.26.11"
+  checksum: 10/5d740f87ab873c88a7725d2578f1d059361503a5be5e3d0b3f3d212d7bcc6f62de25552202b2f4ba4788771fb133cda1cf23ba3705150269e8be5232bd9c1527
   languageName: node
   linkType: hard
 
