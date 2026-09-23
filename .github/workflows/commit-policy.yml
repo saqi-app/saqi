@@ -1,3 +1,4 @@
+# Managed by code-standards commit policy; regenerate with `code-standards setup`.
 name: Commit policy
 
 on:
@@ -26,9 +27,4 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-      - name: Enforce concise commit history
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-        run: bash .github/scripts/check-pr-commits.sh
+      - uses: sarj-ai/repo-standards/pull-request-commits@7f1c27d4cd04f427e5d3571cd39692d122985f01 # v5.15.0

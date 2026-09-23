@@ -78,7 +78,9 @@ const SourceContentDocumentSchema = z.looseObject({
   content: z.array(z.string()),
 });
 
-export class ProductionResolutionConflictError extends Error {}
+export class ProductionResolutionConflictError extends Error {
+  override name = "ProductionResolutionConflictError";
+}
 
 export interface ProductionResolutionStore {
   resolve(input: unknown): Promise<ProductionResolutionResponse>;

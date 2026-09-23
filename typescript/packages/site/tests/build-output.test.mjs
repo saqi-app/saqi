@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { hash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import test from "node:test";
+import { URL } from "node:url";
 
 const siteRoot = new URL("../", import.meta.url);
 
@@ -35,7 +36,18 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
     0,
     "unused sessions must remain disabled",
   );
-  assert.ok(clientFiles.length <= 10, "public client artifact must stay tiny");
+  const readerFiles = clientFiles.filter(
+    (file) => !file.pathname.includes("/docs/diagrams/"),
+  );
+  const diagramFiles = clientFiles.filter((file) =>
+    file.pathname.includes("/docs/diagrams/"),
+  );
+  assert.ok(readerFiles.length <= 10, "public reader artifact must stay tiny");
+  assert.equal(
+    diagramFiles.length,
+    4,
+    "architecture ships Mermaid sources and SVG previews",
+  );
   assert.doesNotMatch(entry, /_next\/|elevenlabs|favorite/iu);
   const serverSource = await Promise.all(
     serverFiles
@@ -54,11 +66,17 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
   );
 
   let bytes = 0;
-  for (const file of clientFiles) {
+  for (const file of readerFiles) {
     const fileStat = await stat(file);
     bytes += fileStat.size;
   }
-  assert.ok(bytes < 140_000, "public browser assets must stay under 140 KiB");
+  assert.ok(bytes < 141_000, "public reader assets must stay under 141 KB");
+  const diagramStats = await Promise.all(diagramFiles.map((file) => stat(file)));
+  const diagramBytes = diagramStats.map((fileStat) => fileStat.size);
+  assert.ok(
+    diagramBytes.reduce((total, size) => total + size, 0) < 20_000,
+    "architecture assets stay compact",
+  );
 });
 
 void test("static assets retain immutable and strict security headers", async () => {

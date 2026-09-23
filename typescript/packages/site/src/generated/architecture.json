@@ -1,0 +1,144 @@
+{
+  "generatedFrom": "TypeScript AST imports, Astro route frontmatter, and workspace package manifests",
+  "packages": [
+    {
+      "name": "app",
+      "description": "Access-protected Saqi operations console",
+      "source": "typescript/packages/app/package.json"
+    },
+    {
+      "name": "crawler-local",
+      "description": "Restart-safe local collection and enrichment coordinator for Saqi",
+      "source": "typescript/packages/crawler-local/package.json"
+    },
+    {
+      "name": "precedent-iso",
+      "description": "Runtime-safe shared Saqi contracts and domain models",
+      "source": "typescript/packages/precedent-iso/package.json"
+    },
+    {
+      "name": "precedent-node",
+      "description": "Cloudflare-compatible persistence and task services for Saqi",
+      "source": "typescript/packages/precedent-node/package.json"
+    },
+    {
+      "name": "site",
+      "description": "Public Astro site for the Saqi poetry corpus",
+      "source": "typescript/packages/site/package.json"
+    },
+    {
+      "name": "source-adapter",
+      "description": "Pure, runtime-neutral source policies and projection parsers",
+      "source": "typescript/packages/source-adapter/package.json"
+    }
+  ],
+  "diagrams": [
+    {
+      "title": "Workspace dependencies",
+      "file": "/docs/diagrams/packages.mmd",
+      "image": "/docs/diagrams/packages.svg"
+    },
+    {
+      "title": "Public routes and data access",
+      "file": "/docs/diagrams/routes.mmd",
+      "image": "/docs/diagrams/routes.svg"
+    }
+  ],
+  "routes": [
+    {
+      "path": "/404",
+      "source": "packages/site/src/pages/404.astro",
+      "imports": [
+        "../layouts/BaseLayout.astro"
+      ]
+    },
+    {
+      "path": "/500",
+      "source": "packages/site/src/pages/500.astro",
+      "imports": [
+        "../layouts/BaseLayout.astro"
+      ]
+    },
+    {
+      "path": "/author/:authorSlug",
+      "source": "packages/site/src/pages/author/[authorSlug]/index.astro",
+      "imports": [
+        "../../../components/AuthorCatalogPage.astro",
+        "../../../lib/catalog"
+      ]
+    },
+    {
+      "path": "/author/:authorSlug/page/:pageNumber",
+      "source": "packages/site/src/pages/author/[authorSlug]/page/[pageNumber].astro",
+      "imports": [
+        "../../../../components/AuthorCatalogPage.astro",
+        "../../../../lib/catalog"
+      ]
+    },
+    {
+      "path": "/author/:authorSlug/poem/:poemId",
+      "source": "packages/site/src/pages/author/[authorSlug]/poem/[poemId].astro",
+      "imports": [
+        "../../../../layouts/BaseLayout.astro",
+        "../../../../components/ModelProviderIcon.astro",
+        "../../../../components/TranslationModel.astro",
+        "../../../../lib/catalog",
+        "../../../../lib/metadata",
+        "../../../../lib/poem-translations",
+        "../../../../lib/routes"
+      ]
+    },
+    {
+      "path": "/authors/page/:pageNumber",
+      "source": "packages/site/src/pages/authors/page/[pageNumber].astro",
+      "imports": []
+    },
+    {
+      "path": "/docs",
+      "source": "packages/site/src/pages/docs/index.astro",
+      "imports": [
+        "../../generated/architecture.json",
+        "../../layouts/BaseLayout.astro"
+      ]
+    },
+    {
+      "path": "/",
+      "source": "packages/site/src/pages/index.astro",
+      "imports": [
+        "../components/AuthorIndexPage.astro",
+        "../lib/catalog"
+      ]
+    },
+    {
+      "path": "/robots.txt",
+      "source": "packages/site/src/pages/robots.txt.ts",
+      "imports": []
+    },
+    {
+      "path": "/sitemap-index.xml",
+      "source": "packages/site/src/pages/sitemap-index.xml.ts",
+      "imports": [
+        "../lib/routes",
+        "../lib/xml"
+      ]
+    },
+    {
+      "path": "/sitemaps/authors-1.xml",
+      "source": "packages/site/src/pages/sitemaps/authors-1.xml.ts",
+      "imports": [
+        "../../lib/catalog",
+        "../../lib/routes",
+        "../../lib/xml"
+      ]
+    },
+    {
+      "path": "/sitemaps/poems-:shard.xml",
+      "source": "packages/site/src/pages/sitemaps/poems-[shard].xml.ts",
+      "imports": [
+        "../../lib/catalog",
+        "../../lib/routes",
+        "../../lib/xml"
+      ]
+    }
+  ]
+}

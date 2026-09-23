@@ -53,7 +53,9 @@ export const SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED =
   "SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED";
 const MAX_TRANSIENT_ATTEMPTS = 12;
 const DISK_PRESSURE_RETRY_MS = 60_000;
-class SolBudgetExhaustedError extends Error {}
+class SolBudgetExhaustedError extends Error {
+  override name = "SolBudgetExhaustedError";
+}
 const ArtifactPersistenceErrorCodeSchema = z.enum([
   "EBUSY",
   "EIO",

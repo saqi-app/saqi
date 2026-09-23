@@ -2251,7 +2251,9 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
   }
 }
 
-export class CorpusRevisionConflictError extends Error {}
+export class CorpusRevisionConflictError extends Error {
+  override name = "CorpusRevisionConflictError";
+}
 
 export class LostPromotionClaimError extends Error {
   constructor() {

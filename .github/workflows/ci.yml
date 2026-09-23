@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   lint-format-build:
-    name: Lint, Format & Build
+    name: Format, Types & Build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -37,7 +37,7 @@ jobs:
       - name: Test deployment classification scripts
         working-directory: .
         run: |
-          node .github/scripts/configure-ops-secrets.test.mjs
+          node typescript/scripts/configure-ops-secrets.test.mjs
           .github/scripts/affected-artifacts.test.sh
           .github/scripts/successful-deployment-base.test.sh
 
@@ -66,6 +66,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Verify source-derived architecture
+        run: yarn docs:check
+
       - name: Save Yarn cache
         if: steps.yarn-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -88,15 +91,17 @@ jobs:
         if: steps.changes.outputs.crawler_only != 'true'
         run: yarn build:api
 
-      - name: Lint, format and type-check local runtime
+      - name: Format and type-check local runtime
         if: steps.changes.outputs.crawler_only == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: >-
-          yarn workspace @saqi/source-adapter check &&
-          yarn workspace @saqi/crawler-local check
+          yarn workspace @saqi/source-adapter check::format &&
+          yarn workspace @saqi/source-adapter check::types &&
+          yarn workspace @saqi/crawler-local check::format &&
+          yarn workspace @saqi/crawler-local check::types
 
-      - name: Lint, format and type-check workspaces
+      - name: Format and type-check workspaces
         if: steps.changes.outputs.crawler_only != 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=4096

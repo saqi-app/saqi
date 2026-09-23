@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import process from "node:process";
 import { test } from "node:test";
+import { fileURLToPath, URL } from "node:url";
 
 const script = fileURLToPath(
-  new URL("./verify-retirement-migration.mjs", import.meta.url),
+  new URL("verify-retirement-migration.mjs", import.meta.url),
 );
 for (const [name, input, passes] of [
   ["applied", [{ success: true, results: [{ applied: 1 }] }], true],

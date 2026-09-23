@@ -33,8 +33,8 @@ interface RuntimeOwnerPort {
 }
 export class RuntimeOwnerBusyError extends Error {
   readonly record: RuntimeOwnerRecord;
-  constructor(record: RuntimeOwnerRecord) {
-    super(`Runtime owner already held by pid ${String(record.pid)}`);
+  constructor(record: RuntimeOwnerRecord, options?: ErrorOptions) {
+    super(`Runtime owner already held by pid ${String(record.pid)}`, options);
     this.name = "RuntimeOwnerBusyError";
     this.record = record;
   }

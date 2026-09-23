@@ -1,0 +1,69 @@
+---
+import architecture from "../../generated/architecture.json";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Architecture | Saqi"
+  description="Architecture diagrams generated from Saqi source code."
+  canonicalPath="/docs"
+>
+  <article class="architecture-docs">
+    <header>
+      <p class="eyebrow">Saqi / Engineering</p>
+      <h1>Architecture, straight from the source.</h1>
+      <p>
+        These diagrams are regenerated from {architecture.generatedFrom}. Each diagram is
+        also available as a standalone Mermaid file.
+      </p>
+    </header>
+    <nav aria-label="Architecture diagrams">
+      {architecture.diagrams.map((diagram, index) => (
+        <a href={`#diagram-${index}`}>{diagram.title}</a>
+      ))}
+    </nav>
+    {architecture.diagrams.map((diagram, index) => (
+      <section id={`diagram-${index}`} aria-labelledby={`title-${index}`}>
+        <div class="section-heading">
+          <h2 id={`title-${index}`}>{diagram.title}</h2>
+          <a href={diagram.file}>Mermaid source ↗</a>
+        </div>
+        <div class="diagram"><img src={diagram.image} alt={`${diagram.title} diagram`} loading="lazy" /></div>
+      </section>
+    ))}
+    <section aria-labelledby="packages-title">
+      <h2 id="packages-title">Code map</h2>
+      <ul>
+        {architecture.packages.map((item) => (
+          <li><strong>{item.name}</strong><span>{item.description}</span><code>{item.source}</code></li>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>
+
+<style>
+  .architecture-docs { max-width: 86rem; margin: auto; padding: clamp(1.5rem, 5vw, 5rem); color: #17342d; }
+  header { max-width: 62rem; margin-bottom: 3rem; }
+  .eyebrow { color: #288269; font-size: .8rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  h1 { max-width: 15ch; font-size: clamp(2.6rem, 6vw, 5.5rem); line-height: 1.04; letter-spacing: -.05em; }
+  header > p:last-child { max-width: 60ch; font-size: 1.15rem; line-height: 1.6; }
+  nav { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 3rem; }
+  nav a, .section-heading a { color: #145d48; }
+  nav a { border: 1px solid #b8d4c9; border-radius: 999px; padding: .6rem 1rem; text-decoration: none; }
+  section { margin: 0 0 2.5rem; padding: clamp(1rem, 3vw, 2.5rem); border: 1px solid #d4e4dc; border-radius: 1.5rem; background: #f8fbf8; }
+  .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); letter-spacing: -.03em; }
+  .diagram { overflow-x: auto; padding: 1rem; background: white; border-radius: 1rem; }
+  .diagram img { display: block; min-width: 50rem; width: 100%; height: auto; }
+  ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .8rem; padding: 0; list-style: none; }
+  li { display: grid; gap: .45rem; padding: 1rem; border-radius: 1rem; background: white; }
+  li strong { font-size: 1.1rem; }
+  li code { overflow-wrap: anywhere; font-size: .75rem; color: #55796c; }
+  @media (prefers-color-scheme: dark) {
+    .architecture-docs { color: #e8f5ed; }
+    section { border-color: #315548; background: #122820; }
+    .diagram, li { background: #eff8f1; color: #17342d; }
+    nav a, .section-heading a { color: #91dfb7; }
+  }
+</style>

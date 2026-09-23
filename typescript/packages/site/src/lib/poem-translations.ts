@@ -168,14 +168,16 @@ export function poemTranslationTracks(
   >,
 ): TranslationTrack[] {
   const tracks: TranslationTrack[] = [];
-  for (const enrichment of poem.modelEnrichments ?? []) {
-    if (!hasTranslation(enrichment.lines)) continue;
-    const presentation = modelPresentation(enrichment);
-    tracks.push({
-      key: enrichment.modelKey,
-      lines: enrichment.lines,
-      ...presentation,
-    });
+  if (poem.modelEnrichments != null) {
+    for (const enrichment of poem.modelEnrichments) {
+      if (!hasTranslation(enrichment.lines)) continue;
+      const presentation = modelPresentation(enrichment);
+      tracks.push({
+        key: enrichment.modelKey,
+        lines: enrichment.lines,
+        ...presentation,
+      });
+    }
   }
   if (
     hasTranslation(poem.linesEnglishSol) &&
