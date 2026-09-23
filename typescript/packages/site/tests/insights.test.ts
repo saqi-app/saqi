@@ -37,6 +37,12 @@ void test("insight rollups track writes and replay without double counting", asy
       VALUES ('author-1', 'author-1', 'شاعر', 3);
       INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
       VALUES ('poem-1', 'author-1', 'poem-1', 1, 'قصيدة', '{"content":["بيت"]}');
+      INSERT INTO author (id, slug, name_arabic)
+      VALUES ('author-unknown', 'author-unknown', 'شاعر آخر');
+      INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
+      SELECT 'unknown-' || value, 'author-unknown', 'unknown-' || value,
+             1, 'قصيدة', '{"content":["بيت"]}'
+      FROM json_each('[1,2,3,4,5,6,7,8,9,10]');
       INSERT INTO source_author_identity (
         id, source_name, external_id, canonical_url, name_arabic,
         canonical_author_id, first_observed_at, last_observed_at
@@ -54,8 +60,8 @@ void test("insight rollups track writes and replay without double counting", asy
     `);
     const expected = await loadCollectionInsights(asD1(sqlite));
     assert.deepEqual(expected, {
-      authorCount: 1,
-      poemCount: 1,
+      authorCount: 2,
+      poemCount: 11,
       sourcePoemCount: 1,
       remainingEstimate: 2,
       modelCounts: [],
@@ -68,6 +74,27 @@ void test("insight rollups track writes and replay without double counting", asy
     sqlite.exec("UPDATE author SET poem_count = 4 WHERE id = 'author-1'");
     const updated = await loadCollectionInsights(asD1(sqlite));
     assert.equal(updated.remainingEstimate, 3);
+
+    sqlite.exec("UPDATE poem SET author_id = 'author-1' WHERE id = 'unknown-1'");
+    const reparented = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(reparented.remainingEstimate, 2);
+    sqlite.exec("DELETE FROM poem WHERE id = 'unknown-1'");
+    const restored = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(restored.remainingEstimate, 3);
+  } finally {
+    sqlite.close();
+  }
+});
+
+void test("remaining count is unavailable without declared author totals", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author (id, slug, name_arabic)
+      VALUES ('undeclared', 'undeclared', 'شاعر');
+    `);
+    const insights = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(insights.remainingEstimate, null);
   } finally {
     sqlite.close();
   }

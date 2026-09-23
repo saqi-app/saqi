@@ -2,8 +2,9 @@ import { z } from "zod";
 
 const CountsSchema = z.object({
   authorCount: z.number().int().nonnegative(),
+  declaredAuthorCount: z.number().int().nonnegative(),
   poemCount: z.number().int().nonnegative(),
-  declaredPoemCount: z.number().int().nonnegative(),
+  remainingPoemCount: z.number().int().nonnegative(),
   sourcePoemCount: z.number().int().nonnegative(),
 });
 const ModelCountSchema = z.object({
@@ -32,7 +33,8 @@ export async function loadCollectionInsights(
     session
       .prepare(
         `SELECT author_count AS authorCount, poem_count AS poemCount,
-                declared_poem_count AS declaredPoemCount,
+                declared_author_count AS declaredAuthorCount,
+                remaining_poem_count AS remainingPoemCount,
                 source_poem_count AS sourcePoemCount
          FROM insights_rollup WHERE singleton = 1`,
       ),
@@ -53,8 +55,8 @@ export async function loadCollectionInsights(
     poemCount: counts.poemCount,
     sourcePoemCount: counts.sourcePoemCount,
     remainingEstimate:
-      counts.declaredPoemCount > 0
-        ? Math.max(0, counts.declaredPoemCount - counts.poemCount)
+      counts.declaredAuthorCount > 0
+        ? counts.remainingPoemCount
         : null,
     modelCounts: ModelCountSchema.array().parse(models?.results),
     collectionDays: CollectionDaySchema.array().parse(days?.results),
