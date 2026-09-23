@@ -7,6 +7,7 @@ import { pageTitle } from "../lib/metadata";
 
 const insights = await loadCollectionInsights(env.DB);
 const number = new Intl.NumberFormat("en");
+const monthFormat = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" });
 const title = pageTitle("Collection insights");
 const description = "Saqi collection progress and published poem enrichment by model.";
 ---
@@ -21,15 +22,10 @@ const description = "Saqi collection progress and published poem enrichment by m
     <section><h2>Poems</h2><p>{number.format(insights.poemCount)}</p></section>
     <section><h2>Poets</h2><p>{number.format(insights.authorCount)}</p></section>
     <section><h2>Source poems collected</h2><p>{number.format(insights.sourcePoemCount)}</p></section>
-    <section>
-      <h2>Estimated to collect</h2>
-      <p>{insights.remainingEstimate === null ? "—" : number.format(insights.remainingEstimate)}</p>
-    </section>
   </div>
   <p class="insights-note">
-    The estimate sums each poet's declared count minus their cataloged poems.
-    It is unavailable until a source has supplied declared counts. Daily counts
-    record each source poem on its first observed UTC day.
+    Collection counts use each source poem's first observed UTC month. The
+    catalog does not establish whether every source poet or poem has been discovered.
   </p>
 
   <section class="insights-section" aria-labelledby="model-heading">
@@ -49,15 +45,15 @@ const description = "Saqi collection progress and published poem enrichment by m
   </section>
 
   <section class="insights-section" aria-labelledby="collection-heading">
-    <h2 id="collection-heading">Source poems collected each day</h2>
-    {insights.collectionDays.length === 0 ? (
+    <h2 id="collection-heading">Poems collected by month</h2>
+    {insights.collectionMonths.length === 0 ? (
       <p>No source poems collected yet.</p>
     ) : (
       <table>
-        <thead><tr><th scope="col">UTC day</th><th scope="col">Source poems</th></tr></thead>
+        <thead><tr><th scope="col">UTC month</th><th scope="col">Source poems</th></tr></thead>
         <tbody>
-          {insights.collectionDays.map(({ day, poemCount }) => (
-            <tr><th scope="row"><time datetime={day}>{day}</time></th><td>{number.format(poemCount)}</td></tr>
+          {insights.collectionMonths.map(({ month, poemCount }) => (
+            <tr><th scope="row"><time datetime={month}>{monthFormat.format(new Date(`${month}T00:00:00Z`))}</time></th><td>{number.format(poemCount)}</td></tr>
           ))}
         </tbody>
       </table>

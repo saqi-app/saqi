@@ -65,7 +65,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0040_insights_rollups.sql");
+    expect(first.at(-1)).toBe("0041_monthly_collection_insights.sql");
     expectCorpusRevisionSchema(database);
     expectModelPublicationGuards(database);
     expectLegacySolPublicationPrecedence(database);

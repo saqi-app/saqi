@@ -29,7 +29,7 @@ function asD1(database: Database.Database): D1Database {
   } as unknown as D1Database;
 }
 
-void test("insight rollups track writes and replay without double counting", async () => {
+void test("monthly insight rollups track writes and replay without double counting", async () => {
   const sqlite = createDatabase();
   try {
     sqlite.exec(`
@@ -57,44 +57,55 @@ void test("insight rollups track writes and replay without double counting", asy
         'source-poem-1', 'test', 'poem-1', 'source-author-1',
         'https://example.com/poem-1', 'poem-1', 1780000000, 1780000000
       );
+      INSERT INTO source_poem_identity (
+        id, source_name, external_id, source_author_id, canonical_url,
+        canonical_poem_id, first_observed_at, last_observed_at
+      ) VALUES (
+        'source-poem-2', 'test', 'poem-2', 'source-author-1',
+        'https://example.com/poem-2', 'poem-1', 1780086400, 1780086400
+      );
     `);
     const expected = await loadCollectionInsights(asD1(sqlite));
     assert.deepEqual(expected, {
       authorCount: 2,
       poemCount: 11,
-      sourcePoemCount: 1,
-      remainingEstimate: 2,
+      sourcePoemCount: 2,
       modelCounts: [],
-      collectionDays: [{ day: "2026-05-28", poemCount: 1 }],
+      collectionMonths: [{ month: "2026-05-01", poemCount: 2 }],
     });
 
-    sqlite.exec(readFileSync(new URL("0040_insights_rollups.sql", MIGRATIONS), "utf8"));
+    sqlite.exec(readFileSync(new URL("0041_monthly_collection_insights.sql", MIGRATIONS), "utf8"));
     assert.deepEqual(await loadCollectionInsights(asD1(sqlite)), expected);
+
+    sqlite.exec(`
+      INSERT INTO source_poem_identity (
+        id, source_name, external_id, source_author_id, canonical_url,
+        canonical_poem_id, first_observed_at, last_observed_at
+      ) VALUES (
+        'source-poem-3', 'test', 'poem-3', 'source-author-1',
+        'https://example.com/poem-3', 'poem-1', 1780444800, 1780444800
+      );
+    `);
+    const nextMonth = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(nextMonth.sourcePoemCount, 3);
+    assert.deepEqual(nextMonth.collectionMonths, [
+      { month: "2026-06-01", poemCount: 1 },
+      { month: "2026-05-01", poemCount: 2 },
+    ]);
 
     sqlite.exec("UPDATE author SET poem_count = 4 WHERE id = 'author-1'");
     const updated = await loadCollectionInsights(asD1(sqlite));
-    assert.equal(updated.remainingEstimate, 3);
+    assert.equal(updated.authorCount, 2);
 
     sqlite.exec("UPDATE poem SET author_id = 'author-1' WHERE id = 'unknown-1'");
     const reparented = await loadCollectionInsights(asD1(sqlite));
-    assert.equal(reparented.remainingEstimate, 2);
+    assert.equal(reparented.poemCount, 11);
     sqlite.exec("DELETE FROM poem WHERE id = 'unknown-1'");
     const restored = await loadCollectionInsights(asD1(sqlite));
-    assert.equal(restored.remainingEstimate, 3);
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("remaining count is unavailable without declared author totals", async () => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      INSERT INTO author (id, slug, name_arabic)
-      VALUES ('undeclared', 'undeclared', 'شاعر');
-    `);
-    const insights = await loadCollectionInsights(asD1(sqlite));
-    assert.equal(insights.remainingEstimate, null);
+    assert.equal(restored.poemCount, 10);
+    sqlite.exec("DELETE FROM author WHERE id = 'author-unknown'");
+    const afterAuthorDelete = await loadCollectionInsights(asD1(sqlite));
+    assert.equal(afterAuthorDelete.authorCount, 1);
   } finally {
     sqlite.close();
   }
