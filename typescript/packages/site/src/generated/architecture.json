@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "TypeScript AST imports, Astro route frontmatter, and workspace package manifests",
+  "generatedFrom": "TypeScript AST imports and D1 calls, Astro route frontmatter, and workspace package manifests",
   "packages": [
     {
       "name": "app",
