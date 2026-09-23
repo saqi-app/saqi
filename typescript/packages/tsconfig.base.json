@@ -1,13 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Base Config - Feb 2026",
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "./precedent-iso" },
-    { "path": "./precedent-node" },
-    { "path": "./app" }
-  ],
+  "display": "Saqi shared strict TypeScript settings",
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -23,12 +16,12 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "noUncheckedSideEffectImports": true,
-
     "module": "ESNext",
     "moduleResolution": "Bundler",
-
     "target": "ES2024",
-    "lib": ["ES2024"],
+    "lib": [
+      "ES2024"
+    ],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

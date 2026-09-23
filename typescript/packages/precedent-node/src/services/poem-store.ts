@@ -17,13 +17,13 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "./db-types";
+import type { Database } from "./db-types.js";
 import {
   ENRICHMENT_ARTIFACT_TABLE as enrichmentArtifact,
   ENRICHMENT_VALIDATION_TABLE as enrichmentValidation,
   POEM_MODEL_PUBLICATION_POINTER_TABLE as modelPublication,
   POEM_TABLE as poem,
-} from "./schema";
+} from "./schema.js";
 
 export interface Translation {
   model?: string;

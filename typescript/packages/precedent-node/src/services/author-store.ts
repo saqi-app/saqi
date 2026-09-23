@@ -7,8 +7,8 @@ import {
 } from "@saqi/precedent-iso";
 import { eq, sql } from "drizzle-orm";
 
-import type { Database } from "./db-types";
-import { AUTHOR_TABLE as author } from "./schema";
+import type { Database } from "./db-types.js";
+import { AUTHOR_TABLE as author } from "./schema.js";
 
 export interface InsertAuthor {
   name: string;

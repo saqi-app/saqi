@@ -15,10 +15,10 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { currentSource } from "@saqi/source-adapter";
 import { z } from "zod";
 
 import { canonicalJson, sha256 } from "../persistence/work-key.js";
+import { currentSource } from "../source-adapter/index.js";
 
 export const PublishedPoemStructureSchema = z.enum(["classical", "free_verse"]);
 

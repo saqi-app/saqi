@@ -75,7 +75,7 @@ export type D1CapacityPreflightInput = z.infer<
   typeof D1CapacityPreflightInputSchema
 >;
 
-export interface D1ActionRecommendation {
+interface D1ActionRecommendation {
   readonly fixedQueries: number;
   readonly maximumRecords: number;
   readonly name: string;
@@ -85,7 +85,7 @@ export interface D1ActionRecommendation {
   readonly rowsWrittenAtRecommendedChunk: number;
 }
 
-export type D1PreflightBlocker =
+type D1PreflightBlocker =
   | "BACKUP_EXPORT_STALE"
   | "BACKUP_PROOF_MISSING"
   | "CURRENT_DATABASE_OVER_LIMIT"

@@ -3,11 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import type {
-  AuthorPoemManifestProjection,
-  PoemDetailProjection,
-} from "@saqi/source-adapter";
-import { configureSource, SourceProjectionError } from "@saqi/source-adapter";
 import type { BrowserContext, Page, Response } from "playwright-core";
 import { describe, expect, it, vi } from "vitest";
 
@@ -56,6 +51,14 @@ import {
 } from "../persistence/artifact-store";
 import { CURRENT_SCHEMA_VERSION, Ledger } from "../persistence/ledger";
 import { inputHash } from "../persistence/work-key";
+import type {
+  AuthorPoemManifestProjection,
+  PoemDetailProjection,
+} from "../source-adapter/index.js";
+import {
+  configureSource,
+  SourceProjectionError,
+} from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const testArtifactStore = (root: string): ArtifactStore =>

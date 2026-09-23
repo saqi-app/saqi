@@ -1,5 +1,11 @@
 import { setTimeout as delay } from "node:timers/promises";
 
+import { z } from "zod";
+
+import type { Artifact } from "../persistence/artifact-store.js";
+import type { Ledger, OriginLease } from "../persistence/ledger.js";
+import { canonicalJson, inputHash, sha256 } from "../persistence/work-key.js";
+import { isNetworkFailureText } from "../runtime/network-resilience.js";
 import {
   type AuthorInventoryPageProjection,
   AuthorInventoryPageSchema,
@@ -7,17 +13,11 @@ import {
   canonicalInventoryPaginationUrl,
   certifyAuthorInventoryPages,
   currentSource,
-} from "@saqi/source-adapter";
-import { z } from "zod";
-
-import type { Artifact } from "../persistence/artifact-store.js";
-import type { Ledger, OriginLease } from "../persistence/ledger.js";
-import { canonicalJson, inputHash, sha256 } from "../persistence/work-key.js";
-import { isNetworkFailureText } from "../runtime/network-resilience.js";
+} from "../source-adapter/index.js";
 import { SourceBrowserError } from "./collection-source-browser.js";
 import { seedAuthorManifests } from "./collector.js";
 
-export const AUTHOR_INVENTORY_WORK_SCHEMA = "author-inventory-work@1";
+const AUTHOR_INVENTORY_WORK_SCHEMA = "author-inventory-work@1";
 const INVENTORY_CHECKPOINT_KIND = "author-inventory-progress-v1";
 
 interface AuthorInventoryIdentity {
@@ -224,7 +224,7 @@ export type AuthorInventoryCollectionResult =
   | { readonly stopped: "aborted" | "idle" };
 
 /** Lifecycle boundary consumed by the unified collection rig. */
-export interface AuthorInventoryCollectorPort {
+interface AuthorInventoryCollectorPort {
   run(signal: AbortSignal): Promise<AuthorInventoryCollectionResult>;
   seed(): { readonly inserted: boolean; readonly workKey: string };
 }

@@ -15,7 +15,7 @@ import {
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "./db-types";
+import type { Database } from "./db-types.js";
 
 const DEFAULT_LIFETIME_MS = 15 * 60_000;
 const ResolutionLifetimeMsSchema = z

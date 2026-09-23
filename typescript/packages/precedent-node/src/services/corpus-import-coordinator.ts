@@ -20,8 +20,8 @@ import type {
   SourceAdmissionResult,
   StageBundleInput,
   StageRecordInput,
-} from "./corpus-revision-store";
-import { CorpusRevisionConflictError } from "./corpus-revision-store";
+} from "./corpus-revision-store.js";
+import { CorpusRevisionConflictError } from "./corpus-revision-store.js";
 
 export interface SourceImportBundle {
   bundle: StageBundleInput;

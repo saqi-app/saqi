@@ -6,7 +6,6 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { configureSource, currentSource } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler";
@@ -28,6 +27,7 @@ import {
   prepareCollectedPoem,
 } from "../publication/corpus-import-actions";
 import { prepareEnrichmentPublication } from "../publication/publication-lane";
+import { configureSource, currentSource } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const DETAIL = {

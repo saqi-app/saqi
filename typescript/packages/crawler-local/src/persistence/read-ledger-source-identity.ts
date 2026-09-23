@@ -1,6 +1,7 @@
 import { SourceConfigurationSchema } from "@saqi/precedent-iso";
-import type { SourceConfiguration } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
+
+import type { SourceConfiguration } from "../source-adapter/index.js";
 
 /** Reads the ledger's own source fence for source-independent diagnostics. */
 export function readLedgerSourceIdentity(path: string): SourceConfiguration {

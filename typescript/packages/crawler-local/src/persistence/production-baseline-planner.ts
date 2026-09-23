@@ -10,12 +10,6 @@ import {
   PoemEnrichmentInputSchema,
   READABLE_ENRICHMENT_PROFILES,
 } from "@saqi/precedent-iso";
-import {
-  type AuthorPoemManifest,
-  canonicalAuthorUrl,
-  canonicalPoemUrl,
-  currentSource,
-} from "@saqi/source-adapter";
 import { z } from "zod";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler.js";
@@ -30,6 +24,12 @@ import {
 import { SOL_ENRICHMENT_WORK_KIND } from "../enrichment/sol-coordinator.js";
 import { SOL_PIPELINE_VERSION } from "../enrichment/sol-runner.js";
 import { canonicalSourceRevisionId } from "../publication/corpus-import-actions.js";
+import {
+  type AuthorPoemManifest,
+  canonicalAuthorUrl,
+  canonicalPoemUrl,
+  currentSource,
+} from "../source-adapter/index.js";
 import type { ArtifactStore } from "./artifact-store.js";
 import type { Ledger } from "./ledger.js";
 import type { WorkDefinition } from "./schema.js";
@@ -162,7 +162,7 @@ export interface BaselineIneligiblePoem {
   readonly slug: string;
 }
 
-export interface CertifiedOrphanRepair {
+interface CertifiedOrphanRepair {
   readonly authorId: string;
   readonly canonicalAuthorId: string;
   readonly canonicalSourceId: string;
@@ -183,7 +183,7 @@ export interface ProductionBaselinePlan {
   readonly report: ProductionBaselineReport;
 }
 
-export interface ProductionBaselineReport {
+interface ProductionBaselineReport {
   readonly authors: number;
   readonly batchSize: number;
   readonly currentProfileWork: number;
@@ -514,7 +514,7 @@ const ACTIVE_WORK_STATES: ReadonlySet<string> = new Set([
   "retry_wait",
   "running",
 ]);
-export const PRODUCTION_DETAIL_RECOVERY_PRIORITY = 1_000;
+const PRODUCTION_DETAIL_RECOVERY_PRIORITY = 1_000;
 
 /** Seeds source verification for a bounded set of legacy production poems.
  *

@@ -1,9 +1,10 @@
+import { z } from "zod";
+
 import {
   canonicalAuthorUrl,
   canonicalPoemUrl,
   LIMITS,
-} from "@saqi/source-adapter";
-import { z } from "zod";
+} from "../source-adapter/index.js";
 
 const CatalogAuthorSchema = z
   .object({
@@ -13,7 +14,7 @@ const CatalogAuthorSchema = z
   .strict();
 const CatalogAuthorRecordsSchema = z.array(CatalogAuthorSchema).max(50_000);
 
-export interface CatalogAuthor {
+interface CatalogAuthor {
   readonly canonicalId: string;
   readonly href: string;
   readonly name?: string;

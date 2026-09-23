@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SAQI_PRODUCTION_DATABASE_ID } from "@saqi/precedent-iso";
-import type { AuthorInventoryPageProjection } from "@saqi/source-adapter";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
@@ -40,6 +39,7 @@ import {
   retireApprovedSolResolution,
   UnifiedRigRuntime,
 } from "../runtime/unified-rig";
+import type { AuthorInventoryPageProjection } from "../source-adapter/index.js";
 import { importEmptyTestOperations } from "./support/import-empty-test-operations.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 

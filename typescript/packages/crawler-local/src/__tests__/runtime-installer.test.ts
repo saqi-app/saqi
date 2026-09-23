@@ -43,7 +43,6 @@ describe("immutable runtime installer", () => {
     });
     expect(commands).toEqual([
       "corepack yarn install --immutable",
-      "corepack yarn workspace @saqi/source-adapter build",
       "corepack yarn workspace @saqi/precedent-iso build",
       "corepack yarn workspace @saqi/crawler-local build",
       "corepack yarn workspaces focus @saqi/crawler-local --production",

@@ -1,3 +1,5 @@
+import { readBoundedJsonBody } from "./read-bounded-json-body";
+
 export const OPS_ORIGIN = "https://ops.saqi.app";
 
 const RESPONSE_HEADERS = {
@@ -104,32 +106,9 @@ export async function readBoundedJson(
     throw new Error("Unsupported content encoding");
   }
   if (!request.body) throw new Error("Missing request body");
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  try {
-    for (;;) {
-      // eslint-disable-next-line no-await-in-loop -- Stream chunks must be read sequentially to enforce the byte limit before requesting more data.
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > maximumBytes) {
-        // eslint-disable-next-line no-await-in-loop -- Cancel the owned reader before releasing its lock after exceeding the byte limit.
-        await reader.cancel();
-        throw new Error("Request body too large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const body = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  return readBoundedJsonBody(
+    request.body,
+    maximumBytes,
+    "Request body too large"
+  );
 }

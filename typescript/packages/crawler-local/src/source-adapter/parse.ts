@@ -10,7 +10,7 @@ import {
   canonicalPoemUrl,
 } from "./url.js";
 
-export interface AuthorRecord {
+interface AuthorRecord {
   canonicalId: string;
   href: string;
   name: string;
@@ -40,7 +40,7 @@ export interface AuthorInventory {
   complete: true;
 }
 
-export interface PoemManifestRecord {
+interface PoemManifestRecord {
   canonicalId: string;
   href: string;
   numericId: string;
@@ -56,7 +56,7 @@ export interface AuthorPoemManifest {
   poems: PoemManifestRecord[];
 }
 
-export type PoemStructure = "classical" | "free_verse";
+type PoemStructure = "classical" | "free_verse";
 
 export interface PoemDetail {
   author: ReturnType<typeof canonicalAuthorUrl>;

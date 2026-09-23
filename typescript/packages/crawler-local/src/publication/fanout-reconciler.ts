@@ -216,14 +216,14 @@ export interface CollectedResolution {
   readonly writerEpoch: number;
 }
 
-export interface EnrichmentPublicationResolution {
+interface EnrichmentPublicationResolution {
   readonly expectedPointerVersion: null | number;
   readonly poemId?: string;
   readonly sourceRevisionId?: string;
   readonly writerEpoch: number;
 }
 
-export type EnrichmentPublicationResolutionResult =
+type EnrichmentPublicationResolutionResult =
   | { readonly errorCode: string; readonly status: "conflict" }
   | { readonly status: "waiting" }
   | EnrichmentPublicationResolution;
@@ -332,7 +332,7 @@ export interface FanoutCycleSummary {
   readonly translatedDetailsPrioritized: number;
 }
 
-export interface FanoutReconciliationPort {
+interface FanoutReconciliationPort {
   close(): Promise<void>;
   cycle(options?: {
     maximum?: number;

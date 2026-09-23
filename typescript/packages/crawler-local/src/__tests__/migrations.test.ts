@@ -2,7 +2,6 @@ import { hash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 
@@ -11,6 +10,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   MIGRATIONS,
 } from "../persistence/migrations.js";
+import { currentSource } from "../source-adapter/index.js";
 import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 

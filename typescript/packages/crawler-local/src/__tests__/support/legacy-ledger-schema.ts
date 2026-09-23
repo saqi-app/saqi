@@ -1,7 +1,7 @@
-import { currentSource } from "@saqi/source-adapter";
 import type Database from "better-sqlite3";
 
 import { MIGRATIONS } from "../../persistence/migrations.js";
+import { currentSource } from "../../source-adapter/index.js";
 
 /** Construct an empty historical fixture, never rewind a newer schema. */
 export function initializeLegacyLedgerSchema(

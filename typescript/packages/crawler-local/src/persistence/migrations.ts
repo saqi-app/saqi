@@ -3,12 +3,12 @@ import { hash } from "node:crypto";
 import { lstatSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { currentSource } from "@saqi/source-adapter";
 import type Database from "better-sqlite3";
 import { z } from "zod";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler.js";
 import { schedulerStateSchemaVersion } from "../enrichment/sol-lane-scheduler.js";
+import { currentSource } from "../source-adapter/index.js";
 import { RUNTIME_OWNER_MIGRATION_SQL } from "./runtime-owner-schema.js";
 import { SolOperationStore } from "./sol-operation-store.js";
 

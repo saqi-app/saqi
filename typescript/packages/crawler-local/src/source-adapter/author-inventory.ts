@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { LIMITS, PROJECTION_SCHEMA_VERSION } from "./constants.js";
-import { sha256Canonical } from "./hash.js";
 import { parseLocalizedCount } from "./parse.js";
+import { sha256Canonical } from "./sha256-canonical.js";
 import { canonicalAuthorUrl, canonicalInventoryPaginationUrl } from "./url.js";
 
 export const AuthorInventoryPageSchema = z
@@ -37,7 +37,7 @@ const AuthorInventoryPagesSchema = z
   .min(1)
   .max(100_000);
 
-export interface CertifiedInventoryAuthor {
+interface CertifiedInventoryAuthor {
   readonly canonicalId: string;
   readonly href: string;
   readonly name: string;

@@ -1,5 +1,6 @@
 import { SourceConfigurationSchema } from "@saqi/precedent-iso";
-import type { SourceConfiguration } from "@saqi/source-adapter";
+
+import type { SourceConfiguration } from "../source-adapter/index.js";
 
 export type CliSourceInitialization = "environment" | "keychain" | "none";
 

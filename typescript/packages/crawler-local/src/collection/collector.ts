@@ -3,18 +3,6 @@ import { resolve } from "node:path";
 import { setInterval } from "node:timers";
 import { setTimeout as delay } from "node:timers/promises";
 
-import {
-  type AuthorPoemManifestProjection,
-  canonicalAuthorUrl,
-  canonicalPoemUrl,
-  currentSource,
-  parseAuthorPoemManifest,
-  parsePoemDetail,
-  type PoemDetailProjection,
-  PROJECTION_SCHEMA_VERSION,
-  sha256Canonical,
-  SourceProjectionError,
-} from "@saqi/source-adapter";
 import { z } from "zod";
 
 import {
@@ -36,6 +24,18 @@ import {
   networkProbeDelayMs,
 } from "../runtime/network-resilience.js";
 import {
+  type AuthorPoemManifestProjection,
+  canonicalAuthorUrl,
+  canonicalPoemUrl,
+  currentSource,
+  parseAuthorPoemManifest,
+  parsePoemDetail,
+  type PoemDetailProjection,
+  PROJECTION_SCHEMA_VERSION,
+  sha256Canonical,
+  SourceProjectionError,
+} from "../source-adapter/index.js";
+import {
   CollectionLaneScheduler,
   collectionWorkKinds,
 } from "./collection-scheduler.js";
@@ -52,7 +52,7 @@ export function collectorSchemaVersion(): string {
   return `${currentSource().name}-projection-v${String(PROJECTION_SCHEMA_VERSION)}`;
 }
 
-export function collectionRuntimeProfile(): {
+function collectionRuntimeProfile(): {
   readonly implementationVersion: string;
   readonly schemaVersion: string;
 } {
@@ -128,7 +128,7 @@ export interface CollectorOptions {
   readonly retryDelayMs?: number;
 }
 
-export interface CollectorCompletion {
+interface CollectorCompletion {
   readonly artifactHash: string;
   readonly kind: string;
   readonly workKey: string;
@@ -242,7 +242,7 @@ function originStateForReason(
 }
 
 /** Lifecycle boundary consumed by the rig and command entrypoints. */
-export interface CollectorCoordinatorPort {
+interface CollectorCoordinatorPort {
   close(): Promise<void>;
   run(
     signal: AbortSignal,

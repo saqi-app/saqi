@@ -56,13 +56,9 @@ import {
   credentialGenerationsEqual,
   credentialObservationClassification,
   type CredentialSnapshotObservationSchema,
-  type SolCredentialObservation,
 } from "./sol-credential-observation.js";
 
-export {
-  type SolCredentialObservation,
-  SolCredentialObservationSchema,
-} from "./sol-credential-observation.js";
+export { SolCredentialObservationSchema } from "./sol-credential-observation.js";
 
 // Enough for long poem outputs and structured events, while preventing one
 // failed subprocess from consuming the remaining disk or resident memory.
@@ -118,9 +114,9 @@ const CodexThreadStartedSchema = z.looseObject({
   type: z.literal("thread.started"),
 });
 export const SOL_MODEL = "gpt-5.6-sol";
-export const SOL_REASONING_EFFORT = "medium";
+const SOL_REASONING_EFFORT = "medium";
 export const SOL_PIPELINE_VERSION = "sol-word-gloss-v3";
-export const LEGACY_SOL_PIPELINE_VERSION = "sol-word-gloss-v2";
+const LEGACY_SOL_PIPELINE_VERSION = "sol-word-gloss-v2";
 const SolPipelineVersionSchema = z.enum([
   SOL_PIPELINE_VERSION,
   LEGACY_SOL_PIPELINE_VERSION,
@@ -136,113 +132,6 @@ export const ENRICHMENT_PROVIDER_SPECS = {
     pipelineVersion: SOL_PIPELINE_VERSION,
     reasoningEffort: SOL_REASONING_EFFORT,
   },
-} as const;
-
-function insightsJsonSchema(notableLines?: readonly string[]) {
-  const prose = { maxLength: 20_000, minLength: 1, type: "string" } as const;
-  return {
-    additionalProperties: false,
-    properties: {
-      culturalSignificance: prose,
-      historicalContext: prose,
-      literaryDevices: {
-        items: prose,
-        maxItems: 100,
-        minItems: 1,
-        type: "array",
-      },
-      notableLines: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            explanation: prose,
-            line: {
-              ...(notableLines && notableLines.length > 0
-                ? { enum: notableLines }
-                : {}),
-              minLength: 1,
-              type: "string",
-            },
-          },
-          required: ["line", "explanation"],
-          type: "object",
-        },
-        maxItems: 100,
-        minItems: 1,
-        type: "array",
-      },
-      summary: prose,
-      themes: {
-        items: prose,
-        maxItems: 100,
-        minItems: 1,
-        type: "array",
-      },
-    },
-    required: [
-      "summary",
-      "themes",
-      "historicalContext",
-      "literaryDevices",
-      "culturalSignificance",
-      "notableLines",
-    ],
-    type: "object",
-  } as const;
-}
-
-export const SOL_ENRICHMENT_OUTPUT_JSON_SCHEMA = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  additionalProperties: false,
-  properties: {
-    insights: insightsJsonSchema(),
-    translation: {
-      additionalProperties: false,
-      properties: {
-        lines: {
-          items: { type: "string" },
-          maxItems: 2_000,
-          minItems: 1,
-          type: "array",
-        },
-      },
-      required: ["lines"],
-      type: "object",
-    },
-    wordGlosses: {
-      additionalProperties: false,
-      properties: {
-        lines: {
-          items: {
-            additionalProperties: false,
-            properties: {
-              lineIndex: { minimum: 0, type: "integer" },
-              tokens: {
-                items: {
-                  additionalProperties: false,
-                  properties: {
-                    meaning: { minLength: 1, type: "string" },
-                    tokenIndex: { minimum: 0, type: "integer" },
-                  },
-                  required: ["tokenIndex", "meaning"],
-                  type: "object",
-                },
-                type: "array",
-              },
-            },
-            required: ["lineIndex", "tokens"],
-            type: "object",
-          },
-          minItems: 1,
-          type: "array",
-        },
-      },
-      required: ["lines"],
-      type: "object",
-    },
-  },
-  required: ["translation", "wordGlosses", "insights"],
-  type: "object",
 } as const;
 
 /**
@@ -364,7 +253,60 @@ export function solGenerationWireJsonSchema(
   } as const;
 }
 
-export const SOL_REVIEW_OUTPUT_JSON_SCHEMA = {
+function insightsJsonSchema(notableLines?: readonly string[]) {
+  const prose = { maxLength: 20_000, minLength: 1, type: "string" } as const;
+  return {
+    additionalProperties: false,
+    properties: {
+      culturalSignificance: prose,
+      historicalContext: prose,
+      literaryDevices: {
+        items: prose,
+        maxItems: 100,
+        minItems: 1,
+        type: "array",
+      },
+      notableLines: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            explanation: prose,
+            line: {
+              ...(notableLines && notableLines.length > 0
+                ? { enum: notableLines }
+                : {}),
+              minLength: 1,
+              type: "string",
+            },
+          },
+          required: ["line", "explanation"],
+          type: "object",
+        },
+        maxItems: 100,
+        minItems: 1,
+        type: "array",
+      },
+      summary: prose,
+      themes: {
+        items: prose,
+        maxItems: 100,
+        minItems: 1,
+        type: "array",
+      },
+    },
+    required: [
+      "summary",
+      "themes",
+      "historicalContext",
+      "literaryDevices",
+      "culturalSignificance",
+      "notableLines",
+    ],
+    type: "object",
+  } as const;
+}
+
+const SOL_REVIEW_OUTPUT_JSON_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   additionalProperties: false,
   properties: {
@@ -1724,13 +1666,6 @@ export class CodexSolRunner {
     )
       throw new Error("CODEX_OPERATION_FENCE_LOST");
   }
-}
-
-export function readSolCredentialObservation(
-  operations: Pick<SolAttemptObservationPort, "readAttempt">,
-  fence: SolOperationFence,
-): null | SolCredentialObservation {
-  return operations.readAttempt(fence)?.observations.credential ?? null;
 }
 
 function credentialSnapshotObservation(

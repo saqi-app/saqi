@@ -98,7 +98,7 @@ interface ProductionBaselineExportPort {
 }
 
 /** Owns every production-baseline query over an injected read-only connection. */
-export class ProductionBaselineExporter implements ProductionBaselineExportPort {
+class ProductionBaselineExporter implements ProductionBaselineExportPort {
   readonly #database: Database.Database;
   readonly #schema: BaselineSchemaInspector;
 

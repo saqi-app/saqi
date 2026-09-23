@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "provenance": {
     "bundleVersion": "7.31.0",
-    "consumerBaseSha": "7eb1ed6e81c87ccf2113739819f47f593a817927",
+    "consumerBaseSha": "ea1eb8c5aa42f81accddfb1610d7b610714b47ad",
     "catalogDigest": "c4a15fb82b0e514464afec36bd0458471c3170929f39d662edc97eba95130bf7"
   },
   "diagnostics": [
@@ -350,7 +350,7 @@
       "count": 1
     },
     {
-      "fingerprint": "ff74c2c8ed80a440080cfbcbea573aef9b50fa57eca22a9aad3c6a76b5cd7b95",
+      "fingerprint": "c022ae8e7f267fdab8f88c3875402189676ede2b68cbe90ae199eb722ee9fa30",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/local-enrichment-fanout.ts",
@@ -427,7 +427,7 @@
       "count": 1
     },
     {
-      "fingerprint": "f91a90d5a3e5642dce0a774de0d196f6d79288652d330df54274b869efe82f4b",
+      "fingerprint": "f8ee04b83ec244e5cf66d38b980272524de84b757201d5d2e4766f0152ff6782",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
@@ -483,14 +483,14 @@
       "count": 1
     },
     {
-      "fingerprint": "6d26248e1a105e78d740bfc6b1169d1bae08dd768946740ee6329dc2397be1b6",
+      "fingerprint": "668fc293e67b92645c39fc3314e467ae02191c1774a881045f6514a74e31f1e8",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
       "count": 1
     },
     {
-      "fingerprint": "6993fb8e7a29444ad7c15027ce3eabf8c4a459d1acad23cbe22d8361efe5650e",
+      "fingerprint": "c0ff8eb08e2b12d0c250d101c753b480beedefb619212d9a4f54712d156838d6",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
@@ -602,7 +602,7 @@
       "count": 1
     },
     {
-      "fingerprint": "7c7a5d45aaaa65e5795a8c30cab81e11f9f271d46dde0798e59a20ede0adab59",
+      "fingerprint": "716bc8b922b0f266291270b7683b57a1c38da1df51a78815a428ce319de8c13a",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/operations-contract.ts",
@@ -686,6 +686,13 @@
       "count": 1
     },
     {
+      "fingerprint": "ac88aa9f02907043e426ac0ad6b566288758877e09148607fcffcf801bdc92af",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/source-adapter/author-inventory.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "ffdd52e9aaf3e98f42458a857a2d1ea11de4b43a9c3e17b7dc334172363d31a2",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
@@ -725,13 +732,6 @@
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/site/src/lib/poem-translations.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "5dd8b92594ed36e95fcf0722998c1ad7e0763b24e31d03eba5c2416d22b2a508",
-      "source": "eslint",
-      "ruleId": "@sarj/no-excessive-cognitive-complexity",
-      "path": "typescript/packages/source-adapter/src/author-inventory.ts",
       "count": 1
     },
     {
@@ -4228,13 +4228,6 @@
       "count": 1
     },
     {
-      "fingerprint": "ac7142cffe732551ef52fc152ea71f8fcebc71b83ef245386eb67c19a193bbe6",
-      "source": "eslint",
-      "ruleId": "arrow-body-style",
-      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "59ecc83a6a08a114dd53b9c70ec22ff1481f87cea9f909ec3841bb1527ef58b3",
       "source": "eslint",
       "ruleId": "eslint/file",
@@ -4851,6 +4844,13 @@
       "count": 1
     },
     {
+      "fingerprint": "c8e7746976a716c9b4079292b897eb373588e4570868170d754192531240a652",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/canonical-json.ts",
+      "count": 4
+    },
+    {
       "fingerprint": "16d96fde52d5111b99e33d0b8065bcec4ab1f05a0f1b74b0da99a0af0d433e2e",
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
@@ -4898,13 +4898,6 @@
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/site/src/lib/catalog.ts",
       "count": 6
-    },
-    {
-      "fingerprint": "baf72816cc114ebc1ef6ce0e4028558d502466aec1e1b120e1032735b3a6ac43",
-      "source": "eslint",
-      "ruleId": "no-restricted-syntax",
-      "path": "typescript/packages/source-adapter/src/hash.ts",
-      "count": 4
     },
     {
       "fingerprint": "e7941b48fb0ed5088d750617d2fbedf136e9a9d6321246af365b1ca873cdd493",
@@ -5194,13 +5187,6 @@
       "count": 1
     },
     {
-      "fingerprint": "e41917bd0d1f2e13c33a3f993489830607ad45e5f3605cf7b8bb7178a533d7e9",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/operations/src/lib/public-cache.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "4c04fedb4115d38ac35d60c2362156ef4f5ae52da19592343a66b7d20775bb75",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
@@ -5311,13 +5297,6 @@
       "ruleId": "unicorn/prefer-combined-guards",
       "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
       "count": 2
-    },
-    {
-      "fingerprint": "6d98fdecd271e192fe3c954ddf4fad33ef7bd044b93edb2713ddf3eccc7da26b",
-      "source": "eslint",
-      "ruleId": "unicorn/prefer-combined-guards",
-      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
-      "count": 1
     },
     {
       "fingerprint": "9201ffcfbb6a6ed8a3259e137908b6ae6c57525459282f2178d9f71e2a2f3315",

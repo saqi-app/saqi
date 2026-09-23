@@ -2,12 +2,6 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  type AuthorInventoryPageProjection,
-  AuthorInventoryPageSchema,
-  canonicalInventoryPaginationUrl,
-  configureSource,
-} from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -16,6 +10,12 @@ import {
 } from "../collection/author-inventory-lane.js";
 import { ArtifactStore } from "../persistence/artifact-store.js";
 import { Ledger } from "../persistence/ledger.js";
+import {
+  type AuthorInventoryPageProjection,
+  AuthorInventoryPageSchema,
+  canonicalInventoryPaginationUrl,
+  configureSource,
+} from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 const FIXTURE = AuthorInventoryPageSchema.parse(

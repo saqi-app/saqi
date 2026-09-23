@@ -21,11 +21,6 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import {
-  canonicalAuthorUrl,
-  canonicalPoemUrl,
-  currentSource,
-} from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
@@ -34,6 +29,11 @@ import type {
   LocalEnrichmentResolver,
 } from "../enrichment/local-enrichment-fanout.js";
 import { assertCollectedArtifactBinding } from "../enrichment/local-enrichment-fanout.js";
+import {
+  canonicalAuthorUrl,
+  canonicalPoemUrl,
+  currentSource,
+} from "../source-adapter/index.js";
 import type { WorkItem } from "./schema.js";
 import {
   queryMany,
@@ -45,8 +45,7 @@ import {
 } from "./sqlite-query.js";
 import { canonicalJson, sha256 } from "./work-key.js";
 
-export const PRODUCTION_RESOLUTION_SCHEMA_ID =
-  "saqi.production-resolution-store";
+const PRODUCTION_RESOLUTION_SCHEMA_ID = "saqi.production-resolution-store";
 // Version 3 is already occupied by exact-scope snapshots. Full snapshots add
 // binding evidence at version 4 so the generic opener can distinguish them.
 export const PRODUCTION_RESOLUTION_SCHEMA_VERSION = 4;
@@ -263,7 +262,7 @@ export interface ProductionResolutionStoreOptions {
   readonly now?: () => number;
 }
 
-export interface ProductionResolutionStorePort extends LocalEnrichmentResolver {
+interface ProductionResolutionStorePort extends LocalEnrichmentResolver {
   close(): void;
   report(): Promise<ProductionResolutionReport>;
   resolvePublication(

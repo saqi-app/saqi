@@ -1,4 +1,3 @@
-import type { AuthorInventoryPageProjection } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +6,7 @@ import {
   scheduledInventoryRefreshGeneration,
 } from "../collection/author-inventory-lane";
 import { Ledger } from "../persistence/ledger";
+import type { AuthorInventoryPageProjection } from "../source-adapter/index.js";
 
 const PAGES: AuthorInventoryPageProjection[] = [
   {

@@ -1,7 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { currentSource } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -17,6 +16,7 @@ import {
 } from "../collection/collector-recovery";
 import { Ledger } from "../persistence/ledger";
 import { canonicalJson, inputHash, sha256 } from "../persistence/work-key";
+import { currentSource } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const ERROR = COLLECTOR_RECOVERY_ERROR_CODES[0];

@@ -1,4 +1,5 @@
 export * from "./assert-never.js";
+export * from "./canonical-json.js";
 export * from "./contracts.js";
 export * from "./corpus-import.js";
 export * from "./enrichment.js";

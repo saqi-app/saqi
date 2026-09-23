@@ -32,7 +32,7 @@ export type ChromeCdpLaunchdOptions = z.infer<
   typeof ChromeCdpLaunchdOptionsSchema
 >;
 
-export interface ChromeCdpLaunchdIssue {
+interface ChromeCdpLaunchdIssue {
   readonly code: string;
   readonly message: string;
 }

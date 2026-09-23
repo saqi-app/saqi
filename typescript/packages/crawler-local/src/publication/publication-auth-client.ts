@@ -63,9 +63,9 @@ export const PublicationAuthConfigSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
-export type PublicationAuthConfig = z.infer<typeof PublicationAuthConfigSchema>;
-export type PublicationAuthPauseReason = "expired" | "rejected";
-export interface PublicationAuthStatus {
+type PublicationAuthConfig = z.infer<typeof PublicationAuthConfigSchema>;
+type PublicationAuthPauseReason = "expired" | "rejected";
+interface PublicationAuthStatus {
   readonly consecutiveRejections: number;
   readonly expiresAt: null | number;
   readonly mode: PublicationAuthConfig["mode"];

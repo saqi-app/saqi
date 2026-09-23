@@ -11,8 +11,9 @@ export default [
   ...createConfig({
     projectService: {
       allowDefaultProject: [
-        "packages/source-adapter/vitest.config.ts",
         "packages/crawler-local/vitest.config.ts",
+        "packages/crawler-local/src/source-adapter/__tests__/author-inventory.test.ts",
+        "packages/crawler-local/src/source-adapter/__tests__/source-adapter.test.ts",
         "packages/precedent-node/src/services/__tests__/author-store.test.ts",
         "packages/precedent-node/src/services/__tests__/corpus-import-coordinator.test.ts",
         "packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",

@@ -1,7 +1,7 @@
+import { canonicalJson } from "@saqi/precedent-iso";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { configureSource, currentSource } from "../constants.js";
-import { canonicalJson, sha256Canonical } from "../hash.js";
 import {
   parseAuthorInventory,
   parseAuthorPoemManifest,
@@ -9,6 +9,7 @@ import {
   parsePoemDetail,
   SourceProjectionError,
 } from "../parse.js";
+import { sha256Canonical } from "../sha256-canonical.js";
 import {
   canonicalAuthorUrl,
   canonicalInventoryPaginationUrl,

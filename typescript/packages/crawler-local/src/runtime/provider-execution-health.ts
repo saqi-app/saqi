@@ -297,7 +297,7 @@ const ProviderSessionHealthSchema = z.strictObject({
   activeUnattributed: z.int().nonnegative(),
 });
 
-export const ProviderExecutionAdmissionReasonSchema = z.enum([
+const ProviderExecutionAdmissionReasonSchema = z.enum([
   "active",
   "ready",
   "no_ready_work",
@@ -346,7 +346,7 @@ const ProviderExecutionHealthEntryInputSchema = z.strictObject({
     .transform((value) => value ?? null),
 });
 
-export const ProviderExecutionHealthEntrySchema =
+const ProviderExecutionHealthEntrySchema =
   ProviderExecutionHealthEntryInputSchema.extend({
     admission: ProviderExecutionAdmissionSchema,
   }).superRefine((entry, context) => {

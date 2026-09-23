@@ -3,10 +3,10 @@ import { lstat, open } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import { SourceConfigurationSchema } from "@saqi/precedent-iso";
-import type { SourceConfiguration } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
+import type { SourceConfiguration } from "../source-adapter/index.js";
 import { controlLaunchdService } from "./launchd-control.js";
 import { loadScraperOperationConfigFromInput } from "./operations-contract.js";
 

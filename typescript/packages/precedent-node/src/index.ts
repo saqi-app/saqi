@@ -1,11 +1,11 @@
-export { type AuthorStore, D1AuthorStore } from "./services/author-store";
+export { type AuthorStore, D1AuthorStore } from "./services/author-store.js";
 export {
   CorpusImportCoordinator,
   type CorpusImportPipeline,
   type EnrichmentPublication,
   type PromotionSummary,
   type SourceImportBundle,
-} from "./services/corpus-import-coordinator";
+} from "./services/corpus-import-coordinator.js";
 export {
   type BoundEnrichmentPublication,
   CorpusRevisionConflictError,
@@ -27,11 +27,11 @@ export {
   type SourceFingerprintBackfillResult,
   type StageBundleInput,
   type StageRecordInput,
-} from "./services/corpus-revision-store";
-export { D1PoemStore, type PoemStore } from "./services/poem-store";
+} from "./services/corpus-revision-store.js";
+export { D1PoemStore, type PoemStore } from "./services/poem-store.js";
 export {
   D1ProductionResolutionStore,
   type D1ProductionResolutionStoreOptions,
   ProductionResolutionConflictError,
   type ProductionResolutionStore,
-} from "./services/production-resolution-reader";
+} from "./services/production-resolution-reader.js";

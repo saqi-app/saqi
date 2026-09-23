@@ -9,4 +9,5 @@ internal let package = Package(
         .executableTarget(name: "SaqiActivityMonitor"),
         .testTarget(name: "SaqiActivityMonitorTests", dependencies: ["SaqiActivityMonitor"]),
     ],
+    swiftLanguageModes: [.v6],
 )
