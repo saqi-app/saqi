@@ -2,14 +2,14 @@
   "generatedFrom": "TypeScript AST imports and D1 calls, Astro route frontmatter, and workspace package manifests",
   "packages": [
     {
-      "name": "app",
-      "description": "Access-protected Saqi operations console",
-      "source": "typescript/packages/app/package.json"
-    },
-    {
       "name": "crawler-local",
       "description": "Restart-safe local collection and enrichment coordinator for Saqi",
       "source": "typescript/packages/crawler-local/package.json"
+    },
+    {
+      "name": "operations",
+      "description": "Access-protected Saqi operations console",
+      "source": "typescript/packages/operations/package.json"
     },
     {
       "name": "precedent-iso",

@@ -127,7 +127,7 @@ node scripts/verify-production-resolution.mjs \
   "${canary_dir}/canonical-resolution.headers" \
   "${canary_dir}/canonical-resolution.json"
 
-fingerprint_request="$(yarn workspace @saqi/app db:execute --remote --json \
+fingerprint_request="$(yarn workspace @saqi/operations db:execute --remote --json \
   --command "WITH active AS (SELECT fingerprint.algorithm, fingerprint.line_nfc_hash AS lineNfcHash, fingerprint.prompt_material_hash AS promptMaterialHash, revision.source_poem_id FROM source_revision_fingerprint fingerprint JOIN poem_source_revision revision ON revision.id = fingerprint.source_revision_id JOIN poem ON poem.active_source_revision_id = revision.id JOIN source_poem_identity source_poem ON source_poem.id = revision.source_poem_id AND source_poem.canonical_poem_id = poem.id AND source_poem.tombstoned_at IS NULL JOIN poem_source_pointer source_pointer ON source_pointer.source_poem_id = source_poem.id AND source_pointer.revision_id = revision.id), unique_fingerprint AS (SELECT algorithm, lineNfcHash, promptMaterialHash FROM active GROUP BY algorithm, lineNfcHash, promptMaterialHash HAVING COUNT(DISTINCT source_poem_id) = 1) SELECT algorithm, lineNfcHash, promptMaterialHash FROM unique_fingerprint LIMIT 1" \
   | node scripts/select-production-resolution-fingerprint.mjs)"
 

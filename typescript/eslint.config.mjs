@@ -32,7 +32,7 @@ export default [
       "!packages/*/src/lib/",
       "!packages/*/src/lib/**",
       ".yarn/**",
-      "packages/app/.open-next/**",
+      "packages/operations/.open-next/**",
     ],
   },
   // {
@@ -45,7 +45,7 @@ export default [
   //   },
   // },
   {
-    files: ["packages/app/**/*.{js,jsx,ts,tsx}"],
+    files: ["packages/operations/**/*.{js,jsx,ts,tsx}"],
     plugins: { "@next/next": nextPlugin },
     rules: {
       ...nextPlugin.configs.recommended.rules,

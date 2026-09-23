@@ -11,7 +11,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
-  new URL("../../../../app/migrations/", import.meta.url),
+  new URL("../../../../operations/migrations/", import.meta.url),
 );
 const MIGRATIONS = readdirSync(MIGRATIONS_DIRECTORY)
   .filter((name) => /^\d{4}_.+\.sql$/u.test(name))

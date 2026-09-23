@@ -54,7 +54,7 @@ assert_case ci typescript/packages/precedent-node/src/index.ts \
   'app=true migrate=false site=false www=false crawler_only=false dependency_audit=false deployment_required=true'
 assert_case ci typescript/packages/precedent-iso/src/index.ts \
   'app=true migrate=false site=true www=false crawler_only=false dependency_audit=false deployment_required=true'
-assert_case deploy typescript/packages/app/migrations/9999_test.sql \
+assert_case deploy typescript/packages/operations/migrations/9999_test.sql \
   'app=true migrate=true site=true www=false crawler_only=false dependency_audit=false deployment_required=true'
 assert_case ci typescript/packages/site/www-worker.ts \
   'app=false migrate=false site=false www=true crawler_only=false dependency_audit=false deployment_required=true'
@@ -102,7 +102,7 @@ assert_dispatch_case() {
   trap - RETURN
 }
 
-assert_dispatch_case typescript/packages/app/src/index.ts \
+assert_dispatch_case typescript/packages/operations/src/index.ts \
   'app=true migrate=false site=false www=false crawler_only=false dependency_audit=false deployment_required=true'
 assert_dispatch_case typescript/yarn.lock \
   'app=true migrate=false site=true www=true crawler_only=false dependency_audit=true deployment_required=true'
@@ -112,7 +112,7 @@ assert_dispatch_case typescript/packages/crawler-local/package.json \
   'app=false migrate=false site=false www=false crawler_only=true dependency_audit=true deployment_required=false'
 assert_dispatch_case README.md \
   'app=false migrate=false site=false www=false crawler_only=false dependency_audit=false deployment_required=false'
-assert_dispatch_case typescript/packages/app/migrations/9999_test.sql \
+assert_dispatch_case typescript/packages/operations/migrations/9999_test.sql \
   'app=true migrate=true site=true www=false crawler_only=false dependency_audit=false deployment_required=true'
 
 output=$(mktemp)

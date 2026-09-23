@@ -18,7 +18,7 @@ import {
 } from "../production-resolution-reader";
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
-  new URL("../../../../app/migrations/", import.meta.url),
+  new URL("../../../../operations/migrations/", import.meta.url),
 );
 const MIGRATION_FILES = readdirSync(MIGRATIONS_DIRECTORY)
   .filter((fileName) => fileName.endsWith(".sql"))

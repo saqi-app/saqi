@@ -25,35 +25,6 @@ const PositiveIntegerSegmentSchema = z
   .regex(/^[1-9]\d*$/)
   .describe("A base-10 positive integer path segment");
 
-export const BatchTranslateRequestSchema = z
-  .strictObject({ authorIds: z.array(ResourceIdSchema).min(1).max(25) })
-  .describe("Create translation tasks for one to twenty-five authors");
-
-const BatchTranslateItemSchema = z.discriminatedUnion("status", [
-  z.strictObject({
-    authorId: ResourceIdSchema,
-    status: z.literal("created"),
-    taskId: ResourceIdSchema,
-  }),
-  z.strictObject({ authorId: ResourceIdSchema, status: z.literal("skipped") }),
-  z.strictObject({
-    authorId: ResourceIdSchema,
-    status: z.literal("error"),
-    error: z.string().min(1),
-  }),
-]);
-
-export const BatchTranslateResponseSchema = z
-  .strictObject({
-    summary: z.strictObject({
-      created: z.number().int().nonnegative(),
-      skipped: z.number().int().nonnegative(),
-      errors: z.number().int().nonnegative(),
-    }),
-    results: z.array(BatchTranslateItemSchema),
-  })
-  .describe("Batch translation task creation result");
-
 export const ErrorResponseSchema = z
   .strictObject({ error: z.string().min(1) })
   .describe("Non-sensitive API error response");
@@ -358,16 +329,6 @@ export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
     audience: "authenticated",
-    id: "operations.tasks",
-    method: "GET",
-    path: "/tasks",
-    responses: [HTML_RESPONSE],
-    service: "operations",
-    summary: "Report retirement of the cloud task console",
-  },
-  {
-    ...EMPTY_INPUT,
-    audience: "authenticated",
     id: "operations.not-found",
     method: "GET",
     path: "/404",
@@ -407,36 +368,6 @@ export const HTTP_CONTRACTS = [
     service: "operations",
     summary:
       "Backfill authoritative active source fingerprints in bounded pages",
-  },
-  {
-    audience: "authenticated",
-    body: BatchTranslateRequestSchema,
-    id: "operations.batch-translate",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/batch-translate",
-    query: EmptyHttpPartSchema,
-    responses: [
-      {
-        body: ErrorResponseSchema.extend({
-          code: z.literal("TRANSLATION_PROVIDER_RETIRED"),
-        }),
-        contentType: "application/json",
-        status: 410,
-      },
-      {
-        body: ErrorResponseSchema,
-        contentType: "application/json",
-        status: 400,
-      },
-      {
-        body: ErrorResponseSchema,
-        contentType: "application/json",
-        status: 500,
-      },
-    ],
-    service: "operations",
-    summary: "Report retirement of legacy translation task creation",
   },
   {
     audience: "authenticated",
