@@ -552,8 +552,8 @@ function outputPath(): string {
 
 function sourceWork(numericId: number): WorkItem {
   const input = {
-    authorHref: "https://source.invalid/writers/Ibn-Farkoun",
-    poemHref: `https://source.invalid/works/${String(numericId)}`,
+    authorHref: "https://source.invalid/cat-Ibn-Farkoun",
+    poemHref: `https://source.invalid/poem${String(numericId)}.html`,
   };
   const definition = {
     implementationVersion: collectorImplementationVersion(),
@@ -585,15 +585,15 @@ function detail(numericId: number) {
   const source = {
     author: {
       canonicalId: "source:author:Ibn-Farkoun",
-      href: "https://source.invalid/writers/Ibn-Farkoun",
-      path: "/writers/Ibn-Farkoun",
+      href: "https://source.invalid/cat-Ibn-Farkoun",
+      path: "/cat-Ibn-Farkoun",
       slug: "Ibn-Farkoun",
     },
     canonicalId: `source:poem:${String(numericId)}`,
-    href: `https://source.invalid/works/${String(numericId)}`,
+    href: `https://source.invalid/poem${String(numericId)}.html`,
     lines: ["صدر", "عجز"],
     numericId: String(numericId),
-    slug: `work-${String(numericId)}`,
+    slug: `poem${String(numericId)}`,
     structure: "classical",
     title: "قصيدة",
     verses: 1,

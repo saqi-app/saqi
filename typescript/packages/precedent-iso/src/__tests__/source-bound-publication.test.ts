@@ -274,10 +274,10 @@ function admissionItem() {
     lineNfcHash: HASH_B,
     linesArabic: ["بيت"],
     sourceAuthorId: "495",
-    sourceAuthorUrl: "https://source.invalid/writers/495",
+    sourceAuthorUrl: "https://source.invalid/cat-495",
     sourceContentSha256: HASH_B,
     sourceName: "primary-source",
-    sourcePoemUrl: "https://source.invalid/works/101680",
+    sourcePoemUrl: "https://source.invalid/poem101680.html",
     sourceRevisionId: HASH_A,
     titleArabic: "عنوان",
   };

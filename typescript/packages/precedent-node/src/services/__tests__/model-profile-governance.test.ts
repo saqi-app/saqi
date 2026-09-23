@@ -3,9 +3,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  APPROVED_ENRICHMENT_PROFILES,
+  ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION,
+} from "@saqi/precedent-iso";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import { z } from "zod";
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
   new URL("../../../../app/migrations/", import.meta.url),
@@ -14,19 +17,6 @@ const MIGRATIONS = readdirSync(MIGRATIONS_DIRECTORY)
   .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
   .toSorted();
 const HASH = "a".repeat(64);
-const ProfileRowSchema = z.strictObject({
-  backend_key: z.string(),
-  created_at: z.number().int().nonnegative(),
-  input_schema_version: z.number().int().positive(),
-  model_key: z.string(),
-  output_schema_version: z.number().int().positive(),
-  profile_key: z.string(),
-  prompt_version: z.string(),
-  public_track_key: z.string(),
-  reasoning_effort: z.string(),
-  runtime_model_id: z.string(),
-});
-type ProfileRow = z.infer<typeof ProfileRowSchema>;
 
 describe("model profile and legacy attribution governance", () => {
   const databases: Database.Database[] = [];
@@ -56,7 +46,7 @@ describe("model profile and legacy attribution governance", () => {
           `SELECT prompt_version, reasoning_effort,
         input_schema_version, output_schema_version FROM enrichment_profile
         WHERE public_track_key = 'sol-5.6'
-        ORDER BY prompt_version, input_schema_version`,
+        ORDER BY prompt_version, output_schema_version, input_schema_version`,
         )
         .all(),
     ).toEqual(
@@ -64,6 +54,7 @@ describe("model profile and legacy attribution governance", () => {
         ["sol-enrichment-v1", "high", 1],
         ["sol-word-gloss-v2", "high", 2],
         ["sol-word-gloss-v3", "medium", 2],
+        ["sol-word-gloss-v3", "medium", 3],
       ].flatMap(([promptVersion, reasoningEffort, outputSchemaVersion]) =>
         [1, 2].map((inputSchemaVersion) => ({
           input_schema_version: inputSchemaVersion,
@@ -75,20 +66,116 @@ describe("model profile and legacy attribution governance", () => {
     );
   });
 
-  it("protects the writer-fence root from skips, anonymous owners, time travel, and deletion", () => {
+  it("admits complete v3 artifacts through one exact immutable profile", () => {
     const database = open();
-    const initialUpdatedAt = z
-      .number()
-      .int()
-      .nonnegative()
-      .parse(
+    const revisionId = insertRevisionFixture(database);
+    const profile = database
+      .prepare(
+        `SELECT profile_key, public_track_key, model_key, backend_key,
+           runtime_model_id, prompt_version, reasoning_effort,
+           input_schema_version, output_schema_version, created_at
+         FROM enrichment_profile
+         WHERE public_track_key = 'sol-5.6'
+           AND prompt_version = 'sol-word-gloss-v3'
+           AND reasoning_effort = 'medium'
+           AND input_schema_version = 2
+           AND output_schema_version = 3`,
+      )
+      .all() as ProfileRow[];
+    expect(profile).toHaveLength(1);
+
+    const payload = JSON.stringify({
+      insights: {
+        culturalSignificance: "A source-grounded cultural note.",
+        historicalContext: "Insufficient source evidence for a precise date.",
+        literaryDevices: ["A concise image."],
+        notableLines: [
+          { explanation: "The image anchors the poem.", line: "بيت" },
+        ],
+        summary: "A concise source-grounded summary.",
+        themes: ["Memory"],
+      },
+      schemaId: "saqi.poem-enrichment-output",
+      schemaVersion: 3,
+      translation: { lines: ["A verse"] },
+      wordGlosses: {
+        lines: [
+          {
+            lineIndex: 0,
+            segments: [
+              { kind: "word", meaning: "verse", surface: "بيت", tokenIndex: 0 },
+            ],
+          },
+        ],
+        tokenizerVersion: "saqi-orthographic-v1",
+      },
+    });
+    insertArtifact(
+      database,
+      revisionId,
+      "artifact-v3",
+      "task-v3",
+      profile[0],
+      payload,
+    );
+    expect(
+      database
+        .prepare(
+          `SELECT profile_key FROM model_enrichment_artifact_profile
+           WHERE artifact_id = 'artifact-v3'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe("sol-5.6/word-gloss-v3-output-v3/source-v2");
+
+    expect(() =>
+      insertArtifact(
+        database,
+        revisionId,
+        "artifact-v3-as-v2",
+        "task-v3-as-v2",
+        { ...profile[0], output_schema_version: 2 },
+      ),
+    ).toThrow();
+  });
+
+  it.each([1, 2])(
+    "keeps input schema %i aligned with the D1 profile registry",
+    (inputSchemaVersion) => {
+      const database = open();
+      const applicationProfile = APPROVED_ENRICHMENT_PROFILES[0];
+      expect(
         database
           .prepare(
-            "SELECT updated_at FROM scraper_writer_control WHERE singleton = 1",
+            `SELECT count(*) FROM enrichment_profile
+             WHERE public_track_key = ? AND model_key = ?
+               AND backend_key = ? AND runtime_model_id = ?
+               AND prompt_version = ? AND reasoning_effort = ?
+               AND input_schema_version = ? AND output_schema_version = ?`,
           )
           .pluck()
-          .get(),
-      );
+          .get(
+            applicationProfile.modelKey,
+            applicationProfile.model,
+            applicationProfile.backendKey,
+            applicationProfile.model,
+            applicationProfile.promptVersion,
+            applicationProfile.reasoningEffort,
+            inputSchemaVersion,
+            ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION,
+          ),
+      ).toBe(1);
+    },
+  );
+
+  it("protects the writer-fence root from skips, anonymous owners, time travel, and deletion", () => {
+    const database = open();
+    const initialUpdatedAt = database
+      .prepare(
+        "SELECT updated_at FROM scraper_writer_control WHERE singleton = 1",
+      )
+      .pluck()
+      .get() as number;
 
     expect(() =>
       database
@@ -187,10 +274,9 @@ describe("model profile and legacy attribution governance", () => {
 
   it("rejects profile mismatches while allowing independent model tracks", () => {
     const database = open();
-    seedFixtureProfile(database);
     const revisionId = insertRevisionFixture(database);
     const sol = requiredProfile(database, "sol-5.6");
-    const fixture = requiredProfile(database, "fixture-model");
+    const claude = requiredProfile(database, "claude-opus-5");
 
     expect(() =>
       insertArtifact(
@@ -200,7 +286,7 @@ describe("model profile and legacy attribution governance", () => {
         "task-mismatch",
         {
           ...sol,
-          public_track_key: fixture.public_track_key,
+          public_track_key: claude.public_track_key,
         },
       ),
     ).toThrow(/MODEL_ENRICHMENT_PROFILE_INVALID/u);
@@ -208,9 +294,9 @@ describe("model profile and legacy attribution governance", () => {
     insertArtifact(
       database,
       revisionId,
-      "artifact-fixture",
-      "task-fixture",
-      fixture,
+      "artifact-claude",
+      "task-claude",
+      claude,
     );
     expect(
       database
@@ -248,15 +334,13 @@ describe("model profile and legacy attribution governance", () => {
     const changed = JSON.stringify({ content: ["Changed translation"] });
     const originalHash = sha256(original);
     const changedHash = sha256(changed);
-    const attributionKey = z.string().parse(
-      database
-        .prepare(
-          `SELECT attribution_key FROM legacy_model_attribution
-           WHERE certainty = 'inferred_range' ORDER BY attribution_key LIMIT 1`,
-        )
-        .pluck()
-        .get(),
-    );
+    const attributionKey = database
+      .prepare(
+        `SELECT attribution_key FROM legacy_model_attribution
+         WHERE certainty = 'inferred_range' ORDER BY attribution_key LIMIT 1`,
+      )
+      .pluck()
+      .get() as string;
     expect(attributionKey).toBeTruthy();
 
     database
@@ -307,42 +391,33 @@ describe("model profile and legacy attribution governance", () => {
   });
 });
 
+interface ProfileRow {
+  backend_key: string;
+  created_at: number;
+  input_schema_version: number;
+  model_key: string;
+  output_schema_version: number;
+  profile_key: string;
+  prompt_version: string;
+  public_track_key: string;
+  reasoning_effort: string;
+  runtime_model_id: string;
+}
+
 function requiredProfile(
   database: Database.Database,
   publicTrackKey: string,
 ): ProfileRow {
-  return ProfileRowSchema.parse(
-    database
-      .prepare(
-        `SELECT profile_key, public_track_key, model_key, backend_key,
-           runtime_model_id, prompt_version, reasoning_effort,
-           input_schema_version, output_schema_version, created_at
-         FROM enrichment_profile WHERE public_track_key = ?`,
-      )
-      .get(publicTrackKey),
-  );
-}
-
-function seedFixtureProfile(database: Database.Database): void {
-  database.exec(`
-    INSERT INTO ai_vendor (vendor_key, display_name, created_at)
-      VALUES ('fixture-vendor', 'Fixture Vendor', 0);
-    INSERT INTO inference_backend (backend_key, display_name, created_at)
-      VALUES ('fixture-backend', 'Fixture Backend', 0);
-    INSERT INTO ai_model (
-      model_key, vendor_key, family_key, version_label, display_name, created_at
-    ) VALUES (
-      'fixture-model', 'fixture-vendor', 'fixture', '1', 'Fixture Model', 0
-    );
-    INSERT INTO enrichment_profile (
-      profile_key, public_track_key, model_key, backend_key, runtime_model_id,
-      prompt_version, reasoning_effort, input_schema_version,
-      output_schema_version, created_at
-    ) VALUES (
-      'fixture-model/source-v1', 'fixture-model', 'fixture-model',
-      'fixture-backend', 'fixture-model', 'fixture-v1', 'high', 2, 1, 0
-    );
-  `);
+  const row = database
+    .prepare(
+      `SELECT profile_key, public_track_key, model_key, backend_key,
+         runtime_model_id, prompt_version, reasoning_effort,
+         input_schema_version, output_schema_version, created_at
+       FROM enrichment_profile WHERE public_track_key = ?`,
+    )
+    .get(publicTrackKey) as ProfileRow | undefined;
+  if (!row) throw new Error(`Missing profile fixture: ${publicTrackKey}`);
+  return row;
 }
 
 function insertRevisionFixture(database: Database.Database): string {
@@ -427,6 +502,7 @@ function insertArtifact(
   artifactId: string,
   taskKey: string,
   profile: ProfileRow,
+  payload = "{}",
 ): void {
   database
     .prepare(
@@ -434,7 +510,7 @@ function insertArtifact(
          id, source_revision_id, task_key, variant, schema_version,
          prompt_version, model, model_key, reasoning_effort, payload_hash,
          payload, created_at
-       ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, '{}', 1)`,
+       ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 1)`,
     )
     .run(
       artifactId,
@@ -446,6 +522,7 @@ function insertArtifact(
       profile.public_track_key,
       profile.reasoning_effort,
       HASH,
+      payload,
     );
 }
 

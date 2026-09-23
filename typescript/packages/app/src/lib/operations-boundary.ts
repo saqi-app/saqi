@@ -1,3 +1,5 @@
+export { BatchTranslateRequestSchema } from "@saqi/precedent-iso";
+
 export const OPS_ORIGIN = "https://ops.saqi.app";
 
 const RESPONSE_HEADERS = {

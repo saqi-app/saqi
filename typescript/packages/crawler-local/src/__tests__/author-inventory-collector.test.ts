@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   type AuthorInventoryPageProjection,
   AuthorInventoryPageSchema,
-  canonicalInventoryUrl,
+  canonicalInventoryPaginationUrl,
   configureSource,
 } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
@@ -28,18 +28,18 @@ const FIXTURE = AuthorInventoryPageSchema.parse(
 );
 
 const PAGE_2 = AuthorInventoryPageSchema.parse({
-  authors: [{ href: "/writers/b", name: "بدر", poemCountText: "٣ قصائد" }],
+  authors: [{ href: "/cat-b", name: "بدر", poemCountText: "٣ قصائد" }],
   challengeDetected: false,
   kind: "author_inventory_page",
   nextPageHref: null,
   page: 2,
   schemaVersion: 1,
-  sourceUrl: "https://source.invalid/directory/2",
+  sourceUrl: "https://source.invalid/authers-2",
   terminal: true,
 });
 
 class FakeInventoryBrowser implements AuthorInventoryPageBrowser {
-  readonly calls: number[] = [];
+  readonly calls: { expectedPage: number; href: string }[] = [];
   readonly #mutateSecondPass: boolean;
 
   constructor(mutateSecondPass = false) {
@@ -48,9 +48,11 @@ class FakeInventoryBrowser implements AuthorInventoryPageBrowser {
 
   collectAuthorInventoryPage(
     value: string,
+    expectedPage: number,
   ): Promise<AuthorInventoryPageProjection> {
-    const page = canonicalInventoryUrl(value).page;
-    this.calls.push(page);
+    canonicalInventoryPaginationUrl(value);
+    const page = expectedPage;
+    this.calls.push({ expectedPage, href: value });
     const pass = Math.ceil(this.calls.length / 2);
     if (page === 1) return Promise.resolve(FIXTURE);
     return Promise.resolve(
@@ -153,7 +155,7 @@ describe("author inventory browser collection", () => {
     await expect(first.run(new AbortController().signal)).rejects.toThrow(
       "synthetic crash",
     );
-    expect(browser.calls).toEqual([1]);
+    expect(browser.calls.map(({ expectedPage }) => expectedPage)).toEqual([1]);
     now = 60_000;
     const resumed = create();
     resumed.seed();
@@ -163,7 +165,9 @@ describe("author inventory browser collection", () => {
       status: { discoveredAuthors: 2, insertedManifests: 2, pagesPerPass: 2 },
       stopped: "succeeded",
     });
-    expect(browser.calls).toEqual([1, 2, 1, 2]);
+    expect(browser.calls.map(({ expectedPage }) => expectedPage)).toEqual([
+      1, 2, 1, 2,
+    ]);
     expect(ledger.status()).toMatchObject({
       byState: expect.objectContaining({ succeeded: 1 }),
     });
@@ -211,7 +215,7 @@ describe("author inventory browser collection", () => {
     await expect(collector.run(new AbortController().signal)).rejects.toThrow(
       "SOURCE_AUTHOR_INVENTORY_PAGE_LIMIT",
     );
-    expect(browser.calls).toEqual([1]);
+    expect(browser.calls.map(({ expectedPage }) => expectedPage)).toEqual([1]);
     ledger.close();
   });
 });

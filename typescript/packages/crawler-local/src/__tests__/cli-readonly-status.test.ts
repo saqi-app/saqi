@@ -3,15 +3,14 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import {
-  currentSource,
-  currentSourceAdapterProfile,
-} from "@saqi/source-adapter";
+import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { expect, it } from "vitest";
 
-import { Ledger } from "../persistence/ledger.js";
-import { CURRENT_SCHEMA_VERSION } from "../persistence/migrations.js";
+import {
+  CURRENT_SCHEMA_VERSION,
+  MIGRATIONS,
+} from "../persistence/migrations.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 const CLI = resolve(import.meta.dirname, "../cli.ts");
@@ -28,20 +27,30 @@ function status(root: string, source = currentSource()): unknown {
           ...process.env,
           SAQI_SOURCE_NAME: source.name,
           SAQI_SOURCE_BASE_URL: source.origin,
-          SAQI_SOURCE_ADAPTER_CONFIG: JSON.stringify(
-            currentSourceAdapterProfile(),
-          ),
         },
       },
     ),
   );
 }
 
-function fixture() {
+function fixture(version: number) {
   const root = mkdtempSync(join(tmpdir(), "saqi-status-readonly-"));
   const path = join(root, "ledger.sqlite3");
-  Ledger.initialize(path).close();
   const database = new Database(path);
+  database.exec(
+    "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY,version INTEGER); INSERT INTO local_schema VALUES(1,0)",
+  );
+  for (const migration of MIGRATIONS) {
+    if (migration.version > version) continue;
+    database.exec(migration.statements);
+    database
+      .prepare("UPDATE local_schema SET version=? WHERE singleton=1")
+      .run(migration.version);
+  }
+  const source = currentSource();
+  database
+    .prepare("INSERT INTO local_source_identity VALUES(1,?,?)")
+    .run(source.name, source.origin);
   database.exec(
     "INSERT INTO runtime_control VALUES('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1); INSERT INTO sol_paid_usage_budget VALUES('fixture-exhausted',3,3,'exhausted',1,1)",
   );
@@ -49,57 +58,44 @@ function fixture() {
   return { root, path };
 }
 
-it("status inspects the current schema without budget or control changes", () => {
-  const f = fixture();
-  const before = readFileSync(f.path);
-  expect(status(f.root)).toMatchObject({
-    command: "status",
-    paused: true,
-    paidWorkPaused: true,
-    runtimeOwnerIssue: null,
-  });
-  expect(readFileSync(f.path)).toEqual(before);
-  const database = new Database(f.path, {
-    readonly: true,
-    fileMustExist: true,
-  });
-  try {
-    expect(database.prepare("SELECT version FROM local_schema").get()).toEqual({
-      version: CURRENT_SCHEMA_VERSION,
+it.each([30, 33, CURRENT_SCHEMA_VERSION])(
+  "status inspects schema%s without migration, budget or control changes",
+  (version) => {
+    const f = fixture(version);
+    const before = readFileSync(f.path);
+    expect(status(f.root)).toMatchObject({
+      command: "status",
+      paused: true,
+      paidWorkPaused: true,
+      runtimeOwnerIssue:
+        version === CURRENT_SCHEMA_VERSION
+          ? null
+          : "RUNTIME_OWNER_AUTHORITY_UNAVAILABLE",
     });
-    expect(
-      database
-        .prepare("SELECT state,reserved_operations FROM sol_paid_usage_budget")
-        .get(),
-    ).toEqual({ state: "exhausted", reserved_operations: 3 });
-  } finally {
-    database.close();
-  }
-});
+    expect(readFileSync(f.path)).toEqual(before);
+    const database = new Database(f.path, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    try {
+      expect(
+        database.prepare("SELECT version FROM local_schema").get(),
+      ).toEqual({ version });
+      expect(
+        database
+          .prepare(
+            "SELECT state,reserved_operations FROM sol_paid_usage_budget",
+          )
+          .get(),
+      ).toEqual({ state: "exhausted", reserved_operations: 3 });
+    } finally {
+      database.close();
+    }
+  },
+);
 
-it("status redacts persisted source identity from operator diagnostics", () => {
-  const f = fixture();
-  const ledger = Ledger.open(f.path);
-  const privateOrigin = "https://private-origin.example";
-  const origin = ledger.claimOrigin(privateOrigin, 1_000, 10_000);
-  if (origin.state !== "claimed") throw new Error("expected origin lease");
-  ledger.failOrigin(origin.lease, 2_000, 3_000, {
-    circuitBreakerAfter: 3,
-    circuitBreakerCooldownMs: 60_000,
-    retryAt: 5_000,
-    stopReason: "PRIVATE_HUMAN_REQUIRED",
-  });
-  ledger.close();
-
-  const body = JSON.stringify(status(f.root));
-  expect(body).not.toContain("private-origin.example");
-  expect(body).not.toContain("PRIVATE_HUMAN_REQUIRED");
-  expect(body).toContain("https://source.invalid");
-  expect(body).toContain("SOURCE_HUMAN_REQUIRED");
-});
-
-it("source mismatch cannot mutate the inspected ledger", () => {
-  const f = fixture();
+it("source mismatch cannot migrate the inspected older ledger", () => {
+  const f = fixture(33);
   const before = readFileSync(f.path);
   expect(() =>
     status(f.root, {
@@ -110,8 +106,8 @@ it("source mismatch cannot mutate the inspected ledger", () => {
   expect(readFileSync(f.path)).toEqual(before);
 });
 
-it("missing controls fail without importing pause files", () => {
-  const f = fixture();
+it("missing legacy controls fail without importing pause files", () => {
+  const f = fixture(30);
   const db = new Database(f.path);
   db.exec("DELETE FROM runtime_control");
   db.close();

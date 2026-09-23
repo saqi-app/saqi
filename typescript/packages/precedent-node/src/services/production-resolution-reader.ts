@@ -12,10 +12,6 @@ import {
   ProductionResolutionResponseSchema,
   SourceNameSchema,
 } from "@saqi/precedent-iso";
-import {
-  type SourceAdapterProfileV1,
-  SourceAdapterProfileV1Schema,
-} from "@saqi/source-adapter";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -78,9 +74,7 @@ const SourceContentDocumentSchema = z.looseObject({
   content: z.array(z.string()),
 });
 
-export class ProductionResolutionConflictError extends Error {
-  override name = "ProductionResolutionConflictError";
-}
+export class ProductionResolutionConflictError extends Error {}
 
 export interface ProductionResolutionStore {
   resolve(input: unknown): Promise<ProductionResolutionResponse>;
@@ -90,7 +84,6 @@ export interface D1ProductionResolutionStoreOptions {
   readonly lifetimeMs?: number;
   readonly now?: () => number;
   readonly sourceName: string;
-  readonly sourceProfile: SourceAdapterProfileV1;
 }
 
 /** Exact, bounded production identity resolution for progressive adoption. */
@@ -99,8 +92,6 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
   readonly #lifetimeMs: number;
   readonly #runtime: { readonly now: () => number };
   readonly #sourceName: string;
-  readonly #sourcePoemSlugPrefix: string;
-  readonly #sourcePoemSlugSuffix: string;
 
   constructor(db: Database, options: D1ProductionResolutionStoreOptions) {
     this.#db = db;
@@ -109,13 +100,6 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
     );
     this.#runtime = { now: options.now ?? Date.now };
     this.#sourceName = SourceNameSchema.parse(options.sourceName);
-    const profile = SourceAdapterProfileV1Schema.parse(options.sourceProfile);
-    const marker = "{id}";
-    const markerIndex = profile.routes.poemSlug.indexOf(marker);
-    this.#sourcePoemSlugPrefix = profile.routes.poemSlug.slice(0, markerIndex);
-    this.#sourcePoemSlugSuffix = profile.routes.poemSlug.slice(
-      markerIndex + marker.length,
-    );
   }
 
   async resolve(input: unknown): Promise<ProductionResolutionResponse> {
@@ -126,7 +110,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
       return this.#resolveFingerprints(request);
     }
     const requestJson = JSON.stringify(request.targets);
-    const rows = await this.#db.all(sql`
+    const rows = await this.#db.all<Record<string, unknown>>(sql`
       WITH requested AS (
         SELECT
           CAST(key AS INTEGER) AS ordinal,
@@ -179,8 +163,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
         LEFT JOIN poem legacy_poem
           ON requested.source_poem_id IS NOT NULL
           AND source_poem.id IS NULL
-          AND legacy_poem.slug = ${this.#sourcePoemSlugPrefix}
-            || requested.source_poem_id || ${this.#sourcePoemSlugSuffix}
+          AND legacy_poem.slug = 'poem' || requested.source_poem_id
           AND EXISTS (
             SELECT 1 FROM author legacy_author
             WHERE legacy_author.id = legacy_poem.author_id
@@ -393,7 +376,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
     request: Extract<ProductionResolutionRequest, { schemaVersion: 3 }>,
   ): Promise<ProductionResolutionResponse> {
     const requestJson = JSON.stringify(request.targets);
-    const rows = await this.#db.all(sql`
+    const rows = await this.#db.all<Record<string, unknown>>(sql`
       WITH requested AS (
         SELECT
           CAST(key AS INTEGER) AS ordinal,

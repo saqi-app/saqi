@@ -9,9 +9,12 @@ import {
   type PoemEnrichmentInputV2,
   PoemEnrichmentInputV2Schema,
   PoemEnrichmentOutputV2Schema,
+  PoemEnrichmentOutputV3Schema,
   PoemEnrichmentReviewSchema,
   reviewAcceptsEnrichment,
   reviewsAcceptEnrichment,
+  validatePoemEnrichmentV2,
+  validatePoemEnrichmentV3,
 } from "@saqi/precedent-iso";
 import { z } from "zod";
 
@@ -22,7 +25,7 @@ import {
 } from "../persistence/artifact-store.js";
 import { type Ledger, LostLeaseError } from "../persistence/ledger.js";
 import type { WorkClaim } from "../persistence/schema.js";
-import { canonicalJson, inputHash } from "../persistence/work-key.js";
+import { canonicalJson, inputHash, sha256 } from "../persistence/work-key.js";
 import {
   NETWORK_UNAVAILABLE_ERROR_CODE,
   networkProbeDelayMs,
@@ -48,14 +51,12 @@ type SupportedPoemEnrichmentInput = PoemEnrichmentInput | PoemEnrichmentInputV2;
 const LEASE_DURATION_MS = 2 * 60 * 60 * 1_000;
 const REJECTION_RETRY_MS = 5 * 60_000;
 const MAX_INVALID_ATTEMPTS = 5;
-const MAX_SOURCE_BOUND_SOL_REVIEW_ATTEMPTS = 2;
+const MAX_SOURCE_BOUND_SOL_REVIEW_ATTEMPTS = 3;
 export const SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED =
   "SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED";
 const MAX_TRANSIENT_ATTEMPTS = 12;
 const DISK_PRESSURE_RETRY_MS = 60_000;
-class SolBudgetExhaustedError extends Error {
-  override name = "SolBudgetExhaustedError";
-}
+class SolBudgetExhaustedError extends Error {}
 const ArtifactPersistenceErrorCodeSchema = z.enum([
   "EBUSY",
   "EIO",
@@ -71,7 +72,7 @@ const ArtifactPersistenceInterruptionSchema = z.object({
 });
 const PhaseSchema = z.strictObject({
   generationAttemptId: z.string().min(1),
-  output: PoemEnrichmentOutputV2Schema,
+  output: z.union([PoemEnrichmentOutputV3Schema, PoemEnrichmentOutputV2Schema]),
   outputHash: z.string().regex(/^[a-f\d]{64}$/),
   rejected: z.boolean(),
   reviewAttemptIds: z.array(z.string().min(1)).max(2),
@@ -279,6 +280,19 @@ export class SolEnrichmentCoordinator
       }
       throw error;
     }
+    // A raised retry ceiling automatically revives only work terminalized by
+    // the previous, narrower policy. Paid execution remains closed until an
+    // explicit three-operation budget is available.
+    this.#ledger.requeueDeadLettersBelowAttemptThreshold(
+      this.#workKind,
+      {
+        implementationVersion: this.#pipelineVersion,
+        schemaVersion: POEM_ENRICHMENT_V2_SCHEMA_VERSION,
+      },
+      SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED,
+      MAX_SOURCE_BOUND_SOL_REVIEW_ATTEMPTS,
+      now(),
+    );
     let recoveryClaims = 0;
     let providerVerified = false;
     while (
@@ -654,7 +668,15 @@ export class SolEnrichmentCoordinator
       summary.deadLettered += 1;
       return;
     }
-    let phase = await this.#loadPhase(claim.work.workKey);
+    let phase: null | SolPhase;
+    try {
+      phase = await this.#loadPhase(claim.work.workKey, input.data);
+    } catch {
+      this.#ledger.deadLetter(claim, "SOL_PHASE_CORRUPT", transitionAt);
+      summary.deadLettered += 1;
+      summary.schedulerOutcome = "task_failure";
+      return;
+    }
     const repair = phase?.rejected
       ? parseSolRepairContext({
           generationAttemptId: phase.generationAttemptId,
@@ -846,7 +868,7 @@ export class SolEnrichmentCoordinator
     }
     let phase: null | SolPhase;
     try {
-      phase = await this.#loadPhase(claim.work.workKey);
+      phase = await this.#loadPhase(claim.work.workKey, parsedInput.data);
     } catch {
       this.#ledger.deadLetter(claim, "SOL_PHASE_CORRUPT", now());
       summary.deadLettered += 1;
@@ -1080,12 +1102,37 @@ export class SolEnrichmentCoordinator
     summary.schedulerOutcome = "task_failure";
   }
 
-  async #loadPhase(workKey: string): Promise<null | SolPhase> {
+  async #loadPhase(
+    workKey: string,
+    input: SupportedPoemEnrichmentInput,
+  ): Promise<null | SolPhase> {
     const checkpoint = this.#ledger.latestCheckpoint(workKey, "sol-phase");
     if (!checkpoint) return null;
     if (!checkpoint.artifactHash) throw new Error("SOL_PHASE_ARTIFACT_MISSING");
     const phaseContents = await this.#artifacts.read(checkpoint.artifactHash);
-    return PhaseSchema.parse(JSON.parse(phaseContents.toString("utf8")));
+    const phase = PhaseSchema.parse(JSON.parse(phaseContents.toString("utf8")));
+    // JSON/schema validity alone is not sufficient proof for free artifact
+    // reuse. Check source alignment before another paid review or publication,
+    // including the provider-free reconciliation path. Never repair a damaged
+    // checkpoint by silently spending a new generation/review operation.
+    const { canonicalBinding: _binding, ...base } =
+      input.schemaVersion === 2 ? input : { ...input, canonicalBinding: null };
+    const source = PoemEnrichmentInputSchema.parse({
+      ...base,
+      schemaVersion: 1,
+    });
+    const validation =
+      phase.output.schemaVersion === 3
+        ? validatePoemEnrichmentV3(source, phase.output)
+        : validatePoemEnrichmentV2(source, phase.output);
+    if (
+      !validation.passed ||
+      phase.outputHash !== sha256(canonicalJson(phase.output)) ||
+      phase.reviewAttemptIds.length !== phase.reviews.length ||
+      new Set(phase.reviewAttemptIds).size !== phase.reviewAttemptIds.length
+    )
+      throw new Error("SOL_PHASE_CORRUPT");
+    return phase;
   }
 
   async #savePhase(
@@ -1188,6 +1235,12 @@ export class SolEnrichmentCoordinator
       return;
     }
     if (result.state === "retry_wait") {
+      if (result.errorCode === "CODEX_CONTEXT_LIMIT_EXCEEDED") {
+        this.#ledger.deadLetter(claim, result.errorCode, now);
+        summary.deadLettered += 1;
+        summary.schedulerOutcome = "task_failure";
+        return;
+      }
       if (result.errorCode === "SOL_SHARED_OPERATION_PENDING") {
         const retryAt = Math.max(result.retryAt ?? now, now + 60_000);
         // This claim did not launch a provider operation. Preserve its attempt

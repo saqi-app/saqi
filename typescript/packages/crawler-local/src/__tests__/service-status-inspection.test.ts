@@ -8,7 +8,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DEFAULT_SOURCE_ADAPTER_PROFILE } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { expect, it } from "vitest";
 
@@ -77,11 +76,7 @@ it("uses retained identity with unchanged ledger and current desired concurrency
 
 it("configured source remains authoritative and cannot be silently replaced by retained identity", async () => {
   const f = fixture();
-  const configured = {
-    name: "new-source",
-    origin: "https://new.example",
-    profile: DEFAULT_SOURCE_ADAPTER_PROFILE,
-  };
+  const configured = { name: "new-source", origin: "https://new.example" };
   const result = await loadServiceStatusInspection(
     f.configPath,
     async () => configured,

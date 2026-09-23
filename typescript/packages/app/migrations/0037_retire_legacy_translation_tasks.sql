@@ -543,7 +543,17 @@ INSERT INTO "ai_vendor" ("vendor_key", "display_name", "created_at") VALUES ('go
 
 INSERT INTO "ai_vendor" ("vendor_key", "display_name", "created_at") VALUES ('openai', 'OpenAI', 0);
 
+INSERT INTO "ai_model" ("model_key", "vendor_key", "family_key", "version_label", "display_name", "created_at") VALUES ('claude-opus-4-6', 'anthropic', 'claude-opus', '4.6', 'Claude Opus 4.6', 0);
+
+INSERT INTO "ai_model" ("model_key", "vendor_key", "family_key", "version_label", "display_name", "created_at") VALUES ('claude-opus-5', 'anthropic', 'claude-opus', '5', 'Claude Opus 5', 0);
+
 INSERT INTO "ai_model" ("model_key", "vendor_key", "family_key", "version_label", "display_name", "created_at") VALUES ('gpt-5.6-sol', 'openai', 'gpt', '5.6-sol', 'Sol 5.6', 0);
+
+INSERT INTO "ai_model" ("model_key", "vendor_key", "family_key", "version_label", "display_name", "created_at") VALUES ('gemini-3.1-pro-high', 'google', 'gemini', '3.1-pro-high', 'Gemini 3.1 Pro High', 0);
+
+INSERT INTO "inference_backend" ("backend_key", "display_name", "created_at") VALUES ('agy-cli', 'Agy CLI', 0);
+
+INSERT INTO "inference_backend" ("backend_key", "display_name", "created_at") VALUES ('anthropic-claude-code-cli', 'Claude Code CLI', 0);
 
 INSERT INTO "inference_backend" ("backend_key", "display_name", "created_at") VALUES ('openai-codex-cli', 'Codex CLI', 0);
 
@@ -551,9 +561,29 @@ INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key"
 
 INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('sol-5.6/source-v2', 'sol-5.6', 'gpt-5.6-sol', 'openai-codex-cli', 'gpt-5.6-sol', 'sol-enrichment-v1', 'high', 2, 1, 0);
 
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('claude-opus-5/source-v1', 'claude-opus-5', 'claude-opus-5', 'anthropic-claude-code-cli', 'claude-opus-5', 'claude-opus-5-enrichment-v1', 'max', 1, 1, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('claude-opus-5/source-v2', 'claude-opus-5', 'claude-opus-5', 'anthropic-claude-code-cli', 'claude-opus-5', 'claude-opus-5-enrichment-v1', 'max', 2, 1, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-claude-opus-4.6-thinking/source-v1', 'agy-claude-opus-4.6-thinking', 'claude-opus-4-6', 'agy-cli', 'claude-opus-4-6-thinking', 'agy-claude-opus-4-6-enrichment-v1', 'high', 1, 1, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-claude-opus-4.6-thinking/source-v2', 'agy-claude-opus-4.6-thinking', 'claude-opus-4-6', 'agy-cli', 'claude-opus-4-6-thinking', 'agy-claude-opus-4-6-enrichment-v1', 'high', 2, 1, 0);
+
 INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('sol-5.6/word-gloss-v2/source-v1', 'sol-5.6', 'gpt-5.6-sol', 'openai-codex-cli', 'gpt-5.6-sol', 'sol-word-gloss-v2', 'high', 1, 2, 0);
 
 INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('sol-5.6/word-gloss-v2/source-v2', 'sol-5.6', 'gpt-5.6-sol', 'openai-codex-cli', 'gpt-5.6-sol', 'sol-word-gloss-v2', 'high', 2, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('claude-opus-5/word-gloss-v2/source-v1', 'claude-opus-5', 'claude-opus-5', 'anthropic-claude-code-cli', 'claude-opus-5', 'claude-opus-5-word-gloss-v2', 'max', 1, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('claude-opus-5/word-gloss-v2/source-v2', 'claude-opus-5', 'claude-opus-5', 'anthropic-claude-code-cli', 'claude-opus-5', 'claude-opus-5-word-gloss-v2', 'max', 2, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-claude-opus-4.6-thinking/word-gloss-v2/source-v1', 'agy-claude-opus-4.6-thinking', 'claude-opus-4-6', 'agy-cli', 'claude-opus-4-6-thinking', 'agy-claude-opus-4-6-word-gloss-v2', 'high', 1, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-claude-opus-4.6-thinking/word-gloss-v2/source-v2', 'agy-claude-opus-4.6-thinking', 'claude-opus-4-6', 'agy-cli', 'claude-opus-4-6-thinking', 'agy-claude-opus-4-6-word-gloss-v2', 'high', 2, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-gemini-3.1-pro-high/word-gloss-v2/source-v1', 'agy-gemini-3.1-pro-high', 'gemini-3.1-pro-high', 'agy-cli', 'gemini-3.1-pro-high', 'agy-gemini-3-1-pro-high-word-gloss-v2', 'high', 1, 2, 0);
+
+INSERT INTO "enrichment_profile" ("profile_key", "public_track_key", "model_key", "backend_key", "runtime_model_id", "prompt_version", "reasoning_effort", "input_schema_version", "output_schema_version", "created_at") VALUES ('agy-gemini-3.1-pro-high/word-gloss-v2/source-v2', 'agy-gemini-3.1-pro-high', 'gemini-3.1-pro-high', 'agy-cli', 'gemini-3.1-pro-high', 'agy-gemini-3-1-pro-high-word-gloss-v2', 'high', 2, 2, 0);
 
 INSERT INTO "legacy_model_attribution" ("attribution_key", "vendor_key", "family_key", "minimum_version", "maximum_version", "certainty", "display_name", "rationale", "created_at") VALUES ('legacy-claude-1-or-2', 'anthropic', 'claude', '1', '2', 'inferred_range', 'Claude 1 or 2', 'Legacy translation provenance is inferred as Claude generation, but the exact major version is not recoverable.', 0);
 
@@ -1856,80 +1886,3 @@ BEGIN
     )
   ON CONFLICT(poem_id, model_key) DO NOTHING;
 END;
-
--- New generation recipe; preserve every historical profile and publication.
-INSERT INTO enrichment_profile ( -- sarj-noqa: SARJ105 -- Versioned migration must fail on preexisting immutable profile identities, not hide provenance drift.
-  profile_key, public_track_key, model_key, backend_key, runtime_model_id,
-  prompt_version, reasoning_effort, input_schema_version, output_schema_version,
-  created_at
-) VALUES
-  ('sol-5.6/word-gloss-v3/source-v1', 'sol-5.6', 'gpt-5.6-sol', 'openai-codex-cli', 'gpt-5.6-sol', 'sol-word-gloss-v3', 'medium', 1, 2, 0),
-  ('sol-5.6/word-gloss-v3/source-v2', 'sol-5.6', 'gpt-5.6-sol', 'openai-codex-cli', 'gpt-5.6-sol', 'sol-word-gloss-v3', 'medium', 2, 2, 0);
-
--- A delayed historical completion must not replace the newer recipe for the
--- same source revision, including publication through the receipt trigger.
-CREATE TRIGGER sol_model_pointer_prevent_recipe_downgrade
-BEFORE UPDATE OF enrichment_artifact_id ON poem_model_publication_pointer
-WHEN NEW.model_key = 'sol-5.6'
-  AND NEW.source_revision_id = OLD.source_revision_id
-  AND EXISTS (
-    SELECT 1 FROM model_enrichment_artifact incoming
-    JOIN model_enrichment_artifact current ON current.id = OLD.enrichment_artifact_id
-    WHERE incoming.id = NEW.enrichment_artifact_id
-      AND incoming.prompt_version = 'sol-word-gloss-v2'
-      AND current.prompt_version = 'sol-word-gloss-v3'
-  )
-BEGIN
-  SELECT RAISE(ABORT, 'LEGACY_SOL_PUBLICATION_SUPERSEDED');
-END;
-
--- Bounded, resumable maintenance authority for adopting source lineage on
--- records that predate source identities. The singleton lease fences every
--- cursor update; conflicts are durable and require an explicit resolution.
-CREATE TABLE IF NOT EXISTS source_lineage_maintenance_job (
-  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-  state TEXT NOT NULL CHECK (state IN ('idle', 'active', 'blocked', 'failed', 'complete')),
-  cursor_poem_id TEXT,
-  pass INTEGER NOT NULL DEFAULT 0 CHECK (pass >= 0),
-  lease_owner TEXT,
-  lease_token TEXT,
-  lease_epoch INTEGER NOT NULL DEFAULT 0 CHECK (lease_epoch >= 0),
-  lease_expires_at INTEGER,
-  scanned_total INTEGER NOT NULL DEFAULT 0 CHECK (scanned_total >= 0),
-  adopted_total INTEGER NOT NULL DEFAULT 0 CHECK (adopted_total >= 0),
-  last_error_code TEXT,
-  updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
-  FOREIGN KEY (cursor_poem_id) REFERENCES poem(id) ON DELETE RESTRICT,
-  CHECK (
-    (lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL)
-    OR
-    (lease_owner IS NOT NULL AND length(lease_owner) BETWEEN 1 AND 128
-      AND lease_token IS NOT NULL AND length(lease_token) = 36
-      AND lease_expires_at IS NOT NULL AND lease_expires_at >= 0)
-  )
-) STRICT;
-
-INSERT INTO source_lineage_maintenance_job (
-  singleton, state, cursor_poem_id, pass, lease_owner, lease_token,
-  lease_epoch, lease_expires_at, scanned_total, adopted_total,
-  last_error_code, updated_at
-) VALUES (1, 'idle', NULL, 0, NULL, NULL, 0, NULL, 0, 0, NULL, unixepoch())
-ON CONFLICT(singleton) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS source_lineage_conflict (
-  poem_id TEXT PRIMARY KEY,
-  error_code TEXT NOT NULL CHECK (
-    length(error_code) BETWEEN 3 AND 100
-    AND error_code NOT GLOB '*[^A-Z0-9_]*'
-  ),
-  first_seen_at INTEGER NOT NULL CHECK (first_seen_at >= 0),
-  last_seen_at INTEGER NOT NULL CHECK (last_seen_at >= first_seen_at),
-  attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
-  lease_epoch INTEGER NOT NULL CHECK (lease_epoch > 0),
-  resolved_at INTEGER CHECK (resolved_at IS NULL OR resolved_at >= last_seen_at),
-  FOREIGN KEY (poem_id) REFERENCES poem(id) ON DELETE RESTRICT
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS source_lineage_conflict_unresolved -- sarj-noqa: SARJ108, SARJ116 — SQLite lacks CONCURRENTLY; the status endpoint counts unresolved conflicts on every poll, so this partial covering index avoids scanning resolved history.
-ON source_lineage_conflict(poem_id)
-WHERE resolved_at IS NULL;

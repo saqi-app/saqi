@@ -1,5 +1,8 @@
 import {
   APPROVED_ENRICHMENT_PROFILES,
+  approvedEnrichmentValidations,
+  READABLE_ENRICHMENT_PROFILES,
+  type ReadableEnrichmentProfile,
   sitemapShardForId,
 } from "@saqi/precedent-iso";
 import Database from "better-sqlite3";
@@ -9,22 +12,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { D1PoemStore } from "../poem-store";
 import { AUTHOR_TABLE as author, POEM_TABLE as poem } from "../schema";
-
-interface TestEnrichmentProfile {
-  readonly model: string;
-  readonly modelKey: string;
-  readonly promptVersion: string;
-  readonly reasoningEffort: string;
-  readonly validatorPrefix: string;
-}
-
-const HISTORICAL_TEST_PROFILE: TestEnrichmentProfile = {
-  model: "historical-model-v1",
-  modelKey: "historical-track-v1",
-  promptVersion: "historical-word-gloss-v1",
-  reasoningEffort: "high",
-  validatorPrefix: "historical-v1",
-};
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS author (
@@ -227,29 +214,6 @@ describe("D1PoemStore", () => {
       );
     });
 
-    it("keeps authenticated historical publications readable without making them executable", async () => {
-      db.update(poem)
-        .set({ activeSourceRevisionId: "revision-current" })
-        .where(eq(poem.id, testPoemId))
-        .run();
-      seedModelEnrichment(
-        sqlite,
-        testPoemId,
-        "revision-current",
-        HISTORICAL_TEST_PROFILE,
-        7,
-      );
-
-      const result = await store.getById(testPoemId);
-
-      expect(result.modelEnrichments).toEqual([
-        expect.objectContaining({
-          model: HISTORICAL_TEST_PROFILE.model,
-          modelKey: HISTORICAL_TEST_PROFILE.modelKey,
-        }),
-      ]);
-    });
-
     it("never exposes a normalized model for a stale source revision", async () => {
       db.update(poem)
         .set({
@@ -317,11 +281,25 @@ describe("D1PoemStore", () => {
         APPROVED_ENRICHMENT_PROFILES[0],
         0,
       );
+      seedModelEnrichment(
+        sqlite,
+        testPoemId,
+        "revision-current",
+        READABLE_ENRICHMENT_PROFILES[2],
+        1,
+      );
+      seedModelEnrichment(
+        sqlite,
+        testPoemId,
+        "revision-current",
+        READABLE_ENRICHMENT_PROFILES[4],
+        2,
+      );
       sqlite
         .prepare(
           "UPDATE model_enrichment_artifact SET payload = ? WHERE id = ?",
         )
-        .run("{invalid", "artifact-0");
+        .run("{invalid", "artifact-1");
       sqlite
         .prepare(
           "UPDATE model_enrichment_validation SET report = ? WHERE id = ?",
@@ -330,7 +308,9 @@ describe("D1PoemStore", () => {
 
       const result = await store.getById(testPoemId);
 
-      expect("modelEnrichments" in result).toBe(false);
+      expect(result.modelEnrichments?.map(({ modelKey }) => modelKey)).toEqual([
+        READABLE_ENRICHMENT_PROFILES[4].modelKey,
+      ]);
     });
 
     it("falls back to legacy Sol only when normalized provenance tables are unavailable", async () => {
@@ -523,6 +503,57 @@ describe("D1PoemStore", () => {
     it("returns empty map for empty array", async () => {
       const result = await store.getArabicCopies([]);
       expect(result.size).toBe(0);
+    });
+  });
+
+  describe("writeTranslationGemini", () => {
+    it("saves translation provenance without fabricating a title", async () => {
+      const translation = {
+        model: "gemini-test",
+        poem: ["First line of translation,", "Second line"],
+      };
+
+      const result = await store.writeTranslationGemini(
+        testPoemId,
+        translation,
+      );
+
+      expect(result.nameEnglish).toBeUndefined();
+
+      const row = db.select().from(poem).where(eq(poem.id, testPoemId)).get();
+      const translationGemini = row?.translationGemini as {
+        content: string[];
+        model: string;
+      };
+      expect(translationGemini.content).toEqual(translation.poem);
+      expect(translationGemini.model).toBe("gemini-test");
+    });
+
+    it("does not overwrite nameEnglish when already set", async () => {
+      db.update(poem)
+        .set({ nameEnglish: "Existing English Name" })
+        .where(eq(poem.id, testPoemId))
+        .run();
+
+      const translation = { poem: ["New first line,", "Second line"] };
+
+      const result = await store.writeTranslationGemini(
+        testPoemId,
+        translation,
+      );
+
+      expect(result.nameEnglish).toBe("Existing English Name");
+    });
+
+    it("handles empty translation array", async () => {
+      const translation = { poem: [] };
+
+      const result = await store.writeTranslationGemini(
+        testPoemId,
+        translation,
+      );
+
+      expect(result.nameEnglish).toBeUndefined();
     });
   });
 
@@ -771,7 +802,7 @@ function seedModelEnrichment(
   database: InstanceType<typeof Database>,
   poemId: string,
   sourceRevisionId: string,
-  profile: TestEnrichmentProfile,
+  profile: ReadableEnrichmentProfile,
   ordinal: number,
   seedValidations = true,
 ): void {
@@ -819,18 +850,7 @@ function seedModelEnrichment(
     verdict: "pass",
   });
   if (!seedValidations) return;
-  for (const validation of [
-    {
-      attempt: 1,
-      validatorKey: `${profile.validatorPrefix}-fidelity-review`,
-      validatorVersion: profile.promptVersion,
-    },
-    {
-      attempt: 2,
-      validatorKey: `${profile.validatorPrefix}-grounding-review`,
-      validatorVersion: profile.promptVersion,
-    },
-  ]) {
+  for (const validation of approvedEnrichmentValidations(profile).all) {
     database
       .prepare(
         `INSERT INTO model_enrichment_validation VALUES

@@ -86,6 +86,30 @@ const ConfigSchema = z
     continuousFreePublication: z.boolean().default(false),
     collector: z
       .object({
+        cdpEndpoint: z
+          .url()
+          .refine((value) => {
+            const url = new URL(value);
+            return (
+              url.protocol === "http:" &&
+              ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) &&
+              url.username === "" &&
+              url.password === "" &&
+              url.pathname === "/" &&
+              url.search === "" &&
+              url.hash === "" &&
+              Number(url.port) >= 1_024 &&
+              Number(url.port) <= 65_535
+            );
+          }, "cdpEndpoint must be a root loopback HTTP URL")
+          .nullable()
+          .default(null),
+        challengeResolutionTimeoutMs: z
+          .int()
+          .min(1_000)
+          .max(15 * 60_000)
+          .default(60_000),
+        continuousDiscoveryRequired: z.boolean().default(false),
         detailBurst: z.int().min(1).max(10_000).default(100),
         enabled: z.boolean().default(true),
         headless: z.boolean().default(false),
@@ -141,6 +165,12 @@ const ConfigSchema = z
       .object({
         enabled: z.boolean().default(false),
         productionAuthorsPath: OptionalPathSchema.default(null),
+        refreshIntervalMs: z
+          .int()
+          .min(60 * 60_000)
+          .max(30 * 24 * 60 * 60_000)
+          .nullable()
+          .default(null),
         refreshGeneration: z
           .string()
           .regex(/^[\w.-]{1,64}$/)
@@ -422,6 +452,17 @@ const ConfigSchema = z
         code: "custom",
         message:
           "Enabled inventory requires collector, productionAuthorsPath, and refreshGeneration",
+      });
+    }
+    if (
+      configuration.collector.continuousDiscoveryRequired &&
+      (!configuration.inventory.enabled ||
+        configuration.inventory.refreshIntervalMs === null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Continuous collector discovery requires inventory with a refreshIntervalMs",
       });
     }
     if (

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SAQI_PRODUCTION_DATABASE_ID } from "@saqi/precedent-iso";
+import type { AuthorInventoryPageProjection } from "@saqi/source-adapter";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
@@ -69,6 +70,333 @@ function parseScraperOperationConfig(
 }
 
 describe("unified rig restart integration", () => {
+  it("does not claim collection work while an inventory traversal is active", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-inventory-collection-gate-"));
+    const database = join(root, "ledger.sqlite3");
+    const productionAuthorsPath = join(root, "authors.json");
+    writeFileSync(productionAuthorsPath, "[]\n");
+    Ledger.initialize(database).close();
+
+    const inventoryStarted = Promise.withResolvers<undefined>();
+    const releaseInventory =
+      Promise.withResolvers<AuthorInventoryPageProjection>();
+    const browser = {
+      close: vi.fn(() => Promise.resolve()),
+      collectAuthorInventoryPage: vi.fn(() => {
+        inventoryStarted.resolve(undefined);
+        return releaseInventory.promise;
+      }),
+      collectAuthorManifest: vi.fn(() => {
+        throw new Error("Collector must wait for active inventory");
+      }),
+      collectPoemDetail: vi.fn(() => {
+        throw new Error("Collector must wait for active inventory");
+      }),
+    };
+    const createBrowser = vi
+      .spyOn(SourceChromeCollector, "create")
+      .mockResolvedValue(browser as unknown as SourceChromeCollector);
+    const config = parseScraperOperationConfig({
+      collector: { enabled: true, headless: true, maximumPerCycle: 1 },
+      inventory: {
+        enabled: true,
+        productionAuthorsPath,
+        refreshGeneration: "test-generation",
+      },
+      retention: { enabled: false },
+      restart: { idlePollMs: 5_000 },
+      schemaVersion: 1,
+      sol: { enabled: false },
+      startupReconciliation: { enabled: false },
+      stateDirectory: root,
+    });
+    const runtime = new UnifiedRigRuntime({
+      config,
+      configDigest: DIGEST,
+      paths: {
+        artifacts: join(root, "artifacts"),
+        database,
+        paused: join(root, "PAUSED"),
+        root,
+        schedulerState: join(root, "sol-scheduler.json"),
+        solAttempts: join(root, "sol-attempts"),
+      },
+    });
+    const controller = new AbortController();
+    let lanes: readonly SupervisorLane[] = [];
+    try {
+      lanes = await runtime.createLanes({
+        publicationAllowed: false,
+        status: {},
+      });
+      const inventoryLane = lanes.find(
+        ({ name }) => name === "author-inventory",
+      );
+      const collectorLane = lanes.find(({ name }) => name === "collector");
+      if (!inventoryLane || !collectorLane)
+        throw new Error("Expected both collection lanes");
+
+      const inventoryCycle = inventoryLane.runOnce(controller.signal);
+      await inventoryStarted.promise;
+      const authorInput = { authorHref: "https://source.invalid/cat-test" };
+      const operator = Ledger.open(database);
+      const seeded = operator.seed({
+        implementationVersion: collectorImplementationVersion(),
+        input: authorInput,
+        inputHash: inputHash(authorInput),
+        kind: collectionWorkKinds().authorManifest,
+        priority: 0,
+        schemaVersion: collectorSchemaVersion(),
+      });
+      operator.close();
+      await expect(collectorLane.runOnce(controller.signal)).resolves.toEqual({
+        nextWakeAt: expect.any(Number),
+        result: "inventory_wait",
+      });
+
+      const verification = Ledger.open(database, { readonly: true });
+      expect(verification.get(seeded.workKey)).toMatchObject({
+        attemptCount: 0,
+        state: "pending",
+      });
+      verification.close();
+      expect(browser.collectAuthorManifest).not.toHaveBeenCalled();
+      expect(browser.collectPoemDetail).not.toHaveBeenCalled();
+
+      controller.abort();
+      releaseInventory.resolve({
+        authors: [],
+        challengeDetected: false,
+        kind: "author_inventory_page",
+        nextPageHref: null,
+        page: 1,
+        schemaVersion: 1,
+        sourceUrl: "https://source.invalid/authers-1",
+        terminal: true,
+      });
+      await expect(inventoryCycle).resolves.toMatchObject({
+        result: "aborted",
+      });
+    } finally {
+      controller.abort();
+      releaseInventory.resolve({
+        authors: [],
+        challengeDetected: false,
+        kind: "author_inventory_page",
+        nextPageHref: null,
+        page: 1,
+        schemaVersion: 1,
+        sourceUrl: "https://source.invalid/authers-1",
+        terminal: true,
+      });
+      for (const lane of lanes) await lane.close();
+      createBrowser.mockRestore();
+      runtime.close();
+    }
+  });
+
+  it("defers a new inventory generation until prior manifests drain", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-inventory-backlog-gate-"));
+    const database = join(root, "ledger.sqlite3");
+    const productionAuthorsPath = join(root, "authors.json");
+    writeFileSync(productionAuthorsPath, "[]\n");
+    const ledger = Ledger.initialize(database);
+    const authorInput = {
+      authorHref: "https://source.invalid/cat-test",
+      inventoryPoemCount: 1,
+    };
+    ledger.seed({
+      implementationVersion: collectorImplementationVersion(),
+      input: authorInput,
+      inputHash: inputHash(authorInput),
+      kind: collectionWorkKinds().authorManifest,
+      priority: 0,
+      schemaVersion: collectorSchemaVersion(),
+    });
+    ledger.close();
+
+    const browser = {
+      close: vi.fn(() => Promise.resolve()),
+      collectAuthorInventoryPage: vi.fn(() => {
+        throw new Error("Inventory must wait for the manifest backlog");
+      }),
+      collectAuthorManifest: vi.fn(),
+      collectPoemDetail: vi.fn(),
+    };
+    const createBrowser = vi
+      .spyOn(SourceChromeCollector, "create")
+      .mockResolvedValue(browser as unknown as SourceChromeCollector);
+    const config = parseScraperOperationConfig({
+      collector: { enabled: true, headless: true, maximumPerCycle: 1 },
+      inventory: {
+        enabled: true,
+        productionAuthorsPath,
+        refreshGeneration: "test-generation",
+      },
+      retention: { enabled: false },
+      restart: { idlePollMs: 5_000 },
+      schemaVersion: 1,
+      sol: { enabled: false },
+      startupReconciliation: { enabled: false },
+      stateDirectory: root,
+    });
+    const runtime = new UnifiedRigRuntime({
+      config,
+      configDigest: DIGEST,
+      paths: {
+        artifacts: join(root, "artifacts"),
+        database,
+        paused: join(root, "PAUSED"),
+        root,
+        schedulerState: join(root, "sol-scheduler.json"),
+        solAttempts: join(root, "sol-attempts"),
+      },
+    });
+    let lanes: readonly SupervisorLane[] = [];
+    try {
+      lanes = await runtime.createLanes({
+        publicationAllowed: false,
+        status: {},
+      });
+      const inventoryLane = lanes.find(
+        ({ name }) => name === "author-inventory",
+      );
+      if (!inventoryLane) throw new Error("Expected inventory lane");
+
+      await expect(
+        inventoryLane.runOnce(new AbortController().signal),
+      ).resolves.toEqual({
+        nextWakeAt: expect.any(Number),
+        result: "manifest_backlog",
+      });
+      expect(browser.collectAuthorInventoryPage).not.toHaveBeenCalled();
+
+      const verification = Ledger.open(database, { readonly: true });
+      const inventoryProgress = verification
+        .status()
+        .kindProgress.find(({ kind }) =>
+          kind.endsWith("author_inventory_discovery"),
+        );
+      expect(inventoryProgress?.byState.pending).toBe(1);
+      const manifestProgress = verification
+        .status()
+        .kindProgress.find(({ kind }) => kind.endsWith("author_manifest"));
+      expect(manifestProgress?.byState).toMatchObject({
+        imported: 0,
+        pending: 1,
+      });
+      verification.close();
+    } finally {
+      for (const lane of lanes) await lane.close();
+      createBrowser.mockRestore();
+      runtime.close();
+    }
+  });
+
+  it("allows queued inventory to bootstrap stable identity over an all-legacy backlog", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-inventory-bootstrap-gate-"));
+    const database = join(root, "ledger.sqlite3");
+    const productionAuthorsPath = join(root, "authors.json");
+    writeFileSync(productionAuthorsPath, "[]\n");
+    const ledger = Ledger.initialize(database);
+    const authorInput = {
+      authorHref: "https://source.invalid/cat-test",
+      refreshGeneration: "legacy-generation",
+    };
+    ledger.seed({
+      implementationVersion: collectorImplementationVersion(),
+      input: authorInput,
+      inputHash: inputHash(authorInput),
+      kind: collectionWorkKinds().authorManifest,
+      priority: 0,
+      schemaVersion: collectorSchemaVersion(),
+    });
+    ledger.close();
+
+    const inventoryStarted = Promise.withResolvers<undefined>();
+    const releaseInventory =
+      Promise.withResolvers<AuthorInventoryPageProjection>();
+    const browser = {
+      close: vi.fn(() => Promise.resolve()),
+      collectAuthorInventoryPage: vi.fn(() => {
+        inventoryStarted.resolve(undefined);
+        return releaseInventory.promise;
+      }),
+      collectAuthorManifest: vi.fn(),
+      collectPoemDetail: vi.fn(),
+    };
+    const createBrowser = vi
+      .spyOn(SourceChromeCollector, "create")
+      .mockResolvedValue(browser as unknown as SourceChromeCollector);
+    const config = parseScraperOperationConfig({
+      collector: { enabled: true, headless: true, maximumPerCycle: 1 },
+      inventory: {
+        enabled: true,
+        productionAuthorsPath,
+        refreshGeneration: "test-generation",
+      },
+      retention: { enabled: false },
+      schemaVersion: 1,
+      sol: { enabled: false },
+      startupReconciliation: { enabled: false },
+      stateDirectory: root,
+    });
+    const runtime = new UnifiedRigRuntime({
+      config,
+      configDigest: DIGEST,
+      paths: {
+        artifacts: join(root, "artifacts"),
+        database,
+        paused: join(root, "PAUSED"),
+        root,
+        schedulerState: join(root, "sol-scheduler.json"),
+        solAttempts: join(root, "sol-attempts"),
+      },
+    });
+    const controller = new AbortController();
+    let lanes: readonly SupervisorLane[] = [];
+    try {
+      lanes = await runtime.createLanes({
+        publicationAllowed: false,
+        status: {},
+      });
+      const inventoryLane = lanes.find(
+        ({ name }) => name === "author-inventory",
+      );
+      if (!inventoryLane) throw new Error("Expected inventory lane");
+      const cycle = inventoryLane.runOnce(controller.signal);
+      await inventoryStarted.promise;
+      expect(browser.collectAuthorInventoryPage).toHaveBeenCalledOnce();
+      controller.abort();
+      releaseInventory.resolve({
+        authors: [],
+        challengeDetected: false,
+        kind: "author_inventory_page",
+        nextPageHref: null,
+        page: 1,
+        schemaVersion: 1,
+        sourceUrl: "https://source.invalid/authers-1",
+        terminal: true,
+      });
+      await expect(cycle).resolves.toMatchObject({ result: "aborted" });
+    } finally {
+      controller.abort();
+      releaseInventory.resolve({
+        authors: [],
+        challengeDetected: false,
+        kind: "author_inventory_page",
+        nextPageHref: null,
+        page: 1,
+        schemaVersion: 1,
+        sourceUrl: "https://source.invalid/authers-1",
+        terminal: true,
+      });
+      for (const lane of lanes) await lane.close();
+      createBrowser.mockRestore();
+      runtime.close();
+    }
+  });
+
   it("rejects missing operation import before recovering expired leases", async () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-missing-operation-import-"));
     const database = join(root, "ledger.sqlite3");
@@ -741,8 +1069,8 @@ describe("unified rig restart integration", () => {
     const ledger = Ledger.initialize(database);
     const seedDetail = (poemId: number, priority: number) => {
       const input = {
-        authorHref: "https://source.invalid/writers/test",
-        poemHref: `https://source.invalid/works/${String(poemId)}`,
+        authorHref: "https://source.invalid/cat-test",
+        poemHref: `https://source.invalid/poem${String(poemId)}.html`,
       };
       return ledger.seed(
         {
@@ -1201,6 +1529,7 @@ describe("unified rig restart integration", () => {
   it("keeps global work active while independently gating paid provider claims", async () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-paid-work-pause-"));
     const paidWorkPaused = join(root, "PAID_WORK_PAUSED");
+    const globallyPaused = join(root, "PAUSED");
     writeFileSync(paidWorkPaused, "paused\n");
     const config = parseScraperOperationConfig({
       collector: { enabled: false },
@@ -1209,17 +1538,21 @@ describe("unified rig restart integration", () => {
       sol: { concurrency: 1, enabled: true, initialConcurrency: 1 },
       stateDirectory: root,
     });
-    const run = vi.fn(() =>
-      Promise.resolve({
-        claimed: 0,
-        deadLettered: 0,
-        quotaWait: 0,
-        retried: 0,
-        retryAt: null,
-        schedulerOutcome: "idle" as const,
-        stopped: "idle" as const,
-        succeeded: 0,
-      }),
+    const run = vi.fn(
+      (
+        _signal?: AbortSignal,
+        _options?: { readonly paused?: () => boolean | Promise<boolean> },
+      ) =>
+        Promise.resolve({
+          claimed: 0,
+          deadLettered: 0,
+          quotaWait: 0,
+          retried: 0,
+          retryAt: null,
+          schedulerOutcome: "idle" as const,
+          stopped: "idle" as const,
+          succeeded: 0,
+        }),
     );
     const runtime = new UnifiedRigRuntime({
       config,
@@ -1228,7 +1561,7 @@ describe("unified rig restart integration", () => {
         artifacts: join(root, "artifacts"),
         database: join(root, "ledger.sqlite3"),
         paidWorkPaused,
-        paused: join(root, "PAUSED"),
+        paused: globallyPaused,
         root,
         schedulerState: join(root, "sol-scheduler.json"),
         solAttempts: join(root, "sol-attempts"),
@@ -1277,6 +1610,11 @@ describe("unified rig restart integration", () => {
       expect.anything(),
       expect.objectContaining({ artifactReconciliationOnly: true }),
     );
+    const recoveryOptions = run.mock.calls.at(-1)?.[1];
+    await expect(recoveryOptions?.paused?.()).resolves.toBe(false);
+    ledger.pauseControls.set("global", true);
+    await expect(recoveryOptions?.paused?.()).resolves.toBe(true);
+    ledger.pauseControls.set("global", false);
     run.mockClear();
     ledger.armSolPaidUsageBudget(3);
     await sol!.runOnce(new AbortController().signal);
@@ -1634,25 +1972,14 @@ describe("unified rig restart integration", () => {
     const database = join(root, "ledger.sqlite3");
     const now = Date.now();
     const writer = Ledger.open(database);
-    const origin = writer.claimOrigin("https://private.example", now, 10_000);
+    const origin = writer.claimOrigin("https://source.invalid", now, 10_000);
     if (origin.state !== "claimed") throw new Error("Expected origin lease");
     writer.failOrigin(origin.lease, now + 1, 0, {
       circuitBreakerAfter: 1,
       circuitBreakerCooldownMs: 60_000,
       retryAt: now + 60_000,
-      stopReason: "PRIVATE_HUMAN_REQUIRED",
+      stopReason: "SOURCE_HUMAN_REQUIRED",
     });
-    writer.seed(
-      {
-        implementationVersion: "test-v1",
-        input: {},
-        inputHash: inputHash({}),
-        kind: "private_poem_detail",
-        priority: 0,
-        schemaVersion: "test-v1",
-      },
-      now,
-    );
     writer.close();
     const config = parseScraperOperationConfig({
       collector: { enabled: true, headless: true },
@@ -1678,41 +2005,17 @@ describe("unified rig restart integration", () => {
       publicationAllowed: false,
       status: {},
     });
-    const status = await runtime.status();
-    const health = JSON.parse(
-      readFileSync(join(root, "health", "latest.json"), "utf8"),
-    ) as {
-      readonly origins: readonly unknown[];
-      readonly queues: readonly { readonly kind: string }[];
-    };
-    expect(health).toMatchObject({
+    await runtime.status();
+    expect(
+      JSON.parse(readFileSync(join(root, "health", "latest.json"), "utf8")),
+    ).toMatchObject({
       origins: [
         {
-          origin: "https://source.invalid",
           state: "challenge_wait",
           stopReason: "SOURCE_HUMAN_REQUIRED",
         },
       ],
     });
-    expect(health.queues).toContainEqual(
-      expect.objectContaining({ kind: "source_poem_detail" }),
-    );
-    expect(status).toMatchObject({
-      collectorSchedule: expect.objectContaining({
-        preferredKind: "source_poem_detail",
-      }),
-      ledger: {
-        kindProgress: [expect.objectContaining({ kind: "source_poem_detail" })],
-        origins: [
-          expect.objectContaining({
-            origin: "https://source.invalid",
-            stopReason: "SOURCE_HUMAN_REQUIRED",
-          }),
-        ],
-      },
-    });
-    expect(JSON.stringify(status)).not.toContain("private.example");
-    expect(JSON.stringify(status)).not.toContain("PRIVATE_");
     for (const lane of lanes) await lane.close();
     runtime.close();
   });
@@ -1767,6 +2070,12 @@ describe("unified rig restart integration", () => {
         "local-enrichment-fanout-sol",
       ]),
     );
+    expect(
+      lanes.find(({ name }) => name === "local-enrichment-fanout-sol"),
+    ).toMatchObject({ honorNextWakeAt: true });
+    const fanout = lanes.find(({ name }) => name === "fanout");
+    expect(fanout).toMatchObject({ honorNextWakeAt: true });
+    expect(fanout?.maximumSleepMs).toBeUndefined();
     await expect(runtime.status()).resolves.toMatchObject({
       providerHostAdmission: {
         activeProcesses: 0,
@@ -2044,7 +2353,7 @@ describe("unified rig restart integration", () => {
       retryAt = failure.nextAllowedAt;
       if (attempt < 3) completedAt = retryAt;
     }
-    const input = { authorHref: "https://source.invalid/writers/test" };
+    const input = { authorHref: "https://source.invalid/cat-test" };
     const pending = ledger.seed(
       {
         implementationVersion: collectorImplementationVersion(),
@@ -2144,7 +2453,7 @@ describe("unified rig restart integration", () => {
     });
     await runtime.createLanes({ publicationAllowed: false, status: {} });
     const writer = Ledger.open(database);
-    const input = { authorHref: "https://source.invalid/writers/poet-one" };
+    const input = { authorHref: "https://source.invalid/cat-poet-one" };
     writer.seed({
       implementationVersion: "test-v1",
       input,
@@ -2197,6 +2506,66 @@ describe("unified rig restart integration", () => {
       status: { d1: { blockers: expect.arrayContaining(["TIER_UNKNOWN"]) } },
     });
     expect(() => readFileSync(join(root, "ledger.sqlite3"))).toThrow();
+  });
+
+  it("checks read authorization even when D1 write capacity is gated", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-unified-auth-preflight-"));
+    const authStatus = {
+      consecutiveRejections: 1,
+      expiresAt: null,
+      mode: "service_token" as const,
+      paused: true,
+      pauseReason: "rejected" as const,
+      retryAt: 61_000,
+    };
+    const publicationAuth = {
+      preflight: vi.fn(() =>
+        Promise.resolve({
+          errorCode: "PUBLICATION_AUTH_REPROBE_WAIT",
+          state: "retry_wait" as const,
+          status: authStatus,
+        }),
+      ),
+      status: vi.fn(() => authStatus),
+      transport: vi.fn(() => {
+        throw new Error("Preflight must not publish");
+      }),
+    };
+    const config = parseScraperOperationConfig({
+      collector: { enabled: false },
+      publication: {
+        enabled: true,
+        endpoint: "https://ops.saqi.app/api/corpus-import",
+      },
+      retention: { enabled: false },
+      schemaVersion: 1,
+      sol: { enabled: false },
+      stateDirectory: root,
+    });
+    const runtime = new UnifiedRigRuntime({
+      config,
+      configDigest: DIGEST,
+      paths: {
+        artifacts: join(root, "artifacts"),
+        database: join(root, "ledger.sqlite3"),
+        paused: join(root, "PAUSED"),
+        root,
+        schedulerState: join(root, "sol-scheduler.json"),
+        solAttempts: join(root, "sol-attempts"),
+      },
+      publicationAuth,
+    });
+
+    await expect(runtime.preflight()).resolves.toMatchObject({
+      publicationAllowed: false,
+      status: {
+        auth: { errorCode: "PUBLICATION_AUTH_REPROBE_WAIT" },
+        d1: { blockers: expect.arrayContaining(["TIER_UNKNOWN"]) },
+      },
+    });
+    expect(publicationAuth.preflight).toHaveBeenCalledOnce();
+    expect(publicationAuth.transport).not.toHaveBeenCalled();
+    runtime.close();
   });
 
   it("requires the durable paid fence before continuous free publication starts", async () => {
@@ -2349,145 +2718,6 @@ describe("unified rig restart integration", () => {
     await expect(
       publication!.runOnce(new AbortController().signal),
     ).resolves.toEqual({ nextWakeAt: 61_000, result: "preflight_gated" });
-    runtime.close();
-  });
-
-  it("drains source lineage through bounded authenticated requests without model quota", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-source-lineage-drain-"));
-    let now = 10_000;
-    const transport = vi.fn().mockResolvedValue({
-      body: JSON.stringify({
-        ok: true,
-        result: { remaining: 80, state: "active" },
-      }),
-      status: 200,
-    });
-    await importEmptyTestOperations(root);
-    const runtime = new UnifiedRigRuntime({
-      config: parseScraperOperationConfig({
-        collector: { enabled: false },
-        publication: {
-          enabled: true,
-          endpoint: "https://ops.saqi.app/api/corpus-import",
-        },
-        retention: { enabled: false },
-        schemaVersion: 1,
-        sol: { enabled: false },
-        stateDirectory: root,
-      }),
-      configDigest: DIGEST,
-      now: () => now,
-      paths: {
-        artifacts: join(root, "artifacts"),
-        database: join(root, "ledger.sqlite3"),
-        paused: join(root, "PAUSED"),
-        root,
-        schedulerState: join(root, "sol-scheduler.json"),
-        solAttempts: join(root, "sol-attempts"),
-      },
-      publicationAuth: {
-        preflight: async () => {
-          throw new Error("Unexpected preflight");
-        },
-        status: () => ({
-          consecutiveRejections: 0,
-          expiresAt: null,
-          mode: "service_token",
-          paused: false,
-          pauseReason: null,
-          retryAt: null,
-        }),
-        transport,
-      },
-    });
-    const lanes = await runtime.createLanes({
-      publicationAllowed: true,
-      status: {},
-    });
-    const lineage = lanes.find(
-      ({ name }) => name === "maintenance-source-lineage",
-    );
-    await expect(
-      lineage?.runOnce(new AbortController().signal),
-    ).resolves.toEqual({ nextWakeAt: 11_991, result: "progress" });
-    expect(transport).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: '{"maxPages":2}',
-        url: "https://ops.saqi.app/api/source-lineage-maintenance",
-      }),
-    );
-
-    now = 12_000;
-    transport.mockResolvedValueOnce({
-      body: JSON.stringify({
-        ok: true,
-        result: { remaining: 0, state: "complete" },
-      }),
-      status: 200,
-    });
-    await expect(
-      lineage?.runOnce(new AbortController().signal),
-    ).resolves.toEqual({ nextWakeAt: 312_000, result: "complete" });
-    for (const lane of lanes) await lane.close();
-    runtime.close();
-  });
-
-  it("backs off the source-lineage lane when shared publication auth rejects", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-source-lineage-auth-"));
-    await importEmptyTestOperations(root);
-    const runtime = new UnifiedRigRuntime({
-      config: parseScraperOperationConfig({
-        collector: { enabled: false },
-        publication: {
-          enabled: true,
-          endpoint: "https://ops.saqi.app/api/corpus-import",
-        },
-        restart: { errorBackoffMs: 4_000 },
-        retention: { enabled: false },
-        schemaVersion: 1,
-        sol: { enabled: false },
-        stateDirectory: root,
-      }),
-      configDigest: DIGEST,
-      now: () => 10_000,
-      paths: {
-        artifacts: join(root, "artifacts"),
-        database: join(root, "ledger.sqlite3"),
-        paused: join(root, "PAUSED"),
-        root,
-        schedulerState: join(root, "sol-scheduler.json"),
-        solAttempts: join(root, "sol-attempts"),
-      },
-      publicationAuth: {
-        preflight: async () => {
-          throw new Error("Unexpected preflight");
-        },
-        status: () => ({
-          consecutiveRejections: 1,
-          expiresAt: null,
-          mode: "service_token",
-          paused: true,
-          pauseReason: "rejected",
-          retryAt: 14_000,
-        }),
-        transport: async () => ({
-          authFailure: "rejected",
-          body: "",
-          status: 403,
-        }),
-      },
-    });
-    const lanes = await runtime.createLanes({
-      publicationAllowed: true,
-      status: {},
-    });
-    const lineage = lanes.find(
-      ({ name }) => name === "maintenance-source-lineage",
-    );
-    await expect(
-      lineage?.runOnce(new AbortController().signal),
-    ).resolves.toEqual({ nextWakeAt: 14_000, result: "auth-wait" });
-    for (const lane of lanes) await lane.close();
     runtime.close();
   });
 

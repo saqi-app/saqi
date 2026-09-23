@@ -3,7 +3,7 @@ import { z } from "zod";
 import { LIMITS, PROJECTION_SCHEMA_VERSION } from "./constants.js";
 import { sha256Canonical } from "./hash.js";
 import { parseLocalizedCount } from "./parse.js";
-import { canonicalAuthorUrl, canonicalInventoryUrl } from "./url.js";
+import { canonicalAuthorUrl, canonicalInventoryPaginationUrl } from "./url.js";
 
 export const AuthorInventoryPageSchema = z
   .object({
@@ -84,12 +84,19 @@ async function certifyPass(input: unknown): Promise<CertifiedInventoryPass> {
   const authors = new Map<string, CertifiedInventoryAuthor>();
   const pages: Readonly<Record<string, unknown>>[] = [];
   let duplicateReferences = 0;
+  let expectedSourceHref = canonicalInventoryPaginationUrl("/authers-1").href;
 
   for (const [index, projection] of projections.entries()) {
     const expectedPage = index + 1;
-    const source = canonicalInventoryUrl(projection.sourceUrl);
+    const source = canonicalInventoryPaginationUrl(projection.sourceUrl);
     if (projection.challengeDetected) throw new Error("SOURCE_CHALLENGE");
-    if (projection.page !== expectedPage || source.page !== expectedPage) {
+    if (
+      projection.page !== expectedPage ||
+      source.href !== expectedSourceHref ||
+      (source.cursor === null
+        ? source.page !== expectedPage
+        : source.page !== 1)
+    ) {
       throw new Error("SOURCE_AUTHOR_INVENTORY_PAGE_GAP");
     }
     const finalPage = index === projections.length - 1;
@@ -105,11 +112,18 @@ async function certifyPass(input: unknown): Promise<CertifiedInventoryPass> {
       if (projection.authors.length === 0 || projection.nextPageHref === null) {
         throw new Error("SOURCE_AUTHOR_INVENTORY_NEXT_PAGE_INVALID");
       }
-      const next = canonicalInventoryUrl(projection.nextPageHref);
-      if (next.page !== expectedPage + 1) {
+      const next = canonicalInventoryPaginationUrl(projection.nextPageHref);
+      const validNumberedPage =
+        source.cursor === null &&
+        next.cursor === null &&
+        next.page === expectedPage + 1;
+      const validCursorPage =
+        next.cursor !== null && next.page === 1 && next.href !== source.href;
+      if (!validNumberedPage && !validCursorPage) {
         throw new Error("SOURCE_AUTHOR_INVENTORY_NEXT_PAGE_INVALID");
       }
       canonicalNextPageHref = next.href;
+      expectedSourceHref = next.href;
     }
 
     const normalizedAuthors = projection.authors
@@ -176,7 +190,10 @@ async function certifyPass(input: unknown): Promise<CertifiedInventoryPass> {
 }
 
 function requiredName(value: string): string {
-  const normalized = value.trim().normalize("NFC");
+  const normalized = value
+    .normalize("NFC")
+    .replace(/\s*[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:قصيدة|قصائد)\s*$/u, "")
+    .trim();
   if (normalized.length === 0) throw new Error("SOURCE_AUTHOR_NAME_EMPTY");
   return normalized;
 }

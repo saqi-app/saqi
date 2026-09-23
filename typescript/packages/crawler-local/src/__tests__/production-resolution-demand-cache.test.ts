@@ -2257,8 +2257,8 @@ function demand(index: number, modelKeys = ["sol-5.6"]) {
 
 function sourceWork(index: number): WorkItem {
   const input = {
-    authorHref: `https://source.invalid/writers/author-${String(index)}`,
-    poemHref: `https://source.invalid/works/${String(index)}`,
+    authorHref: `https://source.invalid/cat-author-${String(index)}`,
+    poemHref: `https://source.invalid/poem${String(index)}.html`,
   };
   const definition = {
     implementationVersion: collectorImplementationVersion(),
@@ -2289,15 +2289,15 @@ function detail(work: WorkItem, index: number) {
   const source = {
     author: {
       canonicalId: `source:author:author-${String(index)}`,
-      href: `https://source.invalid/writers/author-${String(index)}`,
-      path: `/writers/author-${String(index)}`,
+      href: `https://source.invalid/cat-author-${String(index)}`,
+      path: `/cat-author-${String(index)}`,
       slug: `author-${String(index)}`,
     },
     canonicalId: `source:poem:${String(index)}`,
-    href: `https://source.invalid/works/${String(index)}`,
+    href: `https://source.invalid/poem${String(index)}.html`,
     lines: ["صدر", "عجز"],
     numericId: String(index),
-    slug: `work-${String(index)}`,
+    slug: `poem${String(index)}`,
     structure: "classical",
     title: "قصيدة",
     verses: 1,

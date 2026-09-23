@@ -11,7 +11,7 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { currentSource } from "@saqi/source-adapter";
+import { canonicalAuthorUrl, currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
@@ -66,6 +66,7 @@ interface WorkRow {
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 const Sha256Schema = z.string().regex(/^[a-f\d]{64}$/);
+const AuthorManifestIdentitySchema = z.looseObject({ authorHref: z.url() });
 const NullableSha256Schema = Sha256Schema.nullable();
 const LedgerStateKeySchema = z.string().trim().min(1).max(128);
 const LedgerTimestampSchema = z.number().int().nonnegative();
@@ -228,6 +229,11 @@ const RETIRE_UNCLAIMED_SQL = `UPDATE work_item
   WHERE work_key = ? AND attempt_count = 0
     AND NOT EXISTS (SELECT 1 FROM checkpoint WHERE checkpoint.work_key = work_item.work_key)
     AND state IN ('pending','retry_wait','quota_wait')`;
+const RETIRE_RUNNABLE_AUTHOR_MANIFEST_SQL = `UPDATE work_item
+  SET state = 'imported', last_error_code = NULL,
+      available_at = ?, updated_at = ?
+  WHERE work_key = ?
+    AND state IN ('pending','retry_wait','quota_wait')`;
 const ReadyWorkExistsSchema = z.object({ ready: z.literal([0, 1]) });
 const StartedWorkAvailabilitySchema = z.object({
   earliest: z.number().nullable(),
@@ -299,6 +305,23 @@ const COUNT_FANOUT_PRIORITY_HINTS_SQL =
   "SELECT COUNT(*) AS count FROM fanout_priority_hint";
 const FIND_FANOUT_PRIORITY_HINT_SQL =
   "SELECT 1 FROM fanout_priority_hint WHERE work_key = ?";
+const RETIRED_PROVIDER_PROFILES = [
+  [
+    "poem-enrichment-agy-claude-opus-4.6-thinking",
+    "agy-claude-opus-4-6-enrichment-v1",
+  ],
+  [
+    "poem-enrichment-agy-claude-opus-4.6-thinking",
+    "agy-claude-opus-4-6-word-gloss-v2",
+  ],
+  [
+    "poem-enrichment-agy-gemini-3.1-pro-high",
+    "agy-gemini-3-1-pro-high-word-gloss-v2",
+  ],
+  ["poem-enrichment-claude-opus-5", "claude-opus-5-enrichment-v1"],
+  ["poem-enrichment-claude-opus-5", "claude-opus-5-word-gloss-v2"],
+] as const;
+
 export interface OriginLease {
   readonly leaseEpoch: number;
   readonly origin: string;
@@ -532,11 +555,8 @@ export interface ReadyWorkScan {
 }
 
 export class LostLeaseError extends Error {
-  constructor(
-    message = "The fenced lease is no longer current",
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
+  constructor(message = "The fenced lease is no longer current") {
+    super(message);
     this.name = "LostLeaseError";
   }
 }
@@ -968,6 +988,24 @@ export class Ledger {
     return [...this.#seedMany(definitions, now, false).results];
   }
 
+  /** Inventory revisions are monotonic per author, not per refresh window.
+   * A count/name returning to an older value must not reuse superseded or
+   * previously succeeded evidence. Unchanged inventories retain exact keys.
+   * Count/name stability does NOT certify unchanged poem content: detecting
+   * same-count edits requires a separate bounded freshness sweep policy. */
+  seedInventoryAuthorManifests(
+    definitions: readonly WorkDefinition[],
+    now = Date.now(),
+  ): readonly SeedResult[] {
+    if (
+      definitions.some(
+        ({ kind }) => kind !== collectionWorkKinds().authorManifest,
+      )
+    )
+      throw new Error("Inventory author batch contains non-author work");
+    return this.#seedMany(definitions, now, false, true).results;
+  }
+
   seedPoems(
     definitions: readonly WorkDefinition[],
     now = Date.now(),
@@ -978,6 +1016,119 @@ export class Ledger {
       throw new Error("Poem batch contains a non-poem work definition");
     }
     return this.#seedMany(definitions, now, true);
+  }
+
+  /** Retires older unclaimed author-manifest revisions only after their
+   * stable inventory-derived replacements exist. Running and terminal rows
+   * remain immutable evidence. Safe to repeat after startup or a crash. */
+  coalesceAuthorManifestWork(
+    replacements: readonly Readonly<{
+      authorHref: string;
+      replacementWorkKey: string;
+    }>[],
+    now = Date.now(),
+  ): number {
+    return this.#immediate(() =>
+      this.#coalesceAuthorManifestWork(replacements, now),
+    );
+  }
+
+  /** Bounds pre-stable-identity inventory debt without requiring a fresh
+   * inventory pass. For each canonical author, retain the newest runnable
+   * generation-keyed row and retire only its older unclaimed duplicates.
+   * Running and terminal evidence is intentionally outside this scan. */
+  coalesceLegacyAuthorManifestGenerations(now = Date.now()): number {
+    const kind = collectionWorkKinds().authorManifest;
+    return this.#immediate(() => {
+      const rows = this.#database
+        .prepare<
+          [string],
+          { created_at: number; input_json: string; work_key: string }
+        >(
+          `SELECT work_key, input_json, created_at
+             FROM work_item
+            WHERE kind = ?
+              AND state IN ('pending','retry_wait','quota_wait')
+              AND json_valid(input_json)
+              AND json_type(input_json, '$.refreshGeneration') = 'text'
+            ORDER BY created_at DESC, work_key DESC`,
+        )
+        .all(kind);
+      const retainedByAuthor = new Map<string, string>();
+      const retire = this.#database.prepare(
+        RETIRE_RUNNABLE_AUTHOR_MANIFEST_SQL,
+      );
+      let retired = 0;
+      for (const row of rows) {
+        const input = AuthorManifestIdentitySchema.parse(
+          JSON.parse(row.input_json),
+        );
+        const authorHref = canonicalAuthorUrl(input.authorHref).href;
+        const retainedWorkKey = retainedByAuthor.get(authorHref);
+        if (retainedWorkKey === undefined) {
+          retainedByAuthor.set(authorHref, row.work_key);
+          continue;
+        }
+        const changed = retire.run(now, now, row.work_key);
+        if (changed.changes !== 1) continue;
+        retired += 1;
+        this.#appendEvent(
+          row.work_key,
+          null,
+          null,
+          "version_retired",
+          {
+            reason: "SOURCE_AUTHOR_MANIFEST_LEGACY_GENERATION_COALESCED",
+            replacementWorkKey: retainedWorkKey,
+          },
+          now,
+        );
+      }
+      return retired;
+    });
+  }
+
+  /** True only for the one-time transition from generation-keyed manifests
+   * to inventory-revision identity. A caller must separately prove that the
+   * exact inventory job it intends to run is durably queued. */
+  legacyAuthorManifestBootstrapEligible(
+    inventoryWorkKey: string,
+    inventoryKind: string,
+  ): boolean {
+    const inventory = this.get(Sha256Schema.parse(inventoryWorkKey));
+    if (
+      inventory?.kind !== inventoryKind ||
+      !["pending", "retry_wait", "quota_wait"].includes(inventory.state)
+    ) {
+      return false;
+    }
+    const kind = collectionWorkKinds().authorManifest;
+    const row = this.#database
+      .prepare<
+        [string],
+        { active_legacy: number; active_total: number; stable_total: number }
+      >(
+        `SELECT
+           SUM(CASE
+             WHEN state IN ('pending','retry_wait','quota_wait','running')
+              AND json_type(input_json, '$.refreshGeneration') = 'text'
+             THEN 1 ELSE 0 END) AS active_legacy,
+           SUM(CASE
+             WHEN state IN ('pending','retry_wait','quota_wait','running')
+             THEN 1 ELSE 0 END) AS active_total,
+           SUM(CASE
+             WHEN json_type(input_json, '$.inventoryPoemCount') IS NOT NULL
+             THEN 1 ELSE 0 END) AS stable_total
+         FROM work_item
+         WHERE kind = ? AND json_valid(input_json)`,
+      )
+      .get(kind);
+    const activeTotal = row?.active_total ?? 0;
+    return (
+      activeTotal > 0 &&
+      (row?.active_legacy ?? 0) === activeTotal &&
+      (row?.stable_total ?? 0) === 0
+    );
   }
 
   recordSourceAuthorMetadata(
@@ -1042,12 +1193,49 @@ export class Ledger {
          WHERE source_name = ? AND author_href = ?`,
       )
       .get(currentSource().name, authorHref);
-    return row
-      ? {
-          authorNameArabic: row.author_name_arabic,
-          refreshGeneration: row.refresh_generation,
+    if (row)
+      return {
+        authorNameArabic: row.author_name_arabic,
+        refreshGeneration: row.refresh_generation,
+      };
+
+    // Historical collection artifacts can preserve a decomposed Unicode path
+    // while a later inventory observes its NFC-equivalent transport spelling.
+    // Exact bytes remain authoritative for requests, but metadata belongs to
+    // the normalized author identity. This bounded fallback runs only after an
+    // exact miss and selects the newest canonically equivalent observation.
+    const canonicalId = canonicalAuthorUrl(authorHref).canonicalId;
+    const candidates = this.#database
+      .prepare<
+        [string],
+        {
+          author_href: string;
+          author_name_arabic: string;
+          refresh_generation: string;
         }
-      : null;
+      >(
+        `SELECT author_href, author_name_arabic, refresh_generation
+         FROM source_author_metadata WHERE source_name = ?
+         ORDER BY observed_at DESC, author_href LIMIT 20001`,
+      )
+      .all(currentSource().name);
+    if (candidates.length > 20_000)
+      throw new Error("SOURCE_AUTHOR_METADATA_FALLBACK_UNBOUNDED");
+    for (const candidate of candidates) {
+      try {
+        if (
+          canonicalAuthorUrl(candidate.author_href).canonicalId === canonicalId
+        )
+          return {
+            authorNameArabic: candidate.author_name_arabic,
+            refreshGeneration: candidate.refresh_generation,
+          };
+      } catch {
+        // Ignore a corrupt legacy row; exact lookup and all valid candidates
+        // remain available without weakening URL validation.
+      }
+    }
+    return null;
   }
 
   get(key: string): null | WorkItem {
@@ -2461,6 +2649,107 @@ export class Ledger {
         );
       }
       return rows.length;
+    });
+  }
+
+  /** Terminalizes only the explicitly enumerated retired executable profiles.
+   * Completed work remains immutable, and any live claim or output-bearing
+   * nonterminal row aborts the entire bounded transaction. */
+  retireLegacyProviderWork(limit: number, now = Date.now()): number {
+    const bounded = LedgerBatchLimitSchema.parse(limit);
+    if (!Number.isSafeInteger(now) || now < 0)
+      throw new Error("Provider retirement timestamp must be nonnegative");
+    return this.#immediate(() => {
+      const liveClaim = this.#database.prepare<
+        [string, string],
+        { work_key: string }
+      >(
+        `SELECT work_key FROM work_item INDEXED BY work_item_worker_claim
+          WHERE kind = ? AND implementation_version = ?
+            AND schema_version IN ('saqi.poem-enrichment-input@1',
+                                   'saqi.poem-enrichment-input@2')
+            AND state = 'running'
+          LIMIT 1`,
+      );
+      const unsafeOutput = this.#database.prepare<
+        [string, string],
+        { work_key: string }
+      >(
+        `SELECT work_key FROM work_item INDEXED BY work_item_worker_claim
+          WHERE kind = ? AND implementation_version = ?
+            AND schema_version IN ('saqi.poem-enrichment-input@1',
+                                   'saqi.poem-enrichment-input@2')
+            AND state IN ('pending','retry_wait','quota_wait')
+            AND output_artifact_hash IS NOT NULL
+          LIMIT 1`,
+      );
+      const unknownSchema = this.#database.prepare<
+        [string, string],
+        { work_key: string }
+      >(
+        `SELECT work_key FROM work_item INDEXED BY work_item_worker_claim
+          WHERE kind = ? AND implementation_version = ?
+            AND schema_version NOT IN ('saqi.poem-enrichment-input@1',
+                                       'saqi.poem-enrichment-input@2')
+            AND state IN ('pending','retry_wait','quota_wait','running')
+          LIMIT 1`,
+      );
+      for (const [kind, implementationVersion] of RETIRED_PROVIDER_PROFILES) {
+        if (unknownSchema.get(kind, implementationVersion))
+          throw new Error("PROVIDER_RETIREMENT_SCHEMA_UNKNOWN");
+        if (liveClaim.get(kind, implementationVersion))
+          throw new Error("PROVIDER_RETIREMENT_LIVE_CLAIM");
+        if (unsafeOutput.get(kind, implementationVersion))
+          throw new Error("PROVIDER_RETIREMENT_OUTPUT_PRESENT");
+      }
+      const select = this.#database.prepare<
+        [string, string, number],
+        { work_key: string }
+      >(
+        `SELECT work_key FROM work_item INDEXED BY work_item_worker_claim
+          WHERE kind = ? AND implementation_version = ?
+            AND schema_version IN ('saqi.poem-enrichment-input@1',
+                                   'saqi.poem-enrichment-input@2')
+            AND state IN ('pending','retry_wait','quota_wait')
+            AND output_artifact_hash IS NULL
+          ORDER BY schema_version, state, available_at, priority DESC,
+                   created_at, work_key
+          LIMIT ?`,
+      );
+      const update = this.#database.prepare(
+        `UPDATE work_item
+            SET state = 'dead_letter', last_error_code = 'PROVIDER_RETIRED',
+                available_at = ?, updated_at = ?
+          WHERE work_key = ? AND state IN ('pending','retry_wait','quota_wait')
+            AND schema_version IN ('saqi.poem-enrichment-input@1',
+                                   'saqi.poem-enrichment-input@2')
+            AND output_artifact_hash IS NULL`,
+      );
+      let retired = 0;
+      for (const [kind, implementationVersion] of RETIRED_PROVIDER_PROFILES) {
+        if (retired >= bounded) break;
+        const rows = select.all(kind, implementationVersion, bounded - retired);
+        for (const { work_key: workKeyValue } of rows) {
+          const changed = update.run(now, now, workKeyValue);
+          if (changed.changes !== 1)
+            throw new Error("Provider retirement lost its transaction");
+          this.#appendEvent(
+            workKeyValue,
+            null,
+            null,
+            "failed",
+            {
+              errorCode: "PROVIDER_RETIRED",
+              implementationVersion,
+              kind,
+              terminal: true,
+            },
+            now,
+          );
+          retired += 1;
+        }
+      }
+      return retired;
     });
   }
 
@@ -3939,6 +4228,113 @@ export class Ledger {
     });
   }
 
+  /** Reopens terminal work only when a newer bounded retry policy raises the
+   * attempt ceiling. This is an automatic upgrade recovery, not a general
+   * dead-letter escape hatch: kind, implementation, schema, error, and the
+   * strictly-lower attempt count must all match. */
+  requeueDeadLettersBelowAttemptThreshold(
+    kind: string,
+    requirements: Required<ClaimRequirements>,
+    errorCode: string,
+    maximumAttempts: number,
+    now = Date.now(),
+  ): number {
+    validateClaim("dead-letter-policy-requeue", 1, [kind], requirements);
+    requireErrorCode(errorCode);
+    if (!Number.isSafeInteger(maximumAttempts) || maximumAttempts < 1)
+      throw new Error("Attempt threshold must be a positive integer");
+    return this.#immediate(() => {
+      const rows = this.#database
+        .prepare<
+          [string, string, string, string, number],
+          { work_key: string }
+        >(
+          `SELECT work_key FROM work_item
+           WHERE kind = ? AND implementation_version = ?
+             AND schema_version = ? AND last_error_code = ?
+             AND state = 'dead_letter' AND attempt_count < ?
+           ORDER BY work_key`,
+        )
+        .all(
+          kind,
+          requirements.implementationVersion,
+          requirements.schemaVersion,
+          errorCode,
+          maximumAttempts,
+        );
+      const update = this.#database.prepare(REQUEUE_DEAD_LETTER_SQL);
+      for (const row of rows) {
+        const changed = update.run(now, now, row.work_key);
+        if (changed.changes !== 1)
+          throw new Error("Policy dead-letter requeue lost its transaction");
+        this.#appendEvent(
+          row.work_key,
+          null,
+          null,
+          "policy_requeued",
+          { errorCode, maximumAttempts, requirements },
+          now,
+        );
+      }
+      return rows.length;
+    });
+  }
+
+  requeueDeadLetterWorkKeys(
+    workKeys: readonly string[],
+    kinds: readonly string[],
+    errorCodes: readonly string[],
+    now = Date.now(),
+  ): number {
+    if (workKeys.length === 0 || workKeys.length > 100)
+      throw new Error("Dead-letter requeue requires 1 to 100 work keys");
+    if (kinds.length === 0 || errorCodes.length === 0)
+      throw new Error("Requeue kinds and error codes are required");
+    const keys = [...new Set(workKeys.map((key) => Sha256Schema.parse(key)))];
+    if (keys.length !== workKeys.length)
+      throw new Error("Dead-letter requeue contains duplicate work keys");
+    for (const code of errorCodes) requireErrorCode(code);
+    return this.#immediate(() => {
+      const select = this.#database.prepare<
+        [string, ...string[]],
+        { kind: string; last_error_code: null | string; state: WorkState }
+      >(
+        `SELECT kind, last_error_code, state FROM work_item
+         WHERE work_key = ?`,
+      );
+      const allowedKinds = new Set(kinds);
+      const allowedErrorCodes = new Set(errorCodes);
+      for (const key of keys) {
+        const row = select.get(key);
+        if (
+          row?.state !== "dead_letter" ||
+          !allowedKinds.has(row.kind) ||
+          row.last_error_code === null ||
+          !allowedErrorCodes.has(row.last_error_code)
+        ) {
+          throw new Error(
+            "Dead-letter requeue target does not match its fence",
+          );
+        }
+      }
+      const update = this.#database.prepare(REQUEUE_DEAD_LETTER_SQL);
+      for (const key of keys) {
+        const changed = update.run(now, now, key);
+        if (changed.changes !== 1)
+          throw new Error("Dead-letter requeue lost its transaction");
+        this.#appendEvent(
+          key,
+          null,
+          null,
+          "operator_requeued",
+          { errorCodes, kinds, targeted: true },
+          now,
+        );
+      }
+      return keys.length;
+    });
+  }
+
   /** Reopens only completed Sol fanout whose exact immutable source artifact
    * was rejected by the legacy generic publication lane. This is deliberately
    * narrower than a general succeeded-work requeue: canonical rebinding can
@@ -5090,10 +5486,97 @@ export class Ledger {
     return legacyDefinition;
   }
 
+  #coalesceAuthorManifestWork(
+    replacements: readonly Readonly<{
+      authorHref: string;
+      replacementWorkKey: string;
+    }>[],
+    now = Date.now(),
+  ): number {
+    const kind = collectionWorkKinds().authorManifest;
+    const parsed = replacements.map((replacement) => ({
+      authorHref: canonicalAuthorUrl(replacement.authorHref).href,
+      replacementWorkKey: Sha256Schema.parse(replacement.replacementWorkKey),
+    }));
+    const replacement = this.#database.prepare<
+      [string],
+      { input_json: string; kind: string; state: string; insertion_id: number }
+    >(
+      `SELECT kind, input_json, state, rowid AS insertion_id FROM work_item WHERE work_key = ?`,
+    );
+    const candidates = this.#database.prepare<
+      [string],
+      { author_href: string; work_key: string; insertion_id: number }
+    >(
+      `SELECT work_key, rowid AS insertion_id, json_extract(input_json, '$.authorHref') AS author_href
+           FROM work_item
+          WHERE kind = ? AND state IN ('pending','retry_wait','quota_wait')
+          ORDER BY created_at, work_key`,
+    );
+    const retire = this.#database.prepare(RETIRE_RUNNABLE_AUTHOR_MANIFEST_SQL);
+    let retired = 0;
+    const replacementByAuthor = new Map<string, string>();
+    const replacementInsertionByAuthor = new Map<string, number>();
+    for (const item of parsed) {
+      const prior = replacementByAuthor.get(item.authorHref);
+      if (prior !== undefined && prior !== item.replacementWorkKey) {
+        throw new Error("Conflicting author-manifest replacements");
+      }
+      const durable = replacement.get(item.replacementWorkKey);
+      if (durable?.kind !== kind) {
+        throw new Error("Author-manifest replacement is not durably seeded");
+      }
+      const replacementInput = AuthorManifestIdentitySchema.parse(
+        JSON.parse(durable.input_json),
+      );
+      if (
+        canonicalAuthorUrl(replacementInput.authorHref).href !== item.authorHref
+      ) {
+        throw new Error("Author-manifest replacement identity mismatch");
+      }
+      replacementByAuthor.set(item.authorHref, item.replacementWorkKey);
+      // Delayed callers may hold a replacement superseded by another
+      // transaction. Never let such stale evidence retire current work.
+      if (durable.state !== "imported")
+        replacementInsertionByAuthor.set(item.authorHref, durable.insertion_id);
+    }
+    // A certified inventory can contain thousands of authors. Scan runnable
+    // manifest debt once, rather than scanning the same ledger for each
+    // author while holding the writer lock. The exact stored URL comparison
+    // intentionally preserves the previous SQL identity boundary.
+    if (replacementByAuthor.size === 0) return 0;
+    for (const candidate of candidates.all(kind)) {
+      const replacementWorkKey = replacementByAuthor.get(candidate.author_href);
+      if (
+        replacementWorkKey !== undefined &&
+        candidate.work_key !== replacementWorkKey &&
+        candidate.insertion_id <
+          (replacementInsertionByAuthor.get(candidate.author_href) ?? 0)
+      ) {
+        const changed = retire.run(now, now, candidate.work_key);
+        if (changed.changes !== 1) continue;
+        retired += 1;
+        this.#appendEvent(
+          candidate.work_key,
+          null,
+          null,
+          "version_retired",
+          {
+            reason: "SOURCE_AUTHOR_MANIFEST_SUPERSEDED",
+            replacementWorkKey,
+          },
+          now,
+        );
+      }
+    }
+    return retired;
+  }
+
   #seedMany(
     definitions: readonly WorkDefinition[],
     now: number,
     toleratePoemConflicts: boolean,
+    inventoryAuthorRevisions = false,
   ): PoemSeedBatchResult {
     const prepared = definitions.map((definition) => {
       const parsed = WorkDefinitionSchema.parse(definition);
@@ -5108,6 +5591,37 @@ export class Ledger {
     if (prepared.length === 0) return { conflicts: [], results: [] };
 
     return this.#immediate(() => {
+      const latestInventoryByAuthor = new Map<
+        string,
+        Readonly<{ input: Record<string, unknown>; state: string }>
+      >();
+      const maximumInventoryRevisionByAuthor = new Map<string, number>();
+      if (inventoryAuthorRevisions) {
+        const rows = this.#database
+          .prepare<[string], { input_json: string; state: string }>(
+            `SELECT input_json, state FROM work_item
+            WHERE kind = ? AND json_type(input_json, '$.inventoryPoemCount') IS NOT NULL
+            ORDER BY rowid DESC`,
+          )
+          .all(collectionWorkKinds().authorManifest);
+        for (const row of rows) {
+          const input = JsonRecordSchema.parse(JSON.parse(row.input_json));
+          const author = AuthorManifestIdentitySchema.parse(input).authorHref;
+          const revision = z
+            .int()
+            .nonnegative()
+            .parse(input["inventoryRevision"] ?? 0);
+          maximumInventoryRevisionByAuthor.set(
+            author,
+            Math.max(
+              maximumInventoryRevisionByAuthor.get(author) ?? 0,
+              revision,
+            ),
+          );
+          if (!latestInventoryByAuthor.has(author))
+            latestInventoryByAuthor.set(author, { input, state: row.state });
+        }
+      }
       const insert = this.#database.prepare(WORK_ITEM_INSERT_SQL);
       const select = this.#database.prepare<
         [string],
@@ -5150,12 +5664,62 @@ export class Ledger {
       const results: SeedResult[] = [];
       const conflicts: PoemIdentityConflictError[] = [];
       for (const preparedDefinition of prepared) {
-        const parsed = this.#preserveStartedSolProfile(
+        let parsed = this.#preserveStartedSolProfile(
           preparedDefinition.parsed,
           now,
         );
+        if (inventoryAuthorRevisions) {
+          const author = AuthorManifestIdentitySchema.parse(
+            parsed.input,
+          ).authorHref;
+          const latest = latestInventoryByAuthor.get(author);
+          if (latest !== undefined) {
+            const sameRevision =
+              latest.input["authorNameArabic"] ===
+                parsed.input["authorNameArabic"] &&
+              latest.input["inventoryPoemCount"] ===
+                parsed.input["inventoryPoemCount"];
+            const revision = z
+              .int()
+              .nonnegative()
+              .parse(latest.input["inventoryRevision"] ?? 0);
+            // Imported supersessions are not runnable or valid collected
+            // evidence, even when a legacy timestamp tie chose this row.
+            const nextRevision =
+              sameRevision &&
+              latest.input["refreshGeneration"] === undefined &&
+              latest.state !== "imported" &&
+              revision === maximumInventoryRevisionByAuthor.get(author)
+                ? revision
+                : z
+                    .int()
+                    .nonnegative()
+                    .parse(
+                      (maximumInventoryRevisionByAuthor.get(author) ??
+                        revision) + 1,
+                    );
+            const input = {
+              ...parsed.input,
+              ...(nextRevision === 0
+                ? {}
+                : { inventoryRevision: nextRevision }),
+            };
+            parsed = { ...parsed, input, inputHash: inputHash(input) };
+          }
+          latestInventoryByAuthor.set(author, {
+            input: parsed.input,
+            state: "pending",
+          });
+          maximumInventoryRevisionByAuthor.set(
+            author,
+            z
+              .int()
+              .nonnegative()
+              .parse(parsed.input["inventoryRevision"] ?? 0),
+          );
+        }
         const key = workKey(parsed);
-        const { inputJson } = preparedDefinition;
+        const inputJson = canonicalJson(parsed.input);
         if (parsed.kind === collectionWorkKinds().poemDetail) {
           const identity = poemIdentity(parsed.input);
           try {
@@ -5211,6 +5775,17 @@ export class Ledger {
           event.run(randomUUID(), key, now);
         }
         results.push({ inserted: result.changes === 1, workKey: key });
+      }
+      if (inventoryAuthorRevisions) {
+        this.#coalesceAuthorManifestWork(
+          results.map((result, index) => ({
+            authorHref: AuthorManifestIdentitySchema.parse(
+              prepared[index]?.parsed.input,
+            ).authorHref,
+            replacementWorkKey: result.workKey,
+          })),
+          now,
+        );
       }
       return { conflicts, results };
     });

@@ -7,6 +7,8 @@ import { z } from "zod";
 import {
   AuthorInventoryCollector,
   type AuthorInventoryLaneStatus,
+  authorInventoryWorkKind,
+  scheduledInventoryRefreshGeneration,
 } from "../collection/author-inventory-lane.js";
 import { SourceChromeCollector } from "../collection/collection-source-browser.js";
 import {
@@ -22,6 +24,7 @@ import {
   CollectorRecoveryController,
   type CollectorRecoveryState,
 } from "../collection/collector-recovery.js";
+import { SourceRequestTelemetry } from "../collection/source-request-telemetry.js";
 import {
   type EnrichmentStartupReconciliationReport,
   reconcileExistingEnrichmentInputs,
@@ -134,87 +137,7 @@ type ApprovedSolResolution =
     >;
 
 const PUBLICATION_BLOCKING_RESOLUTION_PRIORITY = 1_000;
-export const REDACTED_SOURCE_ORIGIN = "https://source.invalid";
 const CanonicalPoemIdSchema = z.uuid();
-const SourceLineageMaintenanceStateSchema = z.enum([
-  "active",
-  "blocked",
-  "complete",
-  "failed",
-  "idle",
-]);
-const SourceLineageMaintenanceResponseSchema = z.strictObject({
-  ok: z.literal(true),
-  result: z.looseObject({
-    remaining: z.number().int().nonnegative(),
-    state: SourceLineageMaintenanceStateSchema,
-  }),
-});
-
-function diagnosticWorkKind(kind: string): string {
-  if (kind.endsWith("_author_manifest")) return "source_author_manifest";
-  if (kind.endsWith("_poem_detail")) return "source_poem_detail";
-  return kind;
-}
-
-function diagnosticSourceErrorCode(code: null): null;
-function diagnosticSourceErrorCode(code: string): string;
-function diagnosticSourceErrorCode(code: null | string): null | string;
-function diagnosticSourceErrorCode(code: null | string): null | string {
-  if (
-    code === null ||
-    code.startsWith("SOURCE_") ||
-    code.startsWith("COLLECTOR_")
-  )
-    return code;
-  if (code.endsWith("_HUMAN_REQUIRED")) return "SOURCE_HUMAN_REQUIRED";
-  if (code.endsWith("_NETWORK_UNAVAILABLE"))
-    return "SOURCE_NETWORK_UNAVAILABLE";
-  if (code.endsWith("_RATE_LIMITED")) return "SOURCE_RATE_LIMITED";
-  return "SOURCE_COLLECTION_FAILED";
-}
-
-export function diagnosticLedgerStatus(
-  status: ReturnType<Ledger["status"]>,
-): ReturnType<Ledger["status"]> {
-  const sourceErrorCodes = new Set(
-    status.affectedByKindAndErrorCode
-      .filter(({ kind }) => diagnosticWorkKind(kind) !== kind)
-      .map(({ code }) => code),
-  );
-  const diagnosticCode = (code: string): string =>
-    sourceErrorCodes.has(code) ? diagnosticSourceErrorCode(code) : code;
-  return {
-    ...status,
-    affectedByErrorCode: status.affectedByErrorCode.map((entry) => ({
-      ...entry,
-      code: diagnosticCode(entry.code),
-    })),
-    affectedByKindAndErrorCode: status.affectedByKindAndErrorCode.map(
-      (entry) => ({
-        ...entry,
-        code:
-          diagnosticWorkKind(entry.kind) === entry.kind
-            ? entry.code
-            : diagnosticSourceErrorCode(entry.code),
-        kind: diagnosticWorkKind(entry.kind),
-      }),
-    ),
-    failureEventsByCode: status.failureEventsByCode.map((entry) => ({
-      ...entry,
-      code: diagnosticCode(entry.code),
-    })),
-    kindProgress: status.kindProgress.map((entry) => ({
-      ...entry,
-      kind: diagnosticWorkKind(entry.kind),
-    })),
-    origins: status.origins.map((origin) => ({
-      ...origin,
-      origin: REDACTED_SOURCE_ORIGIN,
-      stopReason: diagnosticSourceErrorCode(origin.stopReason),
-    })),
-  };
-}
 
 export function resolveApprovedSolBinding(
   cache: ApprovedSolResolutionCache,
@@ -334,6 +257,7 @@ const PublicationPreflightStateValueSchema = z.enum([
   "retry_wait",
 ]);
 const PublicationPreflightStateSchema = z.object({
+  errorCode: z.string().optional(),
   state: PublicationPreflightStateValueSchema,
 });
 const MAXIMUM_STATUS_BYTES = 2 * 1024 * 1024;
@@ -551,14 +475,12 @@ export class UnifiedRigRuntime {
           environment: this.#environment,
           now: this.#now,
         });
-        if (capacity.go) {
-          this.#publicationAuthPreflight =
-            await this.#publicationAuth.preflight();
-          publicationAllowed =
-            PublicationPreflightStateSchema.parse(
-              this.#publicationAuthPreflight,
-            ).state === "ready";
-        }
+        this.#publicationAuthPreflight =
+          await this.#publicationAuth.preflight();
+        publicationAllowed =
+          capacity.go &&
+          PublicationPreflightStateSchema.parse(this.#publicationAuthPreflight)
+            .state === "ready";
       } catch (error) {
         this.#publicationAuthPreflight = {
           errorCode:
@@ -613,7 +535,6 @@ export class UnifiedRigRuntime {
         },
       },
     ];
-    this.#createSourceLineageMaintenanceLane(lanes);
     const detailFanoutWake = new CoalescingLaneWake();
     let requestDetailFanoutScan: ((now: number) => void) | undefined;
     let requestFanoutWork: ((workKeys: readonly string[]) => void) | undefined;
@@ -656,6 +577,7 @@ export class UnifiedRigRuntime {
       enrichmentReconciliation: this.#enrichmentReconciliationStatus,
     };
     if (this.#config.collector.enabled) {
+      let inventoryCycleActive = false;
       ledger.retireIncompatible(
         [
           collectionWorkKinds().authorManifest,
@@ -666,9 +588,21 @@ export class UnifiedRigRuntime {
           schemaVersion: collectorSchemaVersion(),
         },
       );
+      ledger.coalesceLegacyAuthorManifestGenerations(this.#now());
+      const sourceRequestTelemetry = await SourceRequestTelemetry.open(
+        this.#paths.root,
+        { now: this.#now },
+      );
       const browser = await SourceChromeCollector.create({
+        ...(this.#config.collector.cdpEndpoint === null
+          ? {}
+          : { cdpEndpoint: this.#config.collector.cdpEndpoint }),
+        challengeResolutionTimeoutMs:
+          this.#config.collector.challengeResolutionTimeoutMs,
         headless: this.#config.collector.headless,
         minimumSourceGapMs: this.#config.collector.minimumSourceGapMs,
+        onSourceRequest: (event) =>
+          sourceRequestTelemetry.record(event.surface, event.outcome),
         profileDirectory: defaultChromeProfile(this.#paths.root),
       });
       if (this.#config.inventory.enabled) {
@@ -677,27 +611,68 @@ export class UnifiedRigRuntime {
         const refreshGeneration = this.#config.inventory.refreshGeneration;
         if (!productionAuthorsPath || !refreshGeneration)
           throw new Error("INVENTORY_CONFIGURATION_REQUIRED");
-        const inventory = new AuthorInventoryCollector({
-          artifacts,
-          browser,
-          ledger,
-          productionSourceAuthors: await this.#readBoundedJson(
-            productionAuthorsPath,
-          ),
-          refreshGeneration,
-        });
-        inventory.seed();
+        const productionSourceAuthors = await this.#readBoundedJson(
+          productionAuthorsPath,
+        );
+        let activeGeneration = "";
+        let inventory: AuthorInventoryCollector | null = null;
         lanes.push({
           name: "author-inventory",
           close: () => undefined,
           runOnce: async (signal) => {
-            const result = await inventory.run(signal);
-            if (result.stopped === "succeeded")
-              this.#authorInventoryStatus = result.status;
-            return {
-              nextWakeAt: this.#now() + this.#config.restart.idlePollMs,
-              result: result.stopped,
-            };
+            inventoryCycleActive = true;
+            try {
+              const scheduledGeneration = scheduledInventoryRefreshGeneration(
+                refreshGeneration,
+                this.#config.inventory.refreshIntervalMs,
+                this.#now(),
+              );
+              if (!inventory || scheduledGeneration !== activeGeneration) {
+                activeGeneration = scheduledGeneration;
+                inventory = new AuthorInventoryCollector({
+                  artifacts,
+                  browser,
+                  ledger,
+                  productionSourceAuthors,
+                  refreshGeneration: scheduledGeneration,
+                });
+              }
+              const inventorySeed = inventory.seed();
+              const bootstrapStableManifestIdentity =
+                ledger.legacyAuthorManifestBootstrapEligible(
+                  inventorySeed.workKey,
+                  authorInventoryWorkKind(),
+                );
+              const manifestProgress = ledger
+                .status()
+                .kindProgress.find(
+                  ({ kind }) => kind === collectionWorkKinds().authorManifest,
+                );
+              const manifestBacklog = manifestProgress
+                ? manifestProgress.byState.pending +
+                  manifestProgress.byState.quota_wait +
+                  manifestProgress.byState.retry_wait +
+                  manifestProgress.byState.running
+                : 0;
+              // A refresh generation can contain thousands of authors. Do
+              // not create manifest demand faster than the collector can
+              // consume the preceding generation; the seeded inventory job
+              // remains durable and will run once that backlog reaches zero.
+              if (manifestBacklog > 0 && !bootstrapStableManifestIdentity)
+                return {
+                  nextWakeAt: this.#now() + this.#config.restart.idlePollMs,
+                  result: "manifest_backlog",
+                };
+              const result = await inventory.run(signal);
+              if (result.stopped === "succeeded")
+                this.#authorInventoryStatus = result.status;
+              return {
+                nextWakeAt: this.#now() + this.#config.restart.idlePollMs,
+                result: result.stopped,
+              };
+            } finally {
+              inventoryCycleActive = false;
+            }
           },
         });
       }
@@ -722,6 +697,15 @@ export class UnifiedRigRuntime {
         close: () => coordinator.close(),
         ...(recovery ? { honorNextWakeAt: true, maximumSleepMs: 30_000 } : {}),
         runOnce: async (signal) => {
+          // Inventory and detail collection share one origin and one browser.
+          // Do not hold a poem lease while a long inventory traversal owns
+          // those resources; the next collector cycle will claim after the
+          // inventory lane releases them.
+          if (inventoryCycleActive)
+            return {
+              nextWakeAt: this.#now() + this.#config.restart.idlePollMs,
+              result: "inventory_wait",
+            };
           const recoveryBefore = recovery?.cycle(this.#now());
           if (recoveryBefore && recoveryBefore.state.phase !== "observing") {
             return {
@@ -840,12 +824,27 @@ export class UnifiedRigRuntime {
               if (cache) {
                 const cached = cache.resolveCollected(source, artifact);
                 if (cached) return cached;
+                // A full v4 export carries the production revision fingerprint
+                // and pointer evidence needed to create the exact same bound
+                // input offline. Prefer that verified bootstrap before waiting
+                // on the scoped Access endpoint; v2 exports simply return an
+                // unbound mapping and continue through the demand path below.
+                try {
+                  const bootstrapResolver = await activeLocalResolver();
+                  const bootstrap = await bootstrapResolver.resolve(
+                    source,
+                    artifact,
+                  );
+                  if (bootstrap?.binding) return bootstrap;
+                } catch (error) {
+                  this.#localFanoutResolutionErrors.set(provider, {
+                    code: resolutionErrorCode(error),
+                    retryAt: this.#now() + this.#config.restart.idlePollMs,
+                  });
+                }
                 cache.registerCollectedDemand(source, artifact, [
                   spec.modelKey,
                 ]);
-                // Demand-driven resolution owns freshness. Probing the large
-                // snapshot after a cache miss repeats expensive synchronous
-                // SQLite work and cannot make this request fresher.
                 return null;
               }
               const activeResolver = await activeLocalResolver();
@@ -876,6 +875,10 @@ export class UnifiedRigRuntime {
         lanes.push({
           name: `local-enrichment-fanout-${provider}`,
           close: () => undefined,
+          // Identity and binding misses are shared infrastructure gates. Honor
+          // their bounded retry instead of re-walking ready siblings at the
+          // supervisor's ordinary idle-poll cadence.
+          honorNextWakeAt: true,
           runOnce: async () => {
             const result = await localFanout.cycle({
               maximum: this.#config.localFanout.batchSize,
@@ -893,7 +896,8 @@ export class UnifiedRigRuntime {
               });
             return {
               nextWakeAt:
-                result.ready > 0 ? this.#now() : result.earliestWakeAt,
+                result.resolutionRetryAt ??
+                (result.ready > 0 ? this.#now() : result.earliestWakeAt),
               result:
                 result.scanned > 0 || result.seeded > 0
                   ? "progress"
@@ -911,7 +915,13 @@ export class UnifiedRigRuntime {
       detailFanoutWake.notify();
     });
     if (this.#config.fanout.enabled) {
-      const resolutionPath = this.#config.fanout.resolutionPath;
+      // Both fanout lanes consume the same production identity snapshot. A
+      // demand-driven fanout may omit its legacy static path while local
+      // enrichment supplies the shared bootstrap path, as the production rig
+      // does. Reuse it instead of reporting a missing snapshot that exists.
+      const resolutionPath =
+        this.#config.fanout.resolutionPath ??
+        this.#config.localFanout.resolutionPath;
       const staticResolutionStore = () => {
         if (!resolutionPath) throw new Error("FANOUT_RESOLUTION_PATH_REQUIRED");
         return this.#resolutionStore(resolutionPath);
@@ -988,6 +998,12 @@ export class UnifiedRigRuntime {
             if (cache) {
               const cached = cache.resolveCollected(source, artifact);
               if (cached) return cached;
+              const bootstrap = await resolveOrPending(() =>
+                staticResolutionStore().then((store) =>
+                  store.resolve(source, artifact),
+                ),
+              );
+              if (bootstrap?.binding) return bootstrap;
               cache.registerCollectedDemand(
                 source,
                 artifact,
@@ -1083,7 +1099,6 @@ export class UnifiedRigRuntime {
         // the resolution refresher wakes exact jobs as soon as they resolve.
         // Avoid reopening the ledger every global five-second idle poll.
         honorNextWakeAt: true,
-        maximumSleepMs: 30_000,
         waitForNextRun: detailFanoutWake.waitForNextRun,
         runOnce: async (signal) => {
           this.#fanoutStatus = await fanout.cycle({
@@ -1100,10 +1115,11 @@ export class UnifiedRigRuntime {
                 completedAt + this.#config.restart.idlePollMs,
             };
           const requestedWakeAt =
-            this.#fanoutStatus.ready > 0
+            this.#fanoutStatus.infrastructureRetryAt ??
+            (this.#fanoutStatus.ready > 0
               ? completedAt
               : (this.#fanoutStatus.earliestWakeAt ??
-                completedAt + this.#config.restart.idlePollMs);
+                completedAt + this.#config.restart.idlePollMs));
           return {
             nextWakeAt: Math.max(
               completedAt + FANOUT_MINIMUM_CADENCE_MS,
@@ -1220,28 +1236,17 @@ export class UnifiedRigRuntime {
     const ledgerStatus = this.#ledger?.status() ?? null;
     if (ledgerStatus)
       await this.#writePipelineHealth(ledgerStatus, providerSchedulers);
-    const collectorSchedule =
-      this.#collectorCoordinator?.scheduleSnapshot() ?? null;
     return {
       authorInventory:
         this.#authorInventoryStatus ??
         (await this.#readOptionalStatus(this.#config.inventory.statusPath)),
       baseline: this.#baselineStatus,
       capacity: this.#capacityStatus,
-      collectorSchedule:
-        collectorSchedule === null
-          ? null
-          : {
-              ...collectorSchedule,
-              preferredKind: diagnosticWorkKind(
-                collectorSchedule.preferredKind,
-              ),
-            },
+      collectorSchedule: this.#collectorCoordinator?.scheduleSnapshot() ?? null,
       collectorRecovery: this.#collectorRecovery?.status() ?? null,
       enrichmentReconciliation: this.#enrichmentReconciliationStatus,
       fanout: this.#fanoutStatus,
-      ledger:
-        ledgerStatus === null ? null : diagnosticLedgerStatus(ledgerStatus),
+      ledger: ledgerStatus,
       localFanout: this.#localFanoutStatus,
       publication: this.#publicationStatus,
       publicationAuth: this.#publicationAuth?.status() ?? null,
@@ -1583,13 +1588,16 @@ export class UnifiedRigRuntime {
             artifactReconciliationOnly: true,
             maximum: 8,
             now: this.#now,
-            paused: () => this.paidWorkPaused(),
+            // Paid admission may be paused by budget/operator policy while
+            // already completed provider artifacts still need free local
+            // reconciliation. A global pause remains authoritative.
+            paused: () => this.paused(),
           });
         const result = await reconciliationCoordinator.run(signal, {
           artifactReconciliationOnly: true,
           maximum: 8,
           now: this.#now,
-          paused: () => this.paidWorkPaused(),
+          paused: () => this.paused(),
         });
         return {
           nextWakeAt:
@@ -2058,6 +2066,7 @@ export class UnifiedRigRuntime {
     const providerHostAdmission = this.#providerHostAdmission.snapshot();
     const collectorProgress = ledgerStatus.kindProgress.filter(({ kind }) =>
       [
+        authorInventoryWorkKind(),
         collectionWorkKinds().authorManifest,
         collectionWorkKinds().poemDetail,
       ].includes(kind),
@@ -2150,6 +2159,30 @@ export class UnifiedRigRuntime {
         ? publicationOldestReadyAt !== null &&
           now - publicationOldestReadyAt > GROWTH_SUCCESS_SLO_MS
         : !isRecent(publicationLastSuccessAt, now));
+    const publicationPreflight = PublicationPreflightStateSchema.safeParse(
+      this.#publicationAuthPreflight,
+    );
+    const publicationGates = this.#config.publication.enabled
+      ? [
+          ...(publicationPreflight.success &&
+          publicationPreflight.data.state !== "ready"
+            ? [
+                {
+                  code: "PUBLICATION_AUTH_GATED",
+                  detail: `Production publication and resolution are gated by authorization (${publicationPreflight.data.errorCode ?? publicationPreflight.data.state})`,
+                },
+              ]
+            : []),
+          ...(this.#capacityStatus && !this.#capacityStatus.go
+            ? [
+                {
+                  code: "PUBLICATION_CAPACITY_GATED",
+                  detail: `Production publication is gated by D1 capacity preflight (${this.#capacityStatus.blockers.join(", ") || "unknown blocker"})`,
+                },
+              ]
+            : []),
+        ]
+      : [];
     await this.#pipelineDiagnostics.writeHealth({
       checks: [
         ...(desiredConfigDigest === null
@@ -2172,6 +2205,11 @@ export class UnifiedRigRuntime {
               },
             ]
           : []),
+        ...publicationGates.map((gate) => ({
+          ...gate,
+          retryAt: this.#publicationAuth?.status().retryAt ?? null,
+          state: "warning" as const,
+        })),
         ...providers.flatMap(({ provider, recoverableUnknownOperations }) =>
           recoverableUnknownOperations === 0
             ? []
@@ -2217,6 +2255,19 @@ export class UnifiedRigRuntime {
               },
             ]
           : []),
+        ...(this.#config.collector.enabled &&
+        this.#config.sol.enabled &&
+        !this.#config.localFanout.enabled
+          ? [
+              {
+                code: "LOCAL_ENRICHMENT_FANOUT_DISABLED",
+                detail:
+                  "Collection and Sol are enabled, but collected poems cannot enter translation until an authoritative production resolution and local fanout are configured",
+                retryAt: null,
+                state: "warning" as const,
+              },
+            ]
+          : []),
         ...(duplicatePoems > 0
           ? [
               {
@@ -2251,14 +2302,7 @@ export class UnifiedRigRuntime {
                   : "ready",
         },
       },
-      lanes: lanes.map((lane) =>
-        lane.name === "collector"
-          ? {
-              ...lane,
-              lastErrorCode: diagnosticSourceErrorCode(lane.lastErrorCode),
-            }
-          : lane,
-      ),
+      lanes,
       lastProgressAt: lastProgressAt === 0 ? null : lastProgressAt,
       localFanout: (["sol"] as const).flatMap((provider) => {
         const status = this.#localFanoutStatus[provider];
@@ -2275,7 +2319,6 @@ export class UnifiedRigRuntime {
       }),
       origins: ledgerStatus.origins.map((origin) => ({
         ...origin,
-        origin: REDACTED_SOURCE_ORIGIN,
         state: deriveCollectorOriginHealthState({
           configured: this.#config.collector.enabled,
           consecutiveFailures: origin.consecutiveFailures,
@@ -2291,9 +2334,8 @@ export class UnifiedRigRuntime {
                     ? "network_wait"
                     : this.#collectorOriginState,
               }),
-          stopReason: diagnosticSourceErrorCode(origin.stopReason),
+          stopReason: origin.stopReason,
         }),
-        stopReason: diagnosticSourceErrorCode(origin.stopReason),
       })),
       providerHostAdmission: {
         activeProcesses: providerHostAdmission.activeProcesses,
@@ -2317,7 +2359,7 @@ export class UnifiedRigRuntime {
         return {
           active: byState.running,
           deadLetter: byState.dead_letter,
-          kind: diagnosticWorkKind(kind),
+          kind,
           lastSuccessAt,
           oldestReadyAt:
             exactAvailability === undefined
@@ -2716,56 +2758,6 @@ export class UnifiedRigRuntime {
                   ? "classified"
                   : "idle",
         });
-      },
-    });
-  }
-
-  #createSourceLineageMaintenanceLane(lanes: SupervisorLane[]): void {
-    const publicationEndpoint = this.#config.publication.endpoint;
-    if (!this.#config.publication.enabled || !publicationEndpoint) return;
-    const endpoint = new URL(
-      "/api/source-lineage-maintenance",
-      publicationEndpoint,
-    ).toString();
-    lanes.push({
-      name: "maintenance-source-lineage",
-      close: () => undefined,
-      honorNextWakeAt: true,
-      maximumSleepMs: 30_000,
-      resourcePressureExempt: true,
-      runOnce: async (signal) => {
-        const now = this.#now();
-        const auth = this.#publicationAuth;
-        if (!this.#publicationAllowed || !auth) {
-          return { nextWakeAt: now + 30_000, result: "waiting" };
-        }
-        const response = await auth.transport({
-          body: canonicalJson({ maxPages: 2 }),
-          signal,
-          url: endpoint,
-        });
-        if (response.status !== 200) {
-          return {
-            nextWakeAt: now + this.#config.restart.errorBackoffMs,
-            result: response.authFailure ? "auth-wait" : "retry-wait",
-          };
-        }
-        const parsed = SourceLineageMaintenanceResponseSchema.parse(
-          JSON.parse(response.body),
-        );
-        if (
-          parsed.result.state === "complete" ||
-          parsed.result.state === "blocked"
-        ) {
-          return {
-            nextWakeAt: now + 5 * 60_000,
-            result: parsed.result.state,
-          };
-        }
-        return {
-          nextWakeAt: now + 1_000 + (now % 1_001),
-          result: parsed.result.remaining === 0 ? "complete" : "progress",
-        };
       },
     });
   }

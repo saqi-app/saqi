@@ -23,12 +23,6 @@ import {
   SourceOriginSchema,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import {
-  renderSourcePath,
-  type SourceAdapterProfileV1,
-  SourceAdapterProfileV1Schema,
-  sourcePathValue,
-} from "@saqi/source-adapter";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -539,14 +533,12 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
   readonly #db: Database;
   readonly #sourceBaseUrl: URL;
   readonly #sourceName: string;
-  readonly #sourceProfile: SourceAdapterProfileV1;
 
   constructor(
     db: Database,
     options: {
       readonly sourceBaseUrl: string;
       readonly sourceName: string;
-      readonly sourceProfile: SourceAdapterProfileV1;
     },
   ) {
     this.#db = db;
@@ -554,9 +546,6 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       SourceOriginSchema.parse(options.sourceBaseUrl),
     );
     this.#sourceName = SourceNameSchema.parse(options.sourceName);
-    this.#sourceProfile = SourceAdapterProfileV1Schema.parse(
-      options.sourceProfile,
-    );
   }
 
   async currentWriterEpoch(): Promise<number> {
@@ -576,9 +565,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     if (new Set(poemIds).size !== poemIds.length) {
       throw new Error("LEGACY_SOURCE_LINEAGE_TARGET_DUPLICATE");
     }
-    const rows = LegacySourceLineageRowSchema.array()
-      .parse(
-        await this.#db.all(sql`
+    const rows = await this.#db.all<Record<string, unknown>>(sql`
       SELECT poem.id AS poem_id, poem.slug AS poem_slug,
         poem.name_arabic AS title_arabic,
         poem.content_arabic AS content_arabic,
@@ -587,19 +574,18 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       FROM json_each(${JSON.stringify(poemIds)}) requested
       JOIN poem ON poem.id = requested.value
       JOIN author ON author.id = poem.author_id
+      WHERE poem.slug GLOB 'poem[1-9]*'
+        AND substr(poem.slug, 5) NOT GLOB '*[^0-9]*'
       ORDER BY CAST(requested.key AS INTEGER)
-    `),
-      )
-      .filter((row) => {
-        const externalId = sourcePathValue(
-          this.#sourceProfile.routes.poemSlug,
-          "id",
-          row.poem_slug,
-        );
-        return externalId !== undefined && /^[1-9]\d*$/u.test(externalId);
-      });
+    `);
     const rowsByPoemId = new Map(
-      rows.map((row) => [row.poem_id, row] as const),
+      rows.map(
+        (row) =>
+          [
+            LegacySourceLineageRowSchema.shape.poem_id.parse(row["poem_id"]),
+            row,
+          ] as const,
+      ),
     );
     let adopted = 0;
     const conflicts: { code: string; poemId: string }[] = [];
@@ -651,7 +637,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       throw new Error("SOURCE_FINGERPRINT_BACKFILL_CURSOR_INVALID");
     }
     const rows = SourceFingerprintBackfillRowsSchema.parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT author.name_arabic AS author_name_arabic,
           revision.content_arabic, revision.created_at,
           revision.id AS source_revision_id, revision.title_arabic
@@ -781,7 +767,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       throw new CorpusRevisionConflictError("SOURCE_REVISION_ID_MISMATCH");
     }
     const [sourceAuthor] = SourceAuthorRowsSchema.parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT source.canonical_author_id, source.canonical_url,
           author.name_arabic AS canonical_name_arabic
         FROM source_author_identity source
@@ -804,7 +790,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       }),
     );
     const [knownSource] = KnownSourceRowsSchema.parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT source.canonical_poem_id, source.canonical_url,
           pointer.revision_id AS current_revision_id, source.source_author_id,
           source.tombstoned_at, pointer.pointer_version,
@@ -1136,7 +1122,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     }
 
     const rows = PlanningRowsSchema.parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT
           staged.ordinal,
           staged.record_hash,
@@ -1455,7 +1441,8 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       throw new CorpusRevisionConflictError("ENRICHMENT_PROVENANCE_REJECTED");
     }
     const payload = AnyPoemEnrichmentOutputSchema.parse(input.payload);
-    const expectedSchemaVersion = "schemaVersion" in payload ? 2 : 1;
+    const expectedSchemaVersion =
+      "schemaVersion" in payload ? payload.schemaVersion : 1;
     if (input.schemaVersion !== expectedSchemaVersion) {
       throw new CorpusRevisionConflictError(
         "ENRICHMENT_SCHEMA_VERSION_MISMATCH",
@@ -1590,7 +1577,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       throw new CorpusRevisionConflictError("ENRICHMENT_REVIEWS_REJECTED");
     }
     const [sourceIsCurrent] = FoundRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT 1 AS found
         FROM poem
         JOIN poem_source_revision source_revision
@@ -1611,7 +1598,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     );
 
     const [current] = PublicationPointerRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT author.slug AS author_slug,
           publication.enrichment_artifact_id,
           publication.poem_id,
@@ -1637,7 +1624,11 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
         state: "already_current",
       };
     }
-    if (current && profile.promptVersion === "sol-enrichment-v1") {
+    if (
+      current &&
+      profile.modelKey === "sol-5.6" &&
+      profile.promptVersion === "sol-enrichment-v1"
+    ) {
       throw new CorpusRevisionConflictError(
         "LEGACY_SOL_PUBLICATION_REQUIRES_EMPTY_POINTER",
       );
@@ -1676,7 +1667,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       `);
     }
     const [published] = PublicationPointerRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT author.slug AS author_slug,
           publication.enrichment_artifact_id,
           publication.poem_id,
@@ -1754,7 +1745,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     }
 
     const [bound] = BoundPublicationRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT poem.author_id,
         source.external_id,
         fingerprint.line_nfc_hash,
@@ -1801,7 +1792,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       input.artifact.promptVersion,
     );
     const [current] = ModelPointerRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT enrichment_artifact_id, pointer_version, source_revision_id,
           writer_epoch
         FROM poem_model_publication_pointer
@@ -1868,7 +1859,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
   ): Promise<void> {
     if (promptVersion !== "sol-word-gloss-v2") return;
     const rows = FoundRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT 1 AS found
         FROM poem_model_publication_pointer pointer
         JOIN model_enrichment_artifact current
@@ -1889,7 +1880,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     value: unknown,
   ): Promise<"admitted" | "unchanged"> {
     const row = parseLegacySourceLineageRow(value);
-    const sourcePoemId = legacySourcePoemId(row.poem_slug, this.#sourceProfile);
+    const sourcePoemId = legacySourcePoemId(row.poem_slug);
     const sourceAuthorId = legacySourceAuthorId(row.author_slug);
     const titleArabic = row.title_arabic.trim().normalize("NFC");
     if (titleArabic.length === 0) {
@@ -1919,15 +1910,10 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       sourceAuthorUrl: legacySourceAuthorUrl(
         this.#sourceBaseUrl,
         sourceAuthorId,
-        this.#sourceProfile,
       ),
       sourceContentSha256,
       sourceName: this.#sourceName,
-      sourcePoemUrl: legacySourcePoemUrl(
-        this.#sourceBaseUrl,
-        sourcePoemId,
-        this.#sourceProfile,
-      ),
+      sourcePoemUrl: legacySourcePoemUrl(this.#sourceBaseUrl, sourcePoemId),
       sourceRevisionId,
       titleArabic,
     };
@@ -1988,7 +1974,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       `);
     }
     const [pointer] = SourcePointerRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT pointer_version, revision_id, writer_epoch
         FROM poem_source_pointer
         WHERE source_poem_id = ${item.sourcePoemKey}
@@ -2047,7 +2033,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
         )
     `);
     const [projected] = ProjectedRevisionRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT active_source_revision_id FROM poem WHERE id = ${canonicalPoemId}
       `),
     );
@@ -2082,7 +2068,6 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     const sourceAuthorUrl = legacySourceAuthorUrl(
       this.#sourceBaseUrl,
       input.sourceAuthorId,
-      this.#sourceProfile,
     );
     await this.#db.run(sql`
       INSERT INTO source_author_identity (
@@ -2096,7 +2081,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       ON CONFLICT(source_name, external_id) DO NOTHING
     `);
     const [stored] = SourceAuthorOwnershipRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT source_name, external_id, canonical_url, canonical_author_id
         FROM source_author_identity WHERE id = ${sourceAuthorKey}
       `),
@@ -2126,7 +2111,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
 
   async #ensureCanonicalAuthor(staged: StageRecordInput): Promise<void> {
     const [stored] = FoundRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT 1 AS found FROM author WHERE id = ${staged.canonicalAuthorId}
       `),
     );
@@ -2214,7 +2199,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     staged: StageRecordInput,
   ): Promise<void> {
     const [stored] = SourceAuthorOwnershipRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT source_name, external_id, canonical_url, canonical_author_id
         FROM source_author_identity WHERE id = ${sourceAuthorKey}
       `),
@@ -2235,7 +2220,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     staged: StageRecordInput,
   ): Promise<void> {
     const [stored] = SourcePoemOwnershipRowSchema.array().parse(
-      await this.#db.all(sql`
+      await this.#db.all<Record<string, unknown>>(sql`
         SELECT canonical_poem_id, canonical_url, source_author_id
         FROM source_poem_identity WHERE id = ${sourcePoemKey}
       `),
@@ -2251,9 +2236,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
   }
 }
 
-export class CorpusRevisionConflictError extends Error {
-  override name = "CorpusRevisionConflictError";
-}
+export class CorpusRevisionConflictError extends Error {}
 
 export class LostPromotionClaimError extends Error {
   constructor() {
@@ -2388,11 +2371,9 @@ function parseLegacySourceContent(value: string): CorpusContentArabic {
   return parsed.data;
 }
 
-function legacySourcePoemId(
-  slug: string,
-  profile: SourceAdapterProfileV1,
-): string {
-  const sourcePoemId = sourcePathValue(profile.routes.poemSlug, "id", slug);
+function legacySourcePoemId(slug: string): string {
+  const match = /^poem([1-9]\d*)$/u.exec(slug);
+  const sourcePoemId = match?.[1];
   if (
     sourcePoemId === undefined ||
     !Number.isSafeInteger(Number(sourcePoemId))
@@ -2416,27 +2397,15 @@ function legacySourceAuthorId(slug: string): string {
 function legacySourceAuthorUrl(
   sourceBaseUrl: URL,
   sourceAuthorId: string,
-  profile: SourceAdapterProfileV1,
 ): string {
   return new URL(
-    renderSourcePath(
-      profile.routes.authorPath,
-      "slug",
-      encodeURIComponent(sourceAuthorId),
-    ),
+    `cat-${encodeURIComponent(sourceAuthorId)}`,
     sourceBaseUrl,
   ).toString();
 }
 
-function legacySourcePoemUrl(
-  sourceBaseUrl: URL,
-  sourcePoemId: string,
-  profile: SourceAdapterProfileV1,
-): string {
-  return new URL(
-    renderSourcePath(profile.routes.poemPath, "id", sourcePoemId),
-    sourceBaseUrl,
-  ).toString();
+function legacySourcePoemUrl(sourceBaseUrl: URL, sourcePoemId: string): string {
+  return new URL(`poem${sourcePoemId}.html`, sourceBaseUrl).toString();
 }
 
 async function revisionIdentity(

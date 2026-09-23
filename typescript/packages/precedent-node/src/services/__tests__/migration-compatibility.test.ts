@@ -65,7 +65,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first).toEqual(["0037_retire_legacy_translation_tasks.sql"]);
+    expect(first.at(-1)).toBe("0039_publish_complete_sol_enrichment.sql");
     expectCorpusRevisionSchema(database);
     expectModelPublicationGuards(database);
     expectLegacySolPublicationPrecedence(database);
@@ -75,24 +75,6 @@ describe("production migration compatibility", () => {
     expectProductionDeploymentIdentity(database);
     expectSlugIndexesReduced(database);
     expectSlugUniqueness(database);
-    expect(
-      database.prepare("SELECT * FROM source_lineage_maintenance_job").get(),
-    ).toMatchObject({
-      adopted_total: 0,
-      cursor_poem_id: null,
-      lease_epoch: 0,
-      pass: 0,
-      scanned_total: 0,
-      singleton: 1,
-      state: "idle",
-    });
-    expect(
-      database
-        .prepare(
-          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_conflict'",
-        )
-        .get(),
-    ).toEqual({ name: "source_lineage_conflict" });
     const before = schemaSnapshot(database);
     expect(applyPending(database, migrationFiles())).toEqual([]);
     expect(schemaSnapshot(database)).toEqual(before);
@@ -655,7 +637,7 @@ function expectModelProfileRegistry(database: Database.Database): void {
   );
   expect(
     database.prepare("SELECT count(*) FROM enrichment_profile").pluck().get(),
-  ).toBe(6);
+  ).toBe(18);
   expect(
     database
       .prepare(
@@ -663,7 +645,45 @@ function expectModelProfileRegistry(database: Database.Database): void {
       )
       .pluck()
       .get(),
-  ).toBe(4);
+  ).toBe(10);
+  expect(
+    database
+      .prepare(
+        `SELECT count(*) FROM enrichment_profile
+         WHERE prompt_version = 'sol-word-gloss-v3'
+           AND output_schema_version = 3`,
+      )
+      .pluck()
+      .get(),
+  ).toBe(2);
+  expect(
+    database
+      .prepare(
+        `SELECT model_key, backend_key, runtime_model_id
+           FROM enrichment_profile
+          WHERE profile_key = 'agy-gemini-3.1-pro-high/word-gloss-v2/source-v2'`,
+      )
+      .get(),
+  ).toEqual({
+    backend_key: "agy-cli",
+    model_key: "gemini-3.1-pro-high",
+    runtime_model_id: "gemini-3.1-pro-high",
+  });
+  expect(
+    database
+      .prepare(
+        `SELECT public_track_key, count(*) AS profiles
+           FROM enrichment_profile
+          WHERE public_track_key IN (
+            'agy-claude-opus-4.6-thinking', 'agy-gemini-3.1-pro-high'
+          )
+          GROUP BY public_track_key ORDER BY public_track_key`,
+      )
+      .all(),
+  ).toEqual([
+    { profiles: 4, public_track_key: "agy-claude-opus-4.6-thinking" }, // gitleaks:allow -- Public legacy model identifier, not a credential.
+    { profiles: 2, public_track_key: "agy-gemini-3.1-pro-high" },
+  ]);
   expect(
     database
       .prepare(

@@ -7,8 +7,9 @@
   "scripts": {
     "build": "yarn docs:generate && astro build",
     "check": "astro check",
-    "deploy:preview": "yarn build && wrangler deploy --config dist/server/wrangler.json",
-    "deploy:production": "SAQI_WRANGLER_CONFIG=wrangler.production.jsonc yarn build && wrangler deploy --config dist/server/wrangler.json",
+    "deploy:preview": "yarn build && yarn deploy:artifact",
+    "deploy:artifact": "wrangler deploy --config dist/server/wrangler.json",
+    "deploy:production": "SAQI_WRANGLER_CONFIG=wrangler.production.jsonc yarn build && yarn deploy:artifact",
     "deploy:www": "wrangler deploy --config wrangler.www.jsonc",
     "dev": "astro dev",
     "preview": "astro preview",

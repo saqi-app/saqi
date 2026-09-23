@@ -28,8 +28,8 @@ export interface PublishedPoemRoute {
 }
 
 export class PublicCacheInvalidationError extends Error {
-  constructor(code: string, options?: ErrorOptions) {
-    super(code, options);
+  constructor(code: string) {
+    super(code);
     this.name = "PublicCacheInvalidationError";
   }
 }

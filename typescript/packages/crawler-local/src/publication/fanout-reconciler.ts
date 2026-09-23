@@ -91,6 +91,7 @@ const MAX_TARGETED_CLAIMS_PER_CYCLE = 100;
 const MAX_DETAIL_CLAIMS_PER_CYCLE = 5;
 const LEASE_DURATION_MS = 60_000;
 const LEASE_HEARTBEAT_MS = 20_000;
+const INFRASTRUCTURE_RETRY_MS = 5 * 60_000;
 const TRANSLATED_SOURCE_ADMISSION_PRIORITY = 1_000;
 const MAX_PUBLICATION_SUCCESSOR_DEPTH = 32;
 const LEGACY_SOL_PIPELINE_VERSION = "sol-enrichment-v1";
@@ -319,6 +320,7 @@ export interface FanoutCycleSummary {
   readonly enrichmentCursors: Readonly<Record<string, number>>;
   readonly enrichmentPublicationsSeeded: number;
   readonly enrichmentSeeded: number;
+  readonly infrastructureRetryAt: null | number;
   readonly pendingResolution: number;
   readonly ready: number;
   readonly retried: number;
@@ -347,6 +349,7 @@ type FanoutCycleCounterKey = Exclude<
   | "detailCursor"
   | "earliestWakeAt"
   | "enrichmentCursors"
+  | "infrastructureRetryAt"
   | "ready"
   | "solCursor"
 >;
@@ -374,6 +377,7 @@ export class FanoutReconciler implements FanoutReconciliationPort {
   #sourceScanRequestGeneration = 0;
   #activeCycle: null | Promise<FanoutCycleSummary> = null;
   #closing = false;
+  #infrastructureRetryAt = 0;
   #ownedControl: null | WorkClaim = null;
 
   constructor(options: FanoutReconcilerOptions) {
@@ -523,6 +527,21 @@ export class FanoutReconciler implements FanoutReconciliationPort {
       solSeeded: 0,
       translatedDetailsPrioritized: 0,
     };
+    this.#ledger.requeueDeadLettersBelowAttemptThreshold(
+      FANOUT_DETAIL_KIND,
+      {
+        implementationVersion: FANOUT_IMPLEMENTATION_VERSION,
+        schemaVersion: FANOUT_SCHEMA_VERSION,
+      },
+      "SOURCE_ADMISSION_AUTHOR_NOT_FOUND",
+      MAX_ATTEMPTS,
+      now(),
+    );
+    // A transport/auth/service failure applies to the shared publication
+    // dependency, not to one poem. Preserve one bounded current cycle for
+    // fairness, then keep later cycles from walking the ready backlog until
+    // that dependency is due for another probe.
+    const sourcesGated = this.#infrastructureRetryAt > now();
     if (this.#recoverExpiredLeases) this.#ledger.recoverExpired(now());
     let backfilled = 0;
     for (const kind of FANOUT_CLAIM_ORDER) {
@@ -558,27 +577,35 @@ export class FanoutReconciler implements FanoutReconciliationPort {
     else if (maximum === 1 && !this.#preferTargetedWork)
       this.#preferTargetedWork = true;
     const targetedMaximum = requestedWorkKeys.length;
-    const targeted = await this.#claimSources(
-      targetedMaximum,
-      0,
-      0,
-      0,
-      summary,
-      now,
-      requestedWorkKeys,
-      options.signal,
-    );
+    const targeted = sourcesGated
+      ? emptyClaimResult(0, 0, 0)
+      : await this.#claimSources(
+          targetedMaximum,
+          0,
+          0,
+          0,
+          summary,
+          now,
+          requestedWorkKeys,
+          options.signal,
+        );
     this.#ledger.acknowledgeFanoutPriorityWork(targeted.settledWorkKeys);
-    const ordinary = await this.#claimSources(
-      maximum,
-      targeted.processed,
-      targeted.processedSol,
-      targeted.processedDetails,
-      summary,
-      now,
-      undefined,
-      options.signal,
-    );
+    const ordinary = sourcesGated
+      ? emptyClaimResult(
+          targeted.processed,
+          targeted.processedSol,
+          targeted.processedDetails,
+        )
+      : await this.#claimSources(
+          maximum,
+          targeted.processed,
+          targeted.processedSol,
+          targeted.processedDetails,
+          summary,
+          now,
+          undefined,
+          options.signal,
+        );
     this.#ledger.acknowledgeFanoutPriorityWork(ordinary.settledWorkKeys);
     const { processed, processedDetails, processedSol } = ordinary;
     const control = options.signal?.aborted
@@ -614,16 +641,18 @@ export class FanoutReconciler implements FanoutReconciliationPort {
     // Preserve same-cycle processing for source jobs discovered by this scan,
     // while sharing the cycle-wide budget and detail-admission cap with the
     // pre-scan drain.
-    const discovered = await this.#claimSources(
-      maximum,
-      processed,
-      processedSol,
-      processedDetails,
-      summary,
-      now,
-      undefined,
-      options.signal,
-    );
+    const discovered = sourcesGated
+      ? emptyClaimResult(processed, processedSol, processedDetails)
+      : await this.#claimSources(
+          maximum,
+          processed,
+          processedSol,
+          processedDetails,
+          summary,
+          now,
+          undefined,
+          options.signal,
+        );
     this.#ledger.acknowledgeFanoutPriorityWork(discovered.settledWorkKeys);
     const cursor = await this.#cursor();
     const availability = this.status(now());
@@ -633,6 +662,10 @@ export class FanoutReconciler implements FanoutReconciliationPort {
       detailCursor: cursor.detail,
       earliestWakeAt: availability.earliestAvailableAt,
       enrichmentCursors: cursor.enrichment,
+      infrastructureRetryAt:
+        this.#infrastructureRetryAt > now()
+          ? this.#infrastructureRetryAt
+          : null,
       ready: availability.ready,
       solCursor: cursor.sol,
     };
@@ -784,6 +817,28 @@ export class FanoutReconciler implements FanoutReconciliationPort {
               ) {
                 this.#ledger.deadLetter(claim, code, failedAt);
                 summary.deadLettered += 1;
+              } else if (
+                error instanceof RetryableFanoutError &&
+                !error.consumeAttempt
+              ) {
+                // Authentication, network, rate, and service availability are
+                // infrastructure gates, not defects in this poem. Preserve
+                // its bounded attempt budget while retaining the exact retry.
+                const infrastructureRetryAt = Math.max(
+                  error.retryAt,
+                  failedAt + INFRASTRUCTURE_RETRY_MS,
+                );
+                this.#infrastructureRetryAt = Math.max(
+                  this.#infrastructureRetryAt,
+                  infrastructureRetryAt,
+                );
+                this.#ledger.operatorRelease(
+                  claim,
+                  code,
+                  failedAt,
+                  infrastructureRetryAt,
+                );
+                summary.retried += 1;
               } else {
                 this.#ledger.retry(
                   claim,
@@ -1109,6 +1164,7 @@ export class FanoutReconciler implements FanoutReconciliationPort {
             throw new RetryableFanoutError(
               admission.errorCode,
               admission.retryAt,
+              false,
             );
           }
           if (admission.state === "conflict") {
@@ -1127,13 +1183,15 @@ export class FanoutReconciler implements FanoutReconciliationPort {
           throw new Error("SOURCE_ADMISSION_RESPONSE_MISMATCH");
         }
         if (outcome.status === "rejected") {
+          const authorMetadata =
+            outcome.code === "AUTHOR_NOT_FOUND"
+              ? this.#ledger.sourceAuthorMetadata(admissionItem.sourceAuthorUrl)
+              : null;
           const bootstrapMapping =
             outcome.code === "AUTHOR_NOT_FOUND"
               ? prepareUnboundCollectedMapping(
                   artifact,
-                  this.#ledger.sourceAuthorMetadata(
-                    admissionItem.sourceAuthorUrl,
-                  )?.authorNameArabic,
+                  authorMetadata?.authorNameArabic,
                 )
               : null;
           if (bootstrapMapping) {
@@ -1151,6 +1209,12 @@ export class FanoutReconciler implements FanoutReconciliationPort {
               now,
             );
             return this.#waitResolution(summary, false);
+          }
+          if (outcome.code === "AUTHOR_NOT_FOUND") {
+            throw new RetryableFanoutError(
+              "SOURCE_ADMISSION_AUTHOR_METADATA_PENDING",
+              now() + retryDelay(claim.work.attemptCount),
+            );
           }
           if (outcome.retryable) {
             throw new RetryableFanoutError(
@@ -2081,19 +2145,34 @@ function retryDelay(attempt: number) {
   );
 }
 
+function emptyClaimResult(
+  processed: number,
+  processedSol: number,
+  processedDetails: number,
+): FanoutSourceClaimResult {
+  return {
+    processed,
+    processedDetails,
+    processedSol,
+    settledWorkKeys: [],
+  };
+}
+
 class RetryableFanoutError extends Error {
+  readonly consumeAttempt: boolean;
   readonly retryAt: number;
 
-  constructor(code: string, retryAt: number) {
+  constructor(code: string, retryAt: number, consumeAttempt = true) {
     super(code);
     this.name = "RetryableFanoutError";
+    this.consumeAttempt = consumeAttempt;
     this.retryAt = FanoutRetryAtSchema.parse(retryAt);
   }
 }
 
 class TerminalFanoutError extends Error {
-  constructor(code: string, options?: ErrorOptions) {
-    super(code, options);
+  constructor(code: string) {
+    super(code);
     this.name = "TerminalFanoutError";
   }
 }

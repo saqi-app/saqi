@@ -36,6 +36,7 @@ export const ENRICHMENT_INPUT_SCHEMA_VERSION = 1;
 export const ENRICHMENT_OUTPUT_SCHEMA_ID = "saqi.poem-enrichment-output";
 export const ENRICHMENT_OUTPUT_SCHEMA_VERSION = 1;
 export const ENRICHMENT_OUTPUT_V2_SCHEMA_VERSION = 2;
+export const ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION = 3;
 export const WORD_GLOSS_TOKENIZER_VERSION = "saqi-orthographic-v1";
 export const ENRICHMENT_REVIEW_SCHEMA_ID = "saqi.poem-enrichment-review";
 export const ENRICHMENT_REVIEW_SCHEMA_VERSION = 1;
@@ -140,7 +141,21 @@ export type PoemEnrichmentOutputV2 = z.infer<
   typeof PoemEnrichmentOutputV2Schema
 >;
 
+/** Current combined artifact: faithful translation, lossless word glosses,
+ * and source-grounded prose insight in one reviewed model operation. */
+export const PoemEnrichmentOutputV3Schema = z.strictObject({
+  schemaId: z.literal(ENRICHMENT_OUTPUT_SCHEMA_ID),
+  schemaVersion: z.literal(ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION),
+  translation: PoemEnrichmentOutputV2Schema.shape.translation,
+  wordGlosses: PoemWordGlossesSchema,
+  insights: PoemInsightsSchema,
+});
+export type PoemEnrichmentOutputV3 = z.infer<
+  typeof PoemEnrichmentOutputV3Schema
+>;
+
 export const AnyPoemEnrichmentOutputSchema = z.union([
+  PoemEnrichmentOutputV3Schema,
   PoemEnrichmentOutputV2Schema,
   PoemEnrichmentOutputSchema,
 ]);
@@ -184,6 +199,11 @@ export const PoemEnrichmentWireV2Schema = z.strictObject({
   }),
 });
 export type PoemEnrichmentWireV2 = z.infer<typeof PoemEnrichmentWireV2Schema>;
+
+export const PoemEnrichmentWireV3Schema = PoemEnrichmentWireV2Schema.extend({
+  insights: PoemInsightsSchema,
+});
+export type PoemEnrichmentWireV3 = z.infer<typeof PoemEnrichmentWireV3Schema>;
 
 const ReviewVerdictSchema = z.enum(["pass", "fail"]);
 const ReviewFindingSeveritySchema = z.enum(["critical", "major", "minor"]);
@@ -401,6 +421,20 @@ export function materializePoemEnrichmentV2(
   });
 }
 
+export function materializePoemEnrichmentV3(
+  input: PoemEnrichmentInput,
+  rawWire: PoemEnrichmentWireV3,
+): PoemEnrichmentOutputV3 {
+  const wire = PoemEnrichmentWireV3Schema.parse(rawWire);
+  const { insights, ...wireV2 } = wire;
+  const v2 = materializePoemEnrichmentV2(input, wireV2);
+  return PoemEnrichmentOutputV3Schema.parse({
+    ...v2,
+    insights,
+    schemaVersion: ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION,
+  });
+}
+
 export function validatePoemEnrichmentV2(
   input: PoemEnrichmentInput,
   output: PoemEnrichmentOutputV2,
@@ -466,6 +500,40 @@ export function validatePoemEnrichmentV2(
         severity: "critical",
       });
     }
+  }
+  return { findings, passed: findings.length === 0 };
+}
+
+export function validatePoemEnrichmentV3(
+  input: PoemEnrichmentInput,
+  output: PoemEnrichmentOutputV3,
+): EnrichmentValidationResult {
+  const findings = [
+    ...validatePoemEnrichmentV2(input, {
+      schemaId: output.schemaId,
+      schemaVersion: ENRICHMENT_OUTPUT_V2_SCHEMA_VERSION,
+      translation: output.translation,
+      wordGlosses: output.wordGlosses,
+    }).findings,
+  ];
+  const sourceLines = new Set(
+    input.linesArabic.filter((line) => line.trim().length > 0),
+  );
+  const notableLines = new Set<string>();
+  for (const notable of output.insights.notableLines) {
+    if (!sourceLines.has(notable.line))
+      findings.push({
+        code: "NOTABLE_LINE_NOT_IN_SOURCE",
+        lineIndex: null,
+        severity: "critical",
+      });
+    if (notableLines.has(notable.line))
+      findings.push({
+        code: "DUPLICATE_NOTABLE_LINE",
+        lineIndex: null,
+        severity: "major",
+      });
+    notableLines.add(notable.line);
   }
   return { findings, passed: findings.length === 0 };
 }

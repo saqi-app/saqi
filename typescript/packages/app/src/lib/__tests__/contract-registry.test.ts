@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 
 import {
+  BatchTranslateRequestSchema,
   CLOUDFLARE_WORKER_CONTRACTS,
   generateContractCatalog,
   HTTP_CONTRACTS,
@@ -59,9 +60,8 @@ describe("contract registry", () => {
       "operations.tasks",
       "operations.not-found",
       "operations.legacy-source-lineage-adoption",
-      "operations.source-lineage-maintenance-status",
-      "operations.source-lineage-maintenance-run",
       "operations.corpus-fingerprint-backfill",
+      "operations.batch-translate",
       "operations.corpus-import",
       "operations.corpus-resolution",
       "operations.source-admissions-v2",
@@ -135,6 +135,23 @@ describe("contract registry", () => {
 
   it("derives portable JSON Schema from the runtime validators", () => {
     const catalog = generateContractCatalog();
+    const endpoint = catalog.http.find(
+      ({ id }) => id === "operations.batch-translate"
+    );
+    expect(endpoint?.request.body).toMatchObject({
+      type: "object",
+      required: ["authorIds"],
+    });
     expect(JSON.stringify(catalog)).not.toContain("[object Object]");
+  });
+
+  it("keeps the documented batch body identical to runtime validation", () => {
+    expect(
+      BatchTranslateRequestSchema.safeParse({ authorIds: ["author-1"] }).success
+    ).toBe(true);
+    expect(
+      BatchTranslateRequestSchema.safeParse({ authorIds: ["not valid"] })
+        .success
+    ).toBe(false);
   });
 });

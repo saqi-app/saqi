@@ -31,6 +31,10 @@ const MAXIMUM_ATTEMPTS = 100;
 const LEASE_DURATION_MS = 5 * 60_000;
 const POLL_MS = 30_000;
 const RESOLUTION_RETRY_MS = 5 * 60_000;
+const RESOLUTION_PENDING_ERROR_CODES = [
+  "LOCAL_ENRICHMENT_BINDING_PENDING",
+  "LOCAL_ENRICHMENT_IDENTITY_PENDING",
+] as const;
 const BatchSizeSchema = z.number().int().min(1).max(1_000);
 const CycleMaximumSchema = z.number().int().min(1).max(10_000);
 const ProfileIdentifierSchema = z.string().min(1).max(100);
@@ -40,8 +44,8 @@ const SourceSchema = z.strictObject({
   workKey: z.string().regex(/^[a-f\d]{64}$/),
 });
 const ControlSchema = z.strictObject({
-  collectorImplementationVersion: z.literal(collectorImplementationVersion()),
-  collectorSchemaVersion: z.literal(collectorSchemaVersion()),
+  collectorImplementationVersion: z.string().min(1).max(100),
+  collectorSchemaVersion: z.string().min(1).max(100),
   modelKey: z.string().min(1).max(100),
   pipelineVersion: z.string().min(1).max(100),
 });
@@ -93,7 +97,7 @@ const CollectedWorkInputSchema = z.strictObject({
 });
 const CollectedArtifactSchema = z.strictObject({
   artifactSchemaVersion: z.literal(1),
-  collectedBy: z.literal(collectorImplementationVersion()),
+  collectedBy: z.string().min(1).max(100),
   source: z.looseObject({
     author: z.looseObject({
       canonicalId: z.string(),
@@ -131,6 +135,7 @@ export interface LocalEnrichmentFanoutSummary {
   readonly earliestWakeAt: null | number;
   readonly pendingResolution: number;
   readonly ready: number;
+  readonly resolutionRetryAt: null | number;
   readonly retried: number;
   readonly scanned: number;
   readonly seeded: number;
@@ -222,6 +227,8 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
       throw new Error("LOCAL_FANOUT_CODEX_PROFILE_REQUIRED");
     this.#resolver = options.resolver;
     const profileId = inputHash({
+      collectorImplementationVersion: collectorImplementationVersion(),
+      collectorSchemaVersion: collectorSchemaVersion(),
       modelKey: this.#profile.modelKey,
       pipelineVersion: this.#profile.pipelineVersion,
     }).slice(0, 16);
@@ -258,6 +265,7 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
     const maximum = CycleMaximumSchema.parse(
       options.maximum ?? this.#batchSize,
     );
+    let resolutionRetryAt: null | number = null;
     const summary = {
       deadLettered: 0,
       pendingResolution: 0,
@@ -291,13 +299,30 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
       }
     }
     for (let index = 0; index < maximum; index += 1) {
-      const claim = this.#ledger.claim(
-        this.#owner,
-        now(),
-        LEASE_DURATION_MS,
-        [this.#sourceKind],
-        this.#requirements(),
-      );
+      // Give at least half of every bounded cycle to work that has not already
+      // missed production resolution. Without this fair lane, an older,
+      // higher-priority unresolved cohort becomes eligible at the same retry
+      // boundary and can monopolize every later cycle forever. The fallback
+      // keeps deferred work retrying when no fresh work remains.
+      const preferFresh = index % 2 === 0;
+      const claim =
+        (preferFresh
+          ? this.#ledger.claim(
+              this.#owner,
+              now(),
+              LEASE_DURATION_MS,
+              [this.#sourceKind],
+              this.#requirements(),
+              RESOLUTION_PENDING_ERROR_CODES,
+            )
+          : null) ??
+        this.#ledger.claim(
+          this.#owner,
+          now(),
+          LEASE_DURATION_MS,
+          [this.#sourceKind],
+          this.#requirements(),
+        );
       if (!claim) break;
       try {
         this.#ledger.renew(claim, now(), LEASE_DURATION_MS);
@@ -326,19 +351,18 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
           outputArtifactHash = storedInput.hash;
         } else {
           const source = this.#ledger.get(job.source.workKey);
-          // eslint-disable-next-line no-await-in-loop -- Verify each claimed source before resolving or seeding its provider work.
-          const sourceVerification = await this.#artifacts.verify(
-            job.source.artifactHash,
-          );
           if (
             !source ||
             !["succeeded", "imported"].includes(source.state) ||
-            source.outputArtifactHash !== job.source.artifactHash ||
-            !sourceVerification.ok
+            source.outputArtifactHash !== job.source.artifactHash
           )
             throw new Error("LOCAL_ENRICHMENT_SOURCE_INVALID");
-          // eslint-disable-next-line no-await-in-loop -- Read the verified source inside its owning claim before advancing that claim.
-          const sourceContents = await this.#artifacts.read(
+          // ArtifactStore.read verifies the content hash. A separate verify
+          // pass would hash the same potentially large poem twice before any
+          // identity resolution can begin.
+          // eslint-disable-next-line no-await-in-loop -- Read and verify the source inside its owning claim before advancing that claim.
+          const sourceContents = await readVerifiedSource(
+            this.#artifacts,
             job.source.artifactHash,
           );
           const artifact: unknown = JSON.parse(sourceContents.toString("utf8"));
@@ -346,13 +370,19 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
           // eslint-disable-next-line no-await-in-loop -- Resolution is claim-local and must precede the matching durable seed.
           const resolution = await this.#resolver.resolve(source, artifact);
           if (!resolution) {
+            const releaseAt = now();
             this.#ledger.operatorRelease(
               claim,
               "LOCAL_ENRICHMENT_IDENTITY_PENDING",
-              now(),
-              now() + RESOLUTION_RETRY_MS,
+              releaseAt,
+              releaseAt + RESOLUTION_RETRY_MS,
             );
             summary.pendingResolution += 1;
+            resolutionRetryAt = releaseAt + RESOLUTION_RETRY_MS;
+            // The miss has been moved out of the ready set. Continue through
+            // this bounded cycle so one source absent from production cannot
+            // head-of-line block older poems that the refreshed snapshot can
+            // resolve.
             continue;
           }
           const preparedInput = prepareCollectedPoem(
@@ -362,13 +392,15 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
             resolution.writerEpoch,
           ).enrichmentInput;
           if (!resolution.binding) {
+            const releaseAt = now();
             this.#ledger.operatorRelease(
               claim,
               "LOCAL_ENRICHMENT_BINDING_PENDING",
-              now(),
-              now() + RESOLUTION_RETRY_MS,
+              releaseAt,
+              releaseAt + RESOLUTION_RETRY_MS,
             );
             summary.pendingResolution += 1;
+            resolutionRetryAt = releaseAt + RESOLUTION_RETRY_MS;
             continue;
           }
           input = bindCollectedPoem(preparedInput, resolution.binding);
@@ -416,6 +448,7 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
       cursor: await this.#cursor(),
       earliestWakeAt: availability.earliestAvailableAt,
       ready: availability.ready,
+      resolutionRetryAt,
     };
   }
 
@@ -469,12 +502,13 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
       try {
         if (!artifactHash)
           throw new Error("LOCAL_ENRICHMENT_SOURCE_ARTIFACT_MISSING");
-        // eslint-disable-next-line no-await-in-loop -- Source verification is sequential so the scan lease can be renewed between items.
-        const verification = await this.#artifacts.verify(artifactHash);
-        if (!verification.ok)
-          throw new Error("LOCAL_ENRICHMENT_SOURCE_INVALID");
+        // ArtifactStore.read performs the same SHA-256 integrity check while
+        // returning the bytes, avoiding a second full-file read/hash pass.
         // eslint-disable-next-line no-await-in-loop -- Source reads are sequential so the scan lease can be renewed between items.
-        const sourceContents = await this.#artifacts.read(artifactHash);
+        const sourceContents = await readVerifiedSource(
+          this.#artifacts,
+          artifactHash,
+        );
         const artifact: unknown = JSON.parse(sourceContents.toString("utf8"));
         assertCollectedArtifactBinding(work, artifact);
         // eslint-disable-next-line no-await-in-loop -- Each resolution must stay paired with its source while the scan lease is renewed between items.
@@ -583,6 +617,8 @@ export function assertCollectedArtifactBinding(
     throw new Error("LOCAL_ENRICHMENT_SOURCE_PROFILE_MISMATCH");
   const input = CollectedWorkInputSchema.parse(work.input);
   const envelope = CollectedArtifactSchema.parse(artifact);
+  if (envelope.collectedBy !== collectorImplementationVersion())
+    throw new Error("LOCAL_ENRICHMENT_ARTIFACT_PROFILE_MISMATCH");
   if (envelope.workKey !== work.workKey)
     throw new Error("LOCAL_ENRICHMENT_SOURCE_WORK_KEY_MISMATCH");
   const poem = canonicalPoemUrl(envelope.source.href);
@@ -609,6 +645,17 @@ function quarantineCode(error: unknown): string {
   if (error instanceof Error && /^[A-Z][A-Z0-9_]{0,99}$/.test(error.message))
     return error.message;
   return "LOCAL_ENRICHMENT_SOURCE_QUARANTINED";
+}
+
+async function readVerifiedSource(
+  artifacts: ArtifactStore,
+  artifactHash: string,
+): Promise<Buffer> {
+  try {
+    return await artifacts.read(artifactHash);
+  } catch (error) {
+    throw new Error("LOCAL_ENRICHMENT_SOURCE_INVALID", { cause: error });
+  }
 }
 
 function isGlobalResolutionError(error: unknown): boolean {

@@ -13,7 +13,6 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { DEFAULT_SOURCE_ADAPTER_PROFILE } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,29 +40,14 @@ const PASS_REVIEW = {
   insightScore: 94,
   verdict: "pass" as const,
 };
-
-function seedFixtureModelProfiles(database: InstanceType<typeof Database>) {
-  database.exec(`
-    INSERT INTO ai_vendor (vendor_key, display_name, created_at)
-      VALUES ('fixture-vendor', 'Fixture Vendor', 0);
-    INSERT INTO inference_backend (backend_key, display_name, created_at)
-      VALUES ('fixture-backend', 'Fixture Backend', 0);
-    INSERT INTO ai_model (
-      model_key, vendor_key, family_key, version_label, display_name, created_at
-    ) VALUES
-      ('fixture-model-a', 'fixture-vendor', 'fixture', 'a', 'Fixture Model A', 0),
-      ('fixture-model-b', 'fixture-vendor', 'fixture', 'b', 'Fixture Model B', 0);
-    INSERT INTO enrichment_profile (
-      profile_key, public_track_key, model_key, backend_key, runtime_model_id,
-      prompt_version, reasoning_effort, input_schema_version,
-      output_schema_version, created_at
-    ) VALUES
-      ('fixture-model-a/source-v1', 'fixture-model-a', 'fixture-model-a',
-       'fixture-backend', 'fixture-model-a', 'fixture-a-v1', 'high', 1, 1, 0),
-      ('fixture-model-b/source-v1', 'fixture-model-b', 'fixture-model-b',
-       'fixture-backend', 'fixture-model-b', 'fixture-b-v1', 'high', 1, 1, 0);
-  `);
-}
+const COMPLETE_INSIGHTS = {
+  culturalSignificance: "A source-grounded cultural note.",
+  historicalContext: "Insufficient source evidence for a precise date.",
+  literaryDevices: ["A concise image."],
+  notableLines: [{ explanation: "The image anchors the poem.", line: "بيت" }],
+  summary: "A concise source-grounded summary.",
+  themes: ["Memory"],
+};
 
 describe("D1CorpusRevisionStore", () => {
   let database: InstanceType<typeof Database>;
@@ -93,7 +77,6 @@ describe("D1CorpusRevisionStore", () => {
     store = new D1CorpusRevisionStore(db as any, {
       sourceBaseUrl: SOURCE_BASE_URL,
       sourceName: SOURCE_NAME,
-      sourceProfile: DEFAULT_SOURCE_ADAPTER_PROFILE,
     });
   });
 
@@ -389,7 +372,7 @@ describe("D1CorpusRevisionStore", () => {
       .run(
         `${SOURCE_NAME}\u{1F}poet-Test-70009`,
         "poet-Test-70009",
-        "https://source.invalid/writers/poet-Test-70009",
+        "https://source.invalid/cat-poet-Test-70009",
       );
 
     const first = await store.adoptLegacySourceLineage({ poemIds });
@@ -453,7 +436,7 @@ describe("D1CorpusRevisionStore", () => {
       )
       .run(
         `${SOURCE_NAME}\u{1F}poet-Muslim-ibn-al-Walid`,
-        "https://source.invalid/writers/poet-Muslim-ibn-al-Walid",
+        "https://source.invalid/cat-poet-Muslim-ibn-al-Walid",
       );
     await expect(
       store.adoptLegacySourceLineage({
@@ -515,13 +498,13 @@ describe("D1CorpusRevisionStore", () => {
     await expect(
       store.admitSource({
         ...input,
-        sourcePoemUrl: "https://other.invalid/works/101681",
+        sourcePoemUrl: "https://other.invalid/poem101681.html",
       }),
     ).rejects.toThrow("SOURCE_CONFIGURATION_MISMATCH");
     await expect(
       store.admitSource({
         ...input,
-        sourceAuthorUrl: "https://source.invalid/writers/poet-almaarri?view=1",
+        sourceAuthorUrl: "https://source.invalid/cat-poet-almaarri?view=1",
       }),
     ).rejects.toThrow("SOURCE_CONFIGURATION_MISMATCH");
     expect(
@@ -533,8 +516,9 @@ describe("D1CorpusRevisionStore", () => {
     insertAdmissionAuthor(database);
     const admitted = await store.admitSource(exactAdmissionInput());
     const payload = {
+      insights: COMPLETE_INSIGHTS,
       schemaId: "saqi.poem-enrichment-output" as const,
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       translation: { lines: ["Verse"] },
       wordGlosses: {
         lines: [{ lineIndex: 0, segments: [] }],
@@ -549,7 +533,7 @@ describe("D1CorpusRevisionStore", () => {
       payloadHash: canonicalHash(payload),
       promptVersion: APPROVED_ENRICHMENT_PROMPT_VERSION,
       reasoningEffort: APPROVED_ENRICHMENT_REASONING_EFFORT,
-      schemaVersion: 2,
+      schemaVersion: 3,
       sourceRevisionId: admitted.binding.sourceRevisionId,
       taskKey: "bound-task-1",
       variant: 0,
@@ -622,8 +606,10 @@ describe("D1CorpusRevisionStore", () => {
 
     const receipt = await coordinator.publishBoundEnrichment(input);
     const previousPayload = {
-      ...payload,
+      schemaId: payload.schemaId,
+      schemaVersion: 2 as const,
       translation: { lines: ["Earlier verse"] },
+      wordGlosses: payload.wordGlosses,
     };
     const previousArtifact = {
       ...artifact,
@@ -634,6 +620,7 @@ describe("D1CorpusRevisionStore", () => {
       variant: 1,
       promptVersion: "sol-word-gloss-v2" as const,
       reasoningEffort: "high" as const,
+      schemaVersion: 2,
     };
     const previousValidations = validations.map((validation) => ({
       ...validation,
@@ -1108,7 +1095,7 @@ describe("D1CorpusRevisionStore", () => {
         .prepare(
           "UPDATE source_poem_identity SET canonical_url = ? WHERE external_id = ?",
         )
-        .run("https://source.invalid/works/999", "101680"),
+        .run("https://source.invalid/poem999.html", "101680"),
     ).toThrow(/SOURCE_POEM_OWNERSHIP_IMMUTABLE/);
     expect(() =>
       database.prepare("DELETE FROM poem_source_revision").run(),
@@ -1121,8 +1108,9 @@ describe("D1CorpusRevisionStore", () => {
     const item = plan.items[0];
     await store.promoteRecord(plan, item);
     const payload = {
+      insights: COMPLETE_INSIGHTS,
       schemaId: "saqi.poem-enrichment-output" as const,
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       translation: { lines: ["A new verse"] },
       wordGlosses: {
         lines: [
@@ -1153,7 +1141,7 @@ describe("D1CorpusRevisionStore", () => {
       sourceRevisionId: item.revisionId,
       taskKey: `enrich:${item.revisionId}`,
       variant: 0,
-      schemaVersion: 2,
+      schemaVersion: 3,
       promptVersion: APPROVED_ENRICHMENT_PROMPT_VERSION,
       model: "gpt-5.6-sol",
       reasoningEffort: APPROVED_ENRICHMENT_REASONING_EFFORT,
@@ -1170,7 +1158,7 @@ describe("D1CorpusRevisionStore", () => {
         sourceRevisionId: item.revisionId,
         taskKey: `enrich:${item.revisionId}`,
         variant: 0,
-        schemaVersion: 2,
+        schemaVersion: 3,
         promptVersion: APPROVED_ENRICHMENT_PROMPT_VERSION,
         model: "gpt-5.6-sol",
         reasoningEffort: APPROVED_ENRICHMENT_REASONING_EFFORT,
@@ -1276,7 +1264,6 @@ describe("D1CorpusRevisionStore", () => {
   });
 
   it("stores identical canonical payloads independently for every model", async () => {
-    seedFixtureModelProfiles(database);
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     const item = plan.items[0];
@@ -1301,22 +1288,22 @@ describe("D1CorpusRevisionStore", () => {
     ).not.toThrow();
     expect(() =>
       insert.run(
-        "same-fixture-a",
+        "same-claude",
         item.revisionId,
-        "fixture-a-v1",
-        "fixture-model-a",
-        "fixture-model-a",
-        "high",
+        "claude-opus-5-enrichment-v1",
+        "claude-opus-5",
+        "claude-opus-5",
+        "max",
         HASH_C,
       ),
     ).not.toThrow();
     expect(() =>
       insert.run(
-        "same-fixture-b",
+        "same-agy",
         item.revisionId,
-        "fixture-b-v1",
-        "fixture-model-b",
-        "fixture-model-b",
+        "agy-claude-opus-4-6-enrichment-v1",
+        "claude-opus-4-6-thinking",
+        "agy-claude-opus-4.6-thinking",
         "high",
         HASH_C,
       ),
@@ -1333,8 +1320,8 @@ describe("D1CorpusRevisionStore", () => {
         .pluck()
         .all(),
     ).toEqual([
-      "fixture-model-a/source-v1",
-      "fixture-model-b/source-v1",
+      "agy-claude-opus-4.6-thinking/source-v1",
+      "claude-opus-5/source-v1",
       "sol-5.6/source-v1",
     ]);
     expect(() =>
@@ -1365,7 +1352,7 @@ describe("D1CorpusRevisionStore", () => {
         .prepare(
           `UPDATE model_enrichment_artifact_profile
            SET profile_key = 'sol-5.6/source-v2'
-           WHERE artifact_id = 'same-fixture-a'`,
+           WHERE artifact_id = 'same-claude'`,
         )
         .run(),
     ).toThrow(/ARTIFACT_PROFILE_IMMUTABLE/u);
@@ -1442,8 +1429,9 @@ describe("D1CorpusRevisionStore", () => {
     });
 
     const currentPayload = {
+      insights: COMPLETE_INSIGHTS,
       schemaId: "saqi.poem-enrichment-output" as const,
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       translation: { lines: ["A better new verse"] },
       wordGlosses: {
         lines: [
@@ -1467,7 +1455,7 @@ describe("D1CorpusRevisionStore", () => {
       sourceRevisionId: item.revisionId,
       taskKey: `current:${item.revisionId}`,
       variant: 0,
-      schemaVersion: 2,
+      schemaVersion: 3,
       promptVersion: APPROVED_ENRICHMENT_PROMPT_VERSION,
       model: "gpt-5.6-sol",
       reasoningEffort: APPROVED_ENRICHMENT_REASONING_EFFORT,
@@ -1568,7 +1556,6 @@ describe("D1CorpusRevisionStore", () => {
   });
 
   it("rejects incoherent, stale, and non-monotonic model publication writes", async () => {
-    seedFixtureModelProfiles(database);
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     const item = plan.items[0];
@@ -1600,13 +1587,13 @@ describe("D1CorpusRevisionStore", () => {
         ) VALUES (?, ?, ?, 0, 1, ?, ?, ?, ?, ?, '{}', 1)`,
       )
       .run(
-        "guard-fixture",
+        "guard-claude",
         item.revisionId,
-        "guard-fixture-task",
-        "fixture-a-v1",
-        "fixture-model-a",
-        "fixture-model-a",
-        "high",
+        "guard-claude-task",
+        "claude-opus-5-enrichment-v1",
+        "claude-opus-5",
+        "claude-opus-5",
+        "max",
         HASH_C,
       );
 
@@ -1617,7 +1604,7 @@ describe("D1CorpusRevisionStore", () => {
       ) VALUES ('poem-1', ?, ?, ?, ?, ?, 1)
     `);
     expect(() =>
-      insertPointer.run("fixture-model-a", item.revisionId, "guard-sol", 1, 1),
+      insertPointer.run("claude-opus-5", item.revisionId, "guard-sol", 1, 1),
     ).toThrow(/MODEL_PUBLICATION_(?:PROFILE|RELATIONSHIP)_INVALID/u);
     database
       .prepare(
@@ -1662,7 +1649,7 @@ describe("D1CorpusRevisionStore", () => {
       database
         .prepare(
           `UPDATE poem_model_publication_pointer
-           SET enrichment_artifact_id = 'guard-fixture',
+           SET enrichment_artifact_id = 'guard-claude',
                pointer_version = pointer_version + 1
            WHERE poem_id = 'poem-1' AND model_key = 'sol-5.6'`,
         )
@@ -1860,11 +1847,11 @@ function stagedRecord(
     ordinal: 0,
     sourceName: SOURCE_NAME,
     sourceAuthorId: "495",
-    sourceAuthorUrl: "https://source.invalid/writers/poet-almaarri",
+    sourceAuthorUrl: "https://source.invalid/cat-poet-almaarri",
     authorNameArabic: "أبو العلاء المعري",
     canonicalAuthorId: "author-1",
     sourcePoemId: "101680",
-    sourcePoemUrl: "https://source.invalid/works/101680",
+    sourcePoemUrl: "https://source.invalid/poem101680.html",
     canonicalPoemId: "poem-1",
     titleArabic: "قصيدة جديدة",
     contentArabic: { content: ["بيت جديد"] },
@@ -1907,10 +1894,10 @@ function exactAdmissionInput() {
     lineNfcHash: hash("sha256", sourceLineNfcHashBody(linesArabic), "hex"),
     linesArabic,
     sourceAuthorId: "495",
-    sourceAuthorUrl: "https://source.invalid/writers/poet-almaarri",
+    sourceAuthorUrl: "https://source.invalid/cat-poet-almaarri",
     sourceContentSha256,
     sourceName: SOURCE_NAME,
-    sourcePoemUrl: "https://source.invalid/works/101681",
+    sourcePoemUrl: "https://source.invalid/poem101681.html",
     sourceRevisionId,
     titleArabic,
   };
@@ -1928,10 +1915,7 @@ function insertAdmissionAuthor(database: InstanceType<typeof Database>): void {
         canonical_author_id, first_observed_at, last_observed_at
       ) VALUES (?, 'primary-source', '495', ?, 'شاعر', 'author-1', 1, 1)`,
     )
-    .run(
-      `${SOURCE_NAME}\u{1F}495`,
-      "https://source.invalid/writers/poet-almaarri",
-    );
+    .run(`${SOURCE_NAME}\u{1F}495`, "https://source.invalid/cat-poet-almaarri");
 }
 
 function insertLegacyPoem(
@@ -1961,7 +1945,7 @@ function insertLegacyPoem(
     .run(
       input.poemId,
       input.authorId,
-      `work-${sourcePoemId}`,
+      `poem${sourcePoemId}`,
       "ذاك ظبي تحير الحسن في",
       JSON.stringify({ content: ["ذاك ظبي", "تحير الحسن"] }),
     );

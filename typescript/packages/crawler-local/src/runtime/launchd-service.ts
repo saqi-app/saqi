@@ -24,6 +24,7 @@ const DEFAULT_HOME = homedir();
 const DEFAULT_EXECUTABLE_SEARCH_PATH = [
   "/opt/homebrew/bin",
   join(DEFAULT_HOME, ".local", "bin"),
+  join(DEFAULT_HOME, ".local", "share", "mise", "shims"),
   "/usr/local/bin",
   "/usr/bin",
   "/bin",
@@ -44,11 +45,14 @@ export const LaunchdServiceOptionsSchema = z
       .max(16_384)
       .refine((value) => value.split(":").every(isAbsolute))
       .default(DEFAULT_EXECUTABLE_SEARCH_PATH),
+    // eslint-disable-next-line @sarj/prefer-millisecond-control-duration-schema -- launchd ExitTimeOut is a seconds-valued plist contract.
     exitTimeOutSeconds: z.int().min(30).max(7_200).default(135),
     label: LaunchdServiceLabelSchema,
     homePath: AbsolutePathSchema.default(DEFAULT_HOME),
+    preventIdleSleep: z.boolean().default(true),
     standardErrorPath: AbsolutePathSchema,
     standardOutPath: AbsolutePathSchema,
+    // eslint-disable-next-line @sarj/prefer-millisecond-control-duration-schema -- launchd ThrottleInterval is a seconds-valued plist contract.
     throttleIntervalSeconds: z.int().min(30).max(3_600).default(60),
     workingDirectory: AbsolutePathSchema,
   })
@@ -93,6 +97,9 @@ export async function renderLaunchdService(
     `  ${plistValue(options.label)}`,
     "  <key>ProgramArguments</key>",
     "  <array>",
+    ...(options.preventIdleSleep
+      ? [`    ${plistValue("/usr/bin/caffeinate")}`, `    ${plistValue("-is")}`]
+      : []),
     `    ${plistValue(options.executablePath)}`,
     `    ${plistValue("run-service")}`,
     `    ${plistValue("--config")}`,
@@ -255,7 +262,8 @@ async function inspectCodexAuth(
   let state: LaunchdCodexAuthDiagnostic["state"] = "readable";
   try {
     const information = await stat(authPath);
-    if (!information.isFile()) state = "unreadable";
+    if (!information.isFile() || (information.mode & 0o444) === 0)
+      state = "unreadable";
     else await access(authPath, constants.R_OK);
   } catch (error) {
     state = errorCode(error) === "ENOENT" ? "missing" : "unreadable";

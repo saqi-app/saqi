@@ -4,6 +4,7 @@ import {
   ENRICHMENT_INPUT_SCHEMA_ID,
   ENRICHMENT_INPUT_SCHEMA_VERSION,
   materializePoemEnrichmentV2,
+  materializePoemEnrichmentV3,
   PoemEnrichmentInputSchema,
   PoemEnrichmentOutputSchema,
   PoemEnrichmentReviewSchema,
@@ -11,6 +12,7 @@ import {
   tokenizeArabicForGlosses,
   validatePoemEnrichment,
   validatePoemEnrichmentV2,
+  validatePoemEnrichmentV3,
 } from "../enrichment.js";
 
 const HASH = "a".repeat(64);
@@ -198,6 +200,53 @@ describe("poem enrichment contracts", () => {
         (segment) => segment.kind === "word" && segment.tokenIndex === 0,
       ),
     ).toHaveProperty("parts");
+  });
+
+  it("materializes and validates a combined v3 artifact without dropping insights", () => {
+    const output = materializePoemEnrichmentV3(INPUT, {
+      insights: OUTPUT.insights,
+      translation: OUTPUT.translation,
+      wordGlosses: {
+        lines: INPUT.linesArabic.map((line, lineIndex) => ({
+          lineIndex,
+          tokens: tokenizeArabicForGlosses(line).flatMap((segment) =>
+            segment.kind === "word"
+              ? [
+                  {
+                    meaning: `word ${String(segment.tokenIndex)}`,
+                    tokenIndex: segment.tokenIndex,
+                  },
+                ]
+              : [],
+          ),
+        })),
+      },
+    });
+
+    expect(output).toMatchObject({
+      insights: OUTPUT.insights,
+      schemaId: "saqi.poem-enrichment-output",
+      schemaVersion: 3,
+    });
+    expect(validatePoemEnrichmentV3(INPUT, output)).toEqual({
+      findings: [],
+      passed: true,
+    });
+    expect(
+      validatePoemEnrichmentV3(INPUT, {
+        ...output,
+        insights: {
+          ...output.insights,
+          notableLines: [
+            { explanation: "Invented evidence.", line: "ليست من القصيدة" },
+          ],
+        },
+      }).findings,
+    ).toContainEqual({
+      code: "NOTABLE_LINE_NOT_IN_SOURCE",
+      lineIndex: null,
+      severity: "critical",
+    });
   });
 
   it("drops optional parts that do not reconstruct the source token", () => {

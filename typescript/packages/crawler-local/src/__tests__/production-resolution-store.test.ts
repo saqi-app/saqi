@@ -16,6 +16,7 @@ import {
   ProductionResolutionStore,
 } from "../persistence/production-resolution-store";
 import type { WorkItem } from "../persistence/schema";
+import { openProductionResolutionStore } from "../persistence/scoped-production-resolution";
 import { SqliteQueryValidationError } from "../persistence/sqlite-query";
 import {
   canonicalJson,
@@ -33,6 +34,30 @@ afterEach(() => {
 });
 
 describe("production resolution store", () => {
+  it("keeps legacy v2 full snapshots readable during rolling replacement", async () => {
+    const fixture = createFixture();
+    fixture.database.close();
+    createLegacyV2Snapshot(fixture.output, 42);
+
+    const store = await openProductionResolutionStore(fixture.output);
+    await expect(store.report()).resolves.toMatchObject({
+      poemCount: 1,
+      schemaVersion: 2,
+    });
+    await expect(store.resolve(sourceWork(42), detail(42))).resolves.toEqual({
+      mapping: {
+        authorId: "author-1",
+        authorNameArabic: "شاعر",
+        poemId: poemId(42),
+        sourceAuthorSlug: "poet",
+        sourcePoemId: "42",
+      },
+      observedAt: OBSERVED_AT,
+      writerEpoch: 7,
+    });
+    store.close();
+  });
+
   it("exports indexed identity and independent model pointers, then replays exactly", async () => {
     const fixture = createFixture();
     insertPoem(fixture.database, 42);
@@ -59,10 +84,21 @@ describe("production resolution store", () => {
       writerEpoch: 7,
     });
     expect(statSync(fixture.output).mode & 0o777).toBe(0o600);
+    const compatibleStore = await openProductionResolutionStore(fixture.output);
+    await expect(compatibleStore.report()).resolves.toMatchObject({
+      poemCount: 1,
+      schemaVersion: 4,
+    });
+    compatibleStore.close();
     const store = await ProductionResolutionStore.open(fixture.output);
     await expect(
       store.resolve(sourceWork(42), detail(42)),
     ).resolves.toMatchObject({
+      binding: {
+        admissionEvidence: { sourcePointerVersion: 1 },
+        lineNfcHash: sha256(canonicalJson(["صدر", "عجز"])),
+        sourceRevisionId: revisionId(42),
+      },
       mapping: {
         poemId: poemId(42),
         sourceAuthorSlug: "poet",
@@ -91,7 +127,7 @@ describe("production resolution store", () => {
         poemId(42),
         "historical-model",
         false,
-        "revision-42",
+        revisionId(42),
       ),
     ).resolves.toEqual({ expectedPointerVersion: 4, writerEpoch: 7 });
     await expect(
@@ -99,7 +135,7 @@ describe("production resolution store", () => {
         poemId(42),
         "historical-model",
         false,
-        "revision-stale",
+        sha256("revision-stale"),
       ),
     ).resolves.toBeNull();
     await expect(
@@ -185,24 +221,28 @@ describe("production resolution store", () => {
       )`,
     );
     const revisionInsert = fixture.database.prepare(
-      "INSERT INTO poem_source_revision VALUES (?, ?)",
+      "INSERT INTO poem_source_revision VALUES (?, ?, ?)",
     );
     const pointerInsert = fixture.database.prepare(
-      "INSERT INTO poem_source_pointer VALUES (?, ?)",
+      "INSERT INTO poem_source_pointer VALUES (?, ?, ?)",
     );
     const insert = fixture.database.transaction(() => {
       for (let index = 1; index <= 25_000; index += 1) {
         const numericId = String(index);
         const canonicalPoemId = poemId(index);
-        poemInsert.run(canonicalPoemId, `work-${numericId}`);
+        poemInsert.run(canonicalPoemId, `poem${numericId}`);
         sourceInsert.run(
           `source-poem-${numericId}`,
           numericId,
-          `https://source.invalid/works/${numericId}`,
+          `https://source.invalid/poem${numericId}.html`,
           canonicalPoemId,
         );
-        revisionInsert.run(`revision-${numericId}`, `source-poem-${numericId}`);
-        pointerInsert.run(`source-poem-${numericId}`, `revision-${numericId}`);
+        revisionInsert.run(
+          revisionId(index),
+          `source-poem-${numericId}`,
+          canonicalJson({ content: ["صدر", "عجز"] }),
+        );
+        pointerInsert.run(`source-poem-${numericId}`, revisionId(index), 1);
       }
     });
     insert();
@@ -278,13 +318,50 @@ describe("production resolution store", () => {
     const fixture = createFixture();
     fixture.database.exec(`
       INSERT INTO author VALUES ('author-2', 'شاعر آخر', 'other');
-      INSERT INTO poem VALUES ('wrong-poem', 'author-2', 'work-77');
+      INSERT INTO poem VALUES ('wrong-poem', 'author-2', 'poem77');
       INSERT INTO source_poem_identity VALUES (
         'source-poem-77', 'source', '77', 'source-author-1',
-        'https://source.invalid/works/77', 'wrong-poem', 1, 1, NULL
+        'https://source.invalid/poem77.html', 'wrong-poem', 1, 1, NULL
       );
     `);
     fixture.database.close();
+    await expect(
+      exportProductionResolution({
+        database: fixture.source,
+        observedAt: OBSERVED_AT,
+        output: fixture.output,
+      }),
+    ).rejects.toThrow("PRODUCTION_RESOLUTION_SOURCE_OWNERSHIP_MISMATCH");
+  });
+
+  it("ignores unrelated legacy or test rows outside the exported source domain", async () => {
+    const fixture = createFixture();
+    insertPoem(fixture.database, 42);
+    fixture.database.exec(`
+      PRAGMA foreign_keys = OFF;
+      INSERT INTO poem VALUES ('unrelated-orphan', 'missing-author', 'legacy');
+      INSERT INTO poem_model_publication_pointer
+        VALUES ('unrelated-orphan', 'legacy-model', 1);
+    `);
+    fixture.database.close();
+
+    await expect(
+      exportProductionResolution({
+        database: fixture.source,
+        observedAt: OBSERVED_AT,
+        output: fixture.output,
+      }),
+    ).resolves.toMatchObject({ modelPointerCount: 0, poemCount: 1 });
+  });
+
+  it("rejects an active source identity without a publication pointer", async () => {
+    const fixture = createFixture();
+    insertPoem(fixture.database, 42);
+    fixture.database
+      .prepare("DELETE FROM poem_source_pointer WHERE source_poem_id = ?")
+      .run("source-poem-42");
+    fixture.database.close();
+
     await expect(
       exportProductionResolution({
         database: fixture.source,
@@ -426,11 +503,13 @@ function createFixture() {
     );
     CREATE TABLE poem_source_revision (
       id TEXT PRIMARY KEY,
-      source_poem_id TEXT NOT NULL REFERENCES source_poem_identity(id)
+      source_poem_id TEXT NOT NULL REFERENCES source_poem_identity(id),
+      content_arabic TEXT NOT NULL
     );
     CREATE TABLE poem_source_pointer (
       source_poem_id TEXT PRIMARY KEY REFERENCES source_poem_identity(id),
-      revision_id TEXT NOT NULL REFERENCES poem_source_revision(id)
+      revision_id TEXT NOT NULL REFERENCES poem_source_revision(id),
+      pointer_version INTEGER NOT NULL
     );
     CREATE INDEX source_author_canonical
       ON source_author_identity(canonical_author_id);
@@ -441,11 +520,66 @@ function createFixture() {
     INSERT INTO author VALUES ('author-1', 'شاعر', 'poet');
     INSERT INTO source_author_identity VALUES (
       'source-author-1', 'source', 'poet',
-      'https://source.invalid/writers/poet', 'author-1'
+      'https://source.invalid/cat-poet', 'author-1'
     );
     INSERT INTO scraper_writer_control VALUES (1, 7);
   `);
   return { database, output: join(root, "resolution.sqlite"), root, source };
+}
+
+function createLegacyV2Snapshot(output: string, numericId: number): void {
+  const database = new Database(output);
+  const row = {
+    authorId: "author-1",
+    authorNameArabic: "شاعر",
+    currentRevisionId: revisionId(numericId),
+    expectedPointerVersion: null,
+    poemId: poemId(numericId),
+    sourceAuthorSlug: "poet",
+    sourcePoemId: String(numericId),
+  };
+  const manifest = sha256(`${canonicalJson({ kind: "poem", ...row })}\n`);
+  database.exec(`
+    CREATE TABLE resolution_meta (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      schema_id TEXT NOT NULL,
+      schema_version INTEGER NOT NULL CHECK (schema_version = 2),
+      observed_at TEXT NOT NULL,
+      writer_epoch INTEGER NOT NULL CHECK (writer_epoch >= 1),
+      poem_count INTEGER NOT NULL CHECK (poem_count >= 0),
+      model_pointer_count INTEGER NOT NULL CHECK (model_pointer_count >= 0),
+      manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64)
+    ) STRICT;
+    CREATE TABLE poem_resolution (
+      source_poem_id TEXT PRIMARY KEY,
+      poem_id TEXT NOT NULL UNIQUE,
+      author_id TEXT NOT NULL,
+      author_name_arabic TEXT NOT NULL,
+      source_author_slug TEXT NOT NULL,
+      current_revision_id TEXT NOT NULL,
+      expected_pointer_version INTEGER CHECK (expected_pointer_version >= 1)
+    ) STRICT, WITHOUT ROWID;
+    CREATE TABLE model_pointer (
+      poem_id TEXT NOT NULL REFERENCES poem_resolution(poem_id),
+      model_key TEXT NOT NULL,
+      pointer_version INTEGER NOT NULL CHECK (pointer_version >= 1),
+      PRIMARY KEY (poem_id, model_key)
+    ) STRICT, WITHOUT ROWID;
+  `);
+  database
+    .prepare(`INSERT INTO poem_resolution VALUES (?, ?, ?, ?, ?, ?, NULL)`)
+    .run(
+      row.sourcePoemId,
+      row.poemId,
+      row.authorId,
+      row.authorNameArabic,
+      row.sourceAuthorSlug,
+      row.currentRevisionId,
+    );
+  database
+    .prepare(`INSERT INTO resolution_meta VALUES (1, ?, 2, ?, 7, 1, 0, ?)`)
+    .run("saqi.production-resolution-store", OBSERVED_AT, manifest);
+  database.close();
 }
 
 function insertPoem(
@@ -455,7 +589,7 @@ function insertPoem(
 ): void {
   database
     .prepare("INSERT INTO poem VALUES (?, 'author-1', ?)")
-    .run(poemId(numericId), `work-${String(canonicalSlugNumericId)}`);
+    .run(poemId(numericId), `poem${String(canonicalSlugNumericId)}`);
   database
     .prepare(
       `INSERT INTO source_poem_identity VALUES (
@@ -465,15 +599,23 @@ function insertPoem(
     .run(
       `source-poem-${String(numericId)}`,
       String(numericId),
-      `https://source.invalid/works/${String(numericId)}`,
+      `https://source.invalid/poem${String(numericId)}.html`,
       poemId(numericId),
     );
   database
-    .prepare("INSERT INTO poem_source_revision VALUES (?, ?)")
-    .run(`revision-${String(numericId)}`, `source-poem-${String(numericId)}`);
+    .prepare("INSERT INTO poem_source_revision VALUES (?, ?, ?)")
+    .run(
+      revisionId(numericId),
+      `source-poem-${String(numericId)}`,
+      canonicalJson({ content: ["صدر", "عجز"] }),
+    );
   database
-    .prepare("INSERT INTO poem_source_pointer VALUES (?, ?)")
-    .run(`source-poem-${String(numericId)}`, `revision-${String(numericId)}`);
+    .prepare("INSERT INTO poem_source_pointer VALUES (?, ?, ?)")
+    .run(`source-poem-${String(numericId)}`, revisionId(numericId), 1);
+}
+
+function revisionId(numericId: number): string {
+  return sha256(`revision-${String(numericId)}`);
 }
 
 function poemId(numericId: number): string {
@@ -486,9 +628,9 @@ function sourceWork(
   authorNameArabic?: string,
 ): WorkItem {
   const input = {
-    authorHref: `https://source.invalid/writers/${authorSlug}`,
+    authorHref: `https://source.invalid/cat-${authorSlug}`,
     ...(authorNameArabic === undefined ? {} : { authorNameArabic }),
-    poemHref: `https://source.invalid/works/${String(numericId)}`,
+    poemHref: `https://source.invalid/poem${String(numericId)}.html`,
   };
   const definition = {
     implementationVersion: collectorImplementationVersion(),
@@ -524,15 +666,15 @@ function detail(
   const source = {
     author: {
       canonicalId: `source:author:${authorSlug}`,
-      href: `https://source.invalid/writers/${authorSlug}`,
-      path: `/writers/${authorSlug}`,
+      href: `https://source.invalid/cat-${authorSlug}`,
+      path: `/cat-${authorSlug}`,
       slug: authorSlug,
     },
     canonicalId: `source:poem:${String(numericId)}`,
-    href: `https://source.invalid/works/${String(numericId)}`,
+    href: `https://source.invalid/poem${String(numericId)}.html`,
     lines: ["صدر", "عجز"],
     numericId: String(numericId),
-    slug: `work-${String(numericId)}`,
+    slug: `poem${String(numericId)}`,
     structure: "classical",
     title: "قصيدة",
     verses: 1,

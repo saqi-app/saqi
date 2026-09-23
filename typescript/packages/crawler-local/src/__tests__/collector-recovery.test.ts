@@ -40,8 +40,8 @@ function deadLetter(
 ): string {
   const sourceId = id + 1;
   const input = {
-    authorHref: `https://source.invalid/writers/${String(sourceId)}`,
-    poemHref: `https://source.invalid/works/${String(sourceId)}`,
+    authorHref: `https://source.invalid/cat-${String(sourceId)}`,
+    poemHref: `https://source.invalid/poem${String(sourceId)}.html`,
   };
   const kind = options.kind ?? collectionWorkKinds().poemDetail;
   const seeded = ledger.seed(
@@ -86,6 +86,12 @@ function succeedReleased(
 }
 
 describe("bounded collector recovery", () => {
+  it("includes transient poem structure failures", () => {
+    expect(COLLECTOR_RECOVERY_ERROR_CODES).toContain(
+      "SOURCE_POEM_STRUCTURE_INVALID",
+    );
+  });
+
   it("fences concurrent exact-cohort claims without admitting unrelated work", () => {
     const root = mkdtempSync(join(tmpdir(), "collector-recovery-claim-"));
     const database = join(root, "ledger.sqlite3");
@@ -97,8 +103,8 @@ describe("bounded collector recovery", () => {
       20_000,
     );
     const unrelatedInput = {
-      authorHref: "https://source.invalid/writers/unrelated",
-      poemHref: "https://source.invalid/works/999",
+      authorHref: "https://source.invalid/cat-unrelated",
+      poemHref: "https://source.invalid/poem999.html",
     };
     const unrelated = first.seed(
       {
@@ -244,7 +250,7 @@ describe("bounded collector recovery", () => {
     expect(controller.cycle(now).state.phase).toBe("complete");
     expect(controller.status().completed).toBe(130);
     ledger.close();
-  }, 15_000);
+  });
 
   it("persists its chosen rest deadline and stops on a failed reservation", () => {
     const ledger = open();

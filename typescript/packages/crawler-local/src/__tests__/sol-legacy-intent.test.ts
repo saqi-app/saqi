@@ -61,7 +61,7 @@ describe("historical Sol-only intent adapter", () => {
     { provider: "sol" },
     { modelKey: "sol-5.6" },
     { provider: undefined },
-    { provider: "retired", modelKey: "sol-5.6" },
+    { provider: "claude", modelKey: "sol-5.6" },
     { extra: "unrecognized" },
     { attemptId: "../escape" },
     { inputHash: "not-a-hash" },

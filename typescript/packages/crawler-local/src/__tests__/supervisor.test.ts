@@ -39,9 +39,13 @@ function testConfig(input: Record<string, unknown>) {
 }
 
 async function waitForCondition(condition: () => boolean): Promise<void> {
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline) {
+  const deadline = performance.now() + 5_000;
+  while (performance.now() < deadline) {
     if (condition()) return;
+    // Yield through the timer phase as well as the immediate queue. Status
+    // snapshots include asynchronous filesystem work, and a tight sequence of
+    // immediates can exhaust an arbitrary iteration ceiling before I/O gets a
+    // turn on slower shared or ARM runners.
     await new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 1));
   }
   throw new Error("Timed out waiting for test condition");

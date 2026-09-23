@@ -12,6 +12,16 @@ import {
 import { dirname, resolve } from "node:path";
 
 import {
+  CANONICAL_POEM_BINDING_SCHEMA_ID,
+  CANONICAL_POEM_BINDING_SCHEMA_VERSION,
+  canonicalPoemBindingIdBody,
+  type CanonicalPoemBindingV1,
+  CanonicalPoemBindingV1Schema,
+  SAQI_PRODUCTION_DATABASE_ID,
+  sourceLineNfcHashBody,
+  sourcePromptMaterialHashBody,
+} from "@saqi/precedent-iso";
+import {
   canonicalAuthorUrl,
   canonicalPoemUrl,
   currentSource,
@@ -37,7 +47,10 @@ import { canonicalJson, sha256 } from "./work-key.js";
 
 export const PRODUCTION_RESOLUTION_SCHEMA_ID =
   "saqi.production-resolution-store";
-export const PRODUCTION_RESOLUTION_SCHEMA_VERSION = 2;
+// Version 3 is already occupied by exact-scope snapshots. Full snapshots add
+// binding evidence at version 4 so the generic opener can distinguish them.
+export const PRODUCTION_RESOLUTION_SCHEMA_VERSION = 4;
+const LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION = 2;
 const ForeignKeyViolationsSchema = z.array(z.unknown());
 const ExistenceFlagSchema = z.literal(1);
 const MaximumResolutionAgeMsSchema = z
@@ -52,23 +65,27 @@ const DEFAULT_MAXIMUM_AGE_MS = 30 * 24 * 60 * 60_000;
 const ObservedAtSchema = z.iso.datetime({ offset: true });
 const SourcePoemIdSchema = z.string().regex(/^[1-9]\d*$/);
 const IdentifierSchema = z.string().min(1).max(512);
+const Sha256Schema = z.string().regex(/^[\da-f]{64}$/);
 const PointerVersionSchema = SqliteSafeIntegerSchema.positive();
 const SourcePoemRowSchema = z
   .strictObject({
     author_id: IdentifierSchema,
     author_name_arabic: z.string().trim().min(1).max(10_000),
+    content_arabic: z.string(),
     poem_id: IdentifierSchema,
     source_author_slug: z.string().min(1).max(1_000),
     source_author_url: z.url(),
     source_poem_id: SourcePoemIdSchema,
     source_poem_url: z.url(),
+    source_pointer_version: PointerVersionSchema,
     expected_pointer_version: PointerVersionSchema.nullable(),
-    current_revision_id: IdentifierSchema,
+    current_revision_id: Sha256Schema,
   })
   .transform(
     ({
       author_id,
       author_name_arabic,
+      content_arabic,
       current_revision_id,
       expected_pointer_version,
       poem_id,
@@ -76,9 +93,11 @@ const SourcePoemRowSchema = z
       source_author_url,
       source_poem_id,
       source_poem_url,
+      source_pointer_version,
     }) => ({
       authorId: author_id,
       authorNameArabic: author_name_arabic,
+      contentArabic: content_arabic,
       currentRevisionId: current_revision_id,
       expectedPointerVersion: expected_pointer_version,
       poemId: poem_id,
@@ -86,6 +105,7 @@ const SourcePoemRowSchema = z
       sourceAuthorUrl: source_author_url,
       sourcePoemId: source_poem_id,
       sourcePoemUrl: source_poem_url,
+      sourcePointerVersion: source_pointer_version,
     }),
   );
 const PointerRowSchema = z
@@ -106,7 +126,10 @@ const MetaRowSchema = z
     observed_at: ObservedAtSchema,
     poem_count: SqliteSafeIntegerSchema.nonnegative(),
     schema_id: z.literal(PRODUCTION_RESOLUTION_SCHEMA_ID),
-    schema_version: z.literal(PRODUCTION_RESOLUTION_SCHEMA_VERSION),
+    schema_version: z.union([
+      z.literal(LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION),
+      z.literal(PRODUCTION_RESOLUTION_SCHEMA_VERSION),
+    ]),
     writer_epoch: SqliteSafeIntegerSchema.positive(),
   })
   .transform(
@@ -131,7 +154,9 @@ const MetaRowSchema = z
 const ArtifactIdentitySchema = z.looseObject({
   source: z.looseObject({
     author: z.looseObject({ slug: z.string().min(1).max(1_000) }),
+    lines: z.array(z.string()),
     numericId: SourcePoemIdSchema,
+    title: z.string(),
   }),
   sourceContext: z
     .strictObject({
@@ -142,6 +167,9 @@ const ArtifactIdentitySchema = z.looseObject({
 });
 const CollectedIdentityInputSchema = z.looseObject({
   authorNameArabic: z.string().trim().min(1).max(512).optional(),
+});
+const SourceContentDocumentSchema = z.looseObject({
+  content: z.array(z.string()),
 });
 const WriterControlRowSchema = z
   .strictObject({
@@ -178,28 +206,37 @@ const ResolutionRowSchema = z
     author_id: IdentifierSchema,
     author_name_arabic: z.string().trim().min(1).max(10_000),
     expected_pointer_version: PointerVersionSchema.nullable(),
+    current_source_nfc_sha256: z
+      .string()
+      .regex(/^[a-f\d]{64}$/)
+      .nullable(),
     current_revision_id: IdentifierSchema,
     poem_id: IdentifierSchema,
     source_author_slug: z.string().min(1).max(1_000),
     source_poem_id: SourcePoemIdSchema,
+    source_pointer_version: PointerVersionSchema.nullable(),
   })
   .transform(
     ({
       author_id,
       author_name_arabic,
+      current_source_nfc_sha256,
       current_revision_id,
       expected_pointer_version,
       poem_id,
       source_author_slug,
       source_poem_id,
+      source_pointer_version,
     }) => ({
       authorId: author_id,
       authorNameArabic: author_name_arabic,
+      currentSourceNfcSha256: current_source_nfc_sha256,
       currentRevisionId: current_revision_id,
       expectedPointerVersion: expected_pointer_version,
       poemId: poem_id,
       sourceAuthorSlug: source_author_slug,
       sourcePoemId: source_poem_id,
+      sourcePointerVersion: source_pointer_version,
     }),
   );
 const PoemPointerRowSchema = z
@@ -250,7 +287,9 @@ export interface ProductionResolutionReport {
   readonly promotion?: "created" | "replayed";
   readonly replayed?: boolean;
   readonly schemaId: typeof PRODUCTION_RESOLUTION_SCHEMA_ID;
-  readonly schemaVersion: typeof PRODUCTION_RESOLUTION_SCHEMA_VERSION;
+  readonly schemaVersion:
+    | typeof LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION
+    | typeof PRODUCTION_RESOLUTION_SCHEMA_VERSION;
   readonly writerEpoch: number;
 }
 
@@ -280,7 +319,7 @@ class ProductionResolutionDatabase {
     );
   }
 
-  validateSchema(): void {
+  validateSchema(schemaVersion: 2 | 4): void {
     this.#validateColumns("resolution_meta", [
       "manifest_sha256",
       "model_pointer_count",
@@ -299,6 +338,9 @@ class ProductionResolutionDatabase {
       "poem_id",
       "source_author_slug",
       "source_poem_id",
+      ...(schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
+        ? ["current_source_nfc_sha256", "source_pointer_version"]
+        : []),
     ]);
     this.#validateColumns("model_pointer", [
       "model_key",
@@ -354,6 +396,10 @@ class ProductionResolutionDatabase {
         throw new Error("PRODUCTION_RESOLUTION_INDEX_MISSING");
     }
     const manifest = createHash("sha256");
+    const sourceBindingColumns =
+      meta.schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
+        ? "current_source_nfc_sha256, source_pointer_version"
+        : "NULL AS current_source_nfc_sha256, NULL AS source_pointer_version";
     for (const row of queryStream(
       { operation: "productionResolution.manifestPoems" },
       () =>
@@ -361,17 +407,27 @@ class ProductionResolutionDatabase {
           .prepare(
             `SELECT source_poem_id, poem_id, author_id, author_name_arabic,
                     source_author_slug, current_revision_id,
-                    expected_pointer_version
+                    expected_pointer_version, ${sourceBindingColumns}
                FROM poem_resolution ORDER BY poem_id`,
           )
           .iterate(),
       ResolutionRowSchema,
     )) {
       manifest.update(
-        `${canonicalJson({
-          kind: "poem",
-          ...row,
-        })}\n`,
+        `${canonicalJson(
+          meta.schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
+            ? { kind: "poem", ...row }
+            : {
+                authorId: row.authorId,
+                authorNameArabic: row.authorNameArabic,
+                currentRevisionId: row.currentRevisionId,
+                expectedPointerVersion: row.expectedPointerVersion,
+                kind: "poem",
+                poemId: row.poemId,
+                sourceAuthorSlug: row.sourceAuthorSlug,
+                sourcePoemId: row.sourcePoemId,
+              },
+        )}\n`,
       );
     }
     for (const row of queryStream(
@@ -423,12 +479,16 @@ class ProductionResolutionQueries {
   readonly #bySource: Database.Statement;
   readonly #modelPointer: Database.Statement;
 
-  constructor(database: Database.Database) {
+  constructor(database: Database.Database, schemaVersion: 2 | 4) {
+    const sourceBindingColumns =
+      schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
+        ? "current_source_nfc_sha256, source_pointer_version"
+        : "NULL AS current_source_nfc_sha256, NULL AS source_pointer_version";
     // eslint-disable-next-line @sarj/require-sql-access-class -- This query-store constructor prepares its source lookup on the injected connection.
     this.#bySource = database.prepare(
       `SELECT source_poem_id, poem_id, author_id, author_name_arabic,
               source_author_slug, expected_pointer_version,
-              current_revision_id
+              current_revision_id, ${sourceBindingColumns}
          FROM poem_resolution WHERE source_poem_id = ?`,
     );
     // eslint-disable-next-line @sarj/require-sql-access-class -- This query-store constructor prepares its poem lookup on the injected connection.
@@ -493,11 +553,24 @@ class ProductionSourceDatabase {
       () =>
         this.#database
           .prepare(
-            `SELECT poem_id, model_key, pointer_version
-               FROM poem_model_publication_pointer
-              ORDER BY poem_id, model_key`,
+            `SELECT model_pointer.poem_id, model_pointer.model_key,
+                    model_pointer.pointer_version
+               FROM poem_model_publication_pointer AS model_pointer
+               JOIN source_poem_identity AS source_poem
+                 ON source_poem.canonical_poem_id = model_pointer.poem_id
+                AND source_poem.source_name = ?
+                AND source_poem.tombstoned_at IS NULL
+               JOIN source_author_identity AS source_author
+                 ON source_author.id = source_poem.source_author_id
+                AND source_author.source_name = ?
+               JOIN poem ON poem.id = source_poem.canonical_poem_id
+                AND poem.author_id = source_author.canonical_author_id
+               JOIN author ON author.id = source_author.canonical_author_id
+               JOIN poem_source_pointer AS source_pointer
+                 ON source_pointer.source_poem_id = source_poem.id
+              ORDER BY model_pointer.poem_id, model_pointer.model_key`,
           )
-          .iterate(),
+          .iterate(currentSource().name, currentSource().name),
       PointerRowSchema,
     );
   }
@@ -515,6 +588,8 @@ class ProductionSourceDatabase {
                 source_poem.external_id AS source_poem_id,
                 source_poem.canonical_url AS source_poem_url,
                 source_pointer.revision_id AS current_revision_id,
+                source_pointer.pointer_version AS source_pointer_version,
+                source_revision.content_arabic AS content_arabic,
                 ${legacy ? "legacy.pointer_version" : "NULL"} AS expected_pointer_version
            FROM source_poem_identity AS source_poem
            JOIN source_author_identity AS source_author
@@ -523,6 +598,9 @@ class ProductionSourceDatabase {
            JOIN poem ON poem.id = source_poem.canonical_poem_id
            JOIN poem_source_pointer AS source_pointer
              ON source_pointer.source_poem_id = source_poem.id
+           JOIN poem_source_revision AS source_revision
+             ON source_revision.id = source_pointer.revision_id
+            AND source_revision.source_poem_id = source_poem.id
            JOIN author ON author.id = source_author.canonical_author_id
             AND author.id = poem.author_id
            ${legacy ? "LEFT JOIN poem_publication_pointer AS legacy ON legacy.poem_id = poem.id" : ""}
@@ -594,7 +672,13 @@ class ProductionSourceDatabase {
       "tombstoned_at",
     ]);
     this.#validateColumns("poem_source_pointer", [
+      "pointer_version",
       "revision_id",
+      "source_poem_id",
+    ]);
+    this.#validateColumns("poem_source_revision", [
+      "content_arabic",
+      "id",
       "source_poem_id",
     ]);
     if (this.tableExists("poem_publication_pointer"))
@@ -608,20 +692,6 @@ class ProductionSourceDatabase {
         "poem_id",
         "pointer_version",
       ]);
-    const orphan = queryScalar(
-      { operation: "productionSource.orphanPoem" },
-      () =>
-        this.#database
-          .prepare(
-            `SELECT 1 FROM poem LEFT JOIN author ON author.id = poem.author_id
-              WHERE author.id IS NULL LIMIT 1`,
-          )
-          .pluck()
-          .get(),
-      ExistenceFlagSchema,
-    );
-    if (orphan !== undefined)
-      throw new Error("PRODUCTION_RESOLUTION_ORPHAN_POEM");
     const invalidSourceOwnership = queryScalar(
       { operation: "productionSource.invalidOwnership" },
       () =>
@@ -631,13 +701,23 @@ class ProductionSourceDatabase {
            FROM source_poem_identity AS source_poem
            JOIN source_author_identity AS source_author
              ON source_author.id = source_poem.source_author_id
+           LEFT JOIN author
+             ON author.id = source_author.canonical_author_id
            LEFT JOIN poem ON poem.id = source_poem.canonical_poem_id
+           LEFT JOIN poem_source_pointer AS source_pointer
+             ON source_pointer.source_poem_id = source_poem.id
+           LEFT JOIN poem_source_revision AS source_revision
+             ON source_revision.id = source_pointer.revision_id
+            AND source_revision.source_poem_id = source_poem.id
           WHERE source_poem.source_name = ?
             AND source_poem.tombstoned_at IS NULL
             AND (
               source_author.source_name <> ?
+              OR author.id IS NULL
               OR poem.id IS NULL
               OR poem.author_id <> source_author.canonical_author_id
+              OR source_pointer.source_poem_id IS NULL
+              OR source_revision.id IS NULL
             )
           LIMIT 1`,
           )
@@ -647,30 +727,6 @@ class ProductionSourceDatabase {
     );
     if (invalidSourceOwnership !== undefined)
       throw new Error("PRODUCTION_RESOLUTION_SOURCE_OWNERSHIP_MISMATCH");
-    const unmappedPoem = queryScalar(
-      { operation: "productionSource.unmappedPoem" },
-      () =>
-        this.#database
-          .prepare(
-            `SELECT 1 FROM poem
-          WHERE NOT EXISTS (
-            SELECT 1 FROM source_poem_identity AS source_poem
-            JOIN source_author_identity AS source_author
-              ON source_author.id = source_poem.source_author_id
-            WHERE source_poem.source_name = ?
-              AND source_author.source_name = ?
-              AND source_poem.tombstoned_at IS NULL
-              AND source_poem.canonical_poem_id = poem.id
-              AND source_author.canonical_author_id = poem.author_id
-          )
-          LIMIT 1`,
-          )
-          .pluck()
-          .get(currentSource().name, currentSource().name),
-      ExistenceFlagSchema,
-    );
-    if (unmappedPoem !== undefined)
-      throw new Error("PRODUCTION_RESOLUTION_UNMAPPED_POEM");
   }
 
   #validateColumns(table: string, required: readonly string[]): void {
@@ -706,8 +762,9 @@ class ProductionSnapshotDatabase {
     this.#insertPoem = this.#database.prepare(
       `INSERT INTO poem_resolution (
          source_poem_id, poem_id, author_id, author_name_arabic,
-         source_author_slug, current_revision_id, expected_pointer_version
-       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         source_author_slug, current_revision_id, expected_pointer_version,
+         current_source_nfc_sha256, source_pointer_version
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.#insertModel = this.#database.prepare(
       `INSERT INTO model_pointer (poem_id, model_key, pointer_version)
@@ -760,10 +817,12 @@ class ProductionSnapshotDatabase {
     row: {
       readonly authorId: string;
       readonly authorNameArabic: string;
+      readonly currentSourceNfcSha256: string;
       readonly expectedPointerVersion: null | number;
       readonly poemId: string;
       readonly sourceAuthorSlug: string;
       readonly sourcePoemId: string;
+      readonly sourcePointerVersion: number;
     },
     currentRevisionId: string,
   ): void {
@@ -775,6 +834,8 @@ class ProductionSnapshotDatabase {
       row.sourceAuthorSlug,
       currentRevisionId,
       row.expectedPointerVersion,
+      row.currentSourceNfcSha256,
+      row.sourcePointerVersion,
     );
   }
 
@@ -831,11 +892,14 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
     this.#repository = new ProductionResolutionDatabase(this.#database);
     try {
       this.#repository.configureReadonly();
-      this.#repository.validateSchema();
       this.#meta = this.#repository.meta();
+      this.#repository.validateSchema(this.#meta.schemaVersion);
       this.#assertFresh();
       this.#repository.validateContents(this.#meta);
-      this.#queries = new ProductionResolutionQueries(this.#database);
+      this.#queries = new ProductionResolutionQueries(
+        this.#database,
+        this.#meta.schemaVersion,
+      );
     } catch (error) {
       this.#database.close();
       throw error;
@@ -896,14 +960,58 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
     }
     if (row.sourceAuthorSlug !== identity.author.slug)
       throw new Error("PRODUCTION_RESOLUTION_AUTHOR_MISMATCH");
+    const mapping = {
+      authorId: row.authorId,
+      authorNameArabic: row.authorNameArabic,
+      poemId: row.poemId,
+      sourceAuthorSlug: row.sourceAuthorSlug,
+      sourcePoemId: row.sourcePoemId,
+    };
+    if (
+      row.currentSourceNfcSha256 === null ||
+      row.sourcePointerVersion === null
+    ) {
+      return {
+        mapping,
+        observedAt: this.#meta.observedAt,
+        writerEpoch: this.#meta.writerEpoch,
+      };
+    }
+    const lineNfcHash = sha256(sourceLineNfcHashBody(identity.lines));
+    if (lineNfcHash !== row.currentSourceNfcSha256) return null;
+    const promptMaterialHash = sha256(
+      sourcePromptMaterialHashBody({
+        authorArabic: row.authorNameArabic,
+        linesArabic: identity.lines,
+        titleArabic: identity.title,
+      }),
+    );
+    const bindingIdentity: Omit<
+      CanonicalPoemBindingV1,
+      "admissionEvidence" | "bindingId"
+    > = {
+      authorId: row.authorId,
+      authorNameArabic: row.authorNameArabic,
+      externalPoemId: row.sourcePoemId,
+      lineNfcHash,
+      poemId: row.poemId,
+      promptMaterialHash,
+      schemaId: CANONICAL_POEM_BINDING_SCHEMA_ID,
+      schemaVersion: CANONICAL_POEM_BINDING_SCHEMA_VERSION,
+      sourceName: currentSource().name,
+      sourceRevisionId: row.currentRevisionId,
+    };
     return {
-      mapping: {
-        authorId: row.authorId,
-        authorNameArabic: row.authorNameArabic,
-        poemId: row.poemId,
-        sourceAuthorSlug: row.sourceAuthorSlug,
-        sourcePoemId: row.sourcePoemId,
-      },
+      binding: CanonicalPoemBindingV1Schema.parse({
+        ...bindingIdentity,
+        admissionEvidence: {
+          databaseId: SAQI_PRODUCTION_DATABASE_ID,
+          issuedAt: this.#meta.observedAt,
+          sourcePointerVersion: row.sourcePointerVersion,
+        },
+        bindingId: sha256(canonicalPoemBindingIdBody(bindingIdentity)),
+      }),
+      mapping,
       observedAt: this.#meta.observedAt,
       writerEpoch: this.#meta.writerEpoch,
     };
@@ -1019,10 +1127,12 @@ export async function exportProductionResolution(
         const row = {
           authorId: base.authorId,
           authorNameArabic: base.authorNameArabic,
+          currentSourceNfcSha256: normalizedSourceHash(base.contentArabic),
           expectedPointerVersion,
           poemId: base.poemId,
           sourceAuthorSlug: sourceAuthor.slug,
           sourcePoemId: sourcePoem.numericId,
+          sourcePointerVersion: base.sourcePointerVersion,
         };
         snapshot.insertPoem(row, base.currentRevisionId);
         manifest.update(
@@ -1118,7 +1228,7 @@ function resolutionSchemaSql(): string {
     CREATE TABLE resolution_meta (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
       schema_id TEXT NOT NULL,
-      schema_version INTEGER NOT NULL CHECK (schema_version = 2),
+      schema_version INTEGER NOT NULL CHECK (schema_version = 4),
       observed_at TEXT NOT NULL,
       writer_epoch INTEGER NOT NULL CHECK (writer_epoch >= 1),
       poem_count INTEGER NOT NULL CHECK (poem_count >= 0),
@@ -1132,7 +1242,12 @@ function resolutionSchemaSql(): string {
       author_name_arabic TEXT NOT NULL,
       source_author_slug TEXT NOT NULL,
       current_revision_id TEXT NOT NULL,
-      expected_pointer_version INTEGER CHECK (expected_pointer_version >= 1)
+      expected_pointer_version INTEGER CHECK (expected_pointer_version >= 1),
+      current_source_nfc_sha256 TEXT NOT NULL CHECK (
+        length(current_source_nfc_sha256) = 64
+        AND current_source_nfc_sha256 NOT GLOB '*[^0-9a-f]*'
+      ),
+      source_pointer_version INTEGER NOT NULL CHECK (source_pointer_version >= 1)
     ) STRICT, WITHOUT ROWID;
     CREATE TABLE model_pointer (
       poem_id TEXT NOT NULL REFERENCES poem_resolution(poem_id),
@@ -1141,6 +1256,11 @@ function resolutionSchemaSql(): string {
       PRIMARY KEY (poem_id, model_key)
     ) STRICT, WITHOUT ROWID;
   `;
+}
+
+function normalizedSourceHash(serialized: string): string {
+  const document = SourceContentDocumentSchema.parse(JSON.parse(serialized));
+  return sha256(sourceLineNfcHashBody(document.content));
 }
 
 function sameSnapshot(
@@ -1152,6 +1272,7 @@ function sameSnapshot(
     left.modelPointerCount === right.modelPointerCount &&
     left.observedAt === right.observedAt &&
     left.poemCount === right.poemCount &&
+    left.schemaVersion === right.schemaVersion &&
     left.writerEpoch === right.writerEpoch
   );
 }

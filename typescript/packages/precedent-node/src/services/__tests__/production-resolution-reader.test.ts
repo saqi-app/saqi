@@ -8,7 +8,6 @@ import {
   PRODUCTION_RESOLUTION_RESPONSE_V2_SCHEMA_VERSION,
   PRODUCTION_RESOLUTION_SCHEMA_VERSION,
 } from "@saqi/precedent-iso";
-import { DEFAULT_SOURCE_ADAPTER_PROFILE } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -53,13 +52,12 @@ describe("D1ProductionResolutionStore", () => {
       .prepare(
         "INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(POEM_ID, AUTHOR_ID, "work-82737", 1, "قصيدة", '{"content":["بيت"]}');
+      .run(POEM_ID, AUTHOR_ID, "poem82737", 1, "قصيدة", '{"content":["بيت"]}');
     const db = drizzle(database);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- better-sqlite3 and D1 expose compatible Drizzle query APIs for store tests.
     reader = new D1ProductionResolutionStore(db as any, {
       now: () => Date.parse("2026-08-28T12:00:00.000Z"),
       sourceName: SOURCE_NAME,
-      sourceProfile: DEFAULT_SOURCE_ADAPTER_PROFILE,
     });
   });
 
@@ -153,7 +151,7 @@ describe("D1ProductionResolutionStore", () => {
       .run(
         GENERATED_POEM_ID,
         GENERATED_AUTHOR_ID,
-        "work-82737",
+        "poem82737",
         1,
         "قصيدة",
         '{"content":["بيت"]}',
@@ -215,7 +213,7 @@ describe("D1ProductionResolutionStore", () => {
       .prepare(
         `INSERT INTO source_poem_identity VALUES (
           'source-poem-other', 'primary-source', '99999', 'source-author',
-          'https://source.invalid/works/99999', ?, 1, 1, NULL
+          'https://source.invalid/poem99999.html', ?, 1, 1, NULL
         )`,
       )
       .run(POEM_ID);
@@ -286,8 +284,8 @@ describe("D1ProductionResolutionStore", () => {
            content_arabic, content_hash, observed_at
          ) VALUES (
            'bundle-collision', 0, ?, 'primary-source', 'poet-test',
-           'https://source.invalid/writers/poet-test', 'شاعر', ?,
-           '82737', 'https://source.invalid/works/82737', ?, 'قصيدة قديمة',
+           'https://source.invalid/cat-poet-test', 'شاعر', ?,
+           '82737', 'https://source.invalid/poem82737.html', ?, 'قصيدة قديمة',
            '{"content":["بيت"],"titleArabic":"قصيدة قديمة"}', ?, 2
          )`,
       )
@@ -352,8 +350,8 @@ function adoptPoem(
          content_arabic, content_hash, observed_at
        ) VALUES (
          'bundle', 0, ?, 'primary-source', 'poet-test',
-         'https://source.invalid/writers/poet-test', 'شاعر', ?,
-         '82737', 'https://source.invalid/works/82737', ?, 'قصيدة',
+         'https://source.invalid/cat-poet-test', 'شاعر', ?,
+         '82737', 'https://source.invalid/poem82737.html', ?, 'قصيدة',
          '{"content":["بيت"],"titleArabic":"قصيدة"}', ?, 1
        )`,
     )
@@ -367,7 +365,7 @@ function adoptPoem(
     .prepare(
       `INSERT INTO source_author_identity VALUES (
          'source-author', 'primary-source', 'poet-test',
-         'https://source.invalid/writers/poet-test', 'شاعر', ?, 1, 1
+         'https://source.invalid/cat-poet-test', 'شاعر', ?, 1, 1
        )`,
     )
     .run(ids.authorId);
@@ -375,7 +373,7 @@ function adoptPoem(
     .prepare(
       `INSERT INTO source_poem_identity VALUES (
          'source-poem', 'primary-source', '82737', 'source-author',
-         'https://source.invalid/works/82737', ?, 1, 1, NULL
+         'https://source.invalid/poem82737.html', ?, 1, 1, NULL
        )`,
     )
     .run(ids.poemId);

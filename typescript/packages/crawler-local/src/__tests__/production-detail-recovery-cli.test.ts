@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 
 import { CURRENT_SCHEMA_VERSION, Ledger } from "../persistence/ledger";
 import { canonicalJson, sha256 } from "../persistence/work-key";
+import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
+import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const AUTHOR_ID = "00000000-0000-4000-8000-000000000001";
@@ -16,7 +18,9 @@ const POEM_ID = "00000000-0000-4000-8000-000000000002";
 describe("production detail recovery CLI", () => {
   it("is dry-run by default and applies idempotently only when explicit", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-detail-recovery-"));
-    Ledger.initialize(join(root, "ledger.sqlite3")).close();
+    const legacy = new Database(join(root, "ledger.sqlite3"));
+    initializeLegacyLedgerSchema(legacy, 21);
+    legacy.close();
     const authors = join(root, "authors.ndjson");
     const poems = join(root, "poems.ndjson");
     const manifest = join(root, "manifest.json");
@@ -28,7 +32,7 @@ describe("production detail recovery CLI", () => {
       id: POEM_ID,
       insights: null,
       name_arabic: "قصيدة",
-      slug: "work-1",
+      slug: "poem1",
       translation: null,
       translation_gemini: null,
     })}\n`;
@@ -77,11 +81,19 @@ describe("production detail recovery CLI", () => {
       mode: "dry-run",
       result: { applied: false, candidateWork: 1, seeded: 0 },
     });
-    expect(schemaVersion(root)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(schemaVersion(root)).toBe(21);
     expect(sha256(readFileSync(join(root, "ledger.sqlite3")))).toBe(
       ledgerHashBeforeDryRun,
     );
     expect(readDetailCount(root)).toBe(0);
+    expect(() => run("--apply")).toThrow(
+      "RUNTIME_OWNER_REQUIRES_STAGED_SCHEMA34_IMPORT",
+    );
+    // Historical dry-run admission stays read-only. Exercise recovery apply
+    // against a migrated fixture independently of the offline operator workflow.
+    const upgraded = new Database(join(root, "ledger.sqlite3"));
+    migrateHistoricalFixture(upgraded);
+    upgraded.close();
     expect(() => run("--apply")).toThrow("RECOVERY_REQUIRES_PAID_WORK_PAUSED");
     expect(readDetailCount(root)).toBe(0);
     const controls = Ledger.open(join(root, "ledger.sqlite3"));

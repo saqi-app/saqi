@@ -13,7 +13,6 @@ import {
   type PoemDetailProjection,
   PROJECTION_SCHEMA_VERSION,
   sha256Canonical,
-  sourceAuthorUrl,
   SourceProjectionError,
 } from "@saqi/source-adapter";
 import { z } from "zod";
@@ -46,7 +45,7 @@ import type { CatalogInventory } from "./inventory-reconciliation.js";
 export { collectionWorkKinds } from "./collection-scheduler.js";
 
 export function collectorImplementationVersion(): string {
-  return `${currentSource().name}-chrome-v4`;
+  return `${currentSource().name}-chrome-v5`;
 }
 
 export function collectorSchemaVersion(): string {
@@ -68,6 +67,10 @@ const AuthorInputSchema = z
   .object({
     authorHref: z.url(),
     authorNameArabic: z.string().trim().min(1).max(512).optional(),
+    inventoryPoemCount: z.int().nonnegative().nullish(),
+    inventoryRevision: z.int().nonnegative().optional(),
+    // Accepted only while legacy generation-keyed rows drain. New inventory
+    // work records refresh provenance separately from executable identity.
     refreshGeneration: RefreshGenerationSchema.optional(),
   })
   .strict();
@@ -86,10 +89,12 @@ const LegacyPoemMetadataSchema = z.looseObject({
 const RETRYABLE_RENDER_PROJECTION_CODES: ReadonlySet<string> = new Set([
   "SOURCE_CLASSICAL_LINE_COUNT_MISMATCH",
   "SOURCE_POEM_CONTENT_EMPTY",
+  "SOURCE_POEM_STRUCTURE_INVALID",
   "SOURCE_POEM_TITLE_EMPTY",
 ]);
 const MAXIMUM_RENDER_PROJECTION_ATTEMPTS = 3;
 const MAXIMUM_FEED_CONFIGURATION_ATTEMPTS = 3;
+const MAXIMUM_MANIFEST_PROJECTION_ATTEMPTS = 3;
 const HUMAN_CHALLENGE_BASE_RETRY_MS = 15 * 60_000;
 const HUMAN_CHALLENGE_MAXIMUM_RETRY_MS = 6 * 60 * 60_000;
 const BROWSER_RESTART_REQUIRED_CODES: ReadonlySet<string> = new Set([
@@ -101,6 +106,11 @@ const BOUNDED_OPERATION_TIMEOUT_CODES: ReadonlySet<string> = new Set([
   "SOURCE_AUTHOR_OPERATION_TIMEOUT",
   "SOURCE_INVENTORY_OPERATION_TIMEOUT",
   "SOURCE_POEM_OPERATION_TIMEOUT",
+]);
+const ITEM_SCOPED_MANIFEST_RETRY_CODES: ReadonlySet<string> = new Set([
+  "SOURCE_MANIFEST_NONTERMINAL",
+  "SOURCE_MANIFEST_UNSTABLE",
+  "SOURCE_MANIFEST_UNVERIFIED_EMPTY",
 ]);
 
 export interface CollectorOptions {
@@ -685,6 +695,27 @@ export class CollectorCoordinator implements CollectorCoordinatorPort {
           } else {
             this.#ledger.deadLetter(claim, code);
           }
+        } else if (
+          error instanceof SourceBrowserError &&
+          ITEM_SCOPED_MANIFEST_RETRY_CODES.has(error.code)
+        ) {
+          // An incomplete or unstable projection belongs to one author page.
+          // Its exponential item retry must not gate unrelated source work.
+          if (claim.work.attemptCount < MAXIMUM_MANIFEST_PROJECTION_ATTEMPTS) {
+            this.#ledger.retry(
+              claim,
+              code,
+              now +
+                computeRetryDelayMs(
+                  this.#retryDelayMs,
+                  claim.work.attemptCount,
+                  this.#random,
+                ),
+              now,
+            );
+          } else {
+            this.#ledger.deadLetter(claim, code);
+          }
         } else if (error instanceof SourceBrowserError && !error.retryable) {
           originFailure = { retryAt: now + this.#minimumOriginGapMs };
           this.#ledger.deadLetter(claim, code);
@@ -928,13 +959,15 @@ export function seedAuthorManifest(
   authorNameArabic?: string,
 ): { inserted: boolean; workKey: string } {
   const author = canonicalAuthorUrl(authorValue);
-  return ledger.seed(
-    authorManifestDefinition(
+  if (refreshGeneration !== undefined && authorNameArabic !== undefined) {
+    ledger.recordSourceAuthorMetadata(
       author.href,
-      priority,
-      refreshGeneration,
       authorNameArabic,
-    ),
+      RefreshGenerationSchema.parse(refreshGeneration),
+    );
+  }
+  return ledger.seed(
+    authorManifestDefinition(author.href, priority, authorNameArabic),
   );
 }
 
@@ -944,39 +977,46 @@ export function seedAuthorManifests(
   priority = 0,
   refreshGeneration?: string,
 ): readonly { inserted: boolean; workKey: string }[] {
-  return ledger.seedMany(
-    inventory.authors.map((author) =>
-      authorManifestDefinition(
-        author.href,
-        priority,
-        refreshGeneration,
-        author.name,
-      ),
+  const generation =
+    refreshGeneration === undefined
+      ? undefined
+      : RefreshGenerationSchema.parse(refreshGeneration);
+  for (const author of inventory.authors) {
+    if (generation !== undefined && author.name !== undefined) {
+      ledger.recordSourceAuthorMetadata(author.href, author.name, generation);
+    }
+  }
+  const definitions = inventory.authors.map((author) =>
+    authorManifestDefinition(
+      author.href,
+      priority,
+      author.name,
+      author.poemCount,
     ),
   );
+  return ledger.seedInventoryAuthorManifests(definitions);
 }
 
 function authorManifestDefinition(
   authorHref: string,
   priority: number,
-  refreshGeneration?: string,
   authorNameArabic?: string,
+  inventoryPoemCount?: null | number,
 ): WorkDefinition {
-  if (refreshGeneration !== undefined)
-    RefreshGenerationSchema.parse(refreshGeneration);
   return definition(
     collectionWorkKinds().authorManifest,
     {
       authorHref,
       ...(authorNameArabic === undefined ? {} : { authorNameArabic }),
-      ...(refreshGeneration === undefined ? {} : { refreshGeneration }),
+      ...(inventoryPoemCount === undefined ? {} : { inventoryPoemCount }),
     },
     priority,
   );
 }
 
 export function authorUrlFromCatalogSlug(slug: string): string {
-  return sourceAuthorUrl(slug).href;
+  return canonicalAuthorUrl(`/cat-${encodeURIComponent(slug.normalize("NFC"))}`)
+    .href;
 }
 
 function definition(

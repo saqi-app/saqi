@@ -50,6 +50,8 @@ describe("launchd service packaging", () => {
     expect(plist).toContain("logs &amp; audit");
     expect(plist).toContain("<key>RunAtLoad</key>\n  <true/>");
     expect(plist).toContain("<string>run-service</string>");
+    expect(plist).toContain("<string>/usr/bin/caffeinate</string>");
+    expect(plist).toContain("<string>-is</string>");
     expect(plist).not.toContain("<string>run</string>");
     expect(plist).toContain(
       "<key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>",
@@ -79,6 +81,16 @@ describe("launchd service packaging", () => {
       writeFileSync(path, plist);
       expect(() => execFileSync("plutil", ["-lint", path])).not.toThrow();
     }
+  });
+
+  it("allows idle-sleep prevention to be explicitly disabled", async () => {
+    const { state: _state, ...options } = fixture();
+    const plist = await renderLaunchdService({
+      ...options,
+      preventIdleSleep: false,
+    });
+    expect(plist).not.toContain("/usr/bin/caffeinate");
+    expect(plist).not.toContain("<string>-is</string>");
   });
 
   it("rejects restart-thrashing throttle values and unknown keys", async () => {

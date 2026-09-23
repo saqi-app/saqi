@@ -1,8 +1,7 @@
 import {
+  canonicalAuthorUrl,
+  canonicalPoemUrl,
   LIMITS,
-  sourceAuthorUrl,
-  sourcePoemIdFromSlug,
-  sourcePoemUrl,
 } from "@saqi/source-adapter";
 import { z } from "zod";
 
@@ -32,7 +31,9 @@ export function parseCatalogInventory(input: unknown): CatalogInventory {
   const records = CatalogAuthorRecordsSchema.parse(input);
   const seen = new Set<string>();
   const authors = records.map((record) => {
-    const author = sourceAuthorUrl(record.slug);
+    const author = canonicalAuthorUrl(
+      `/cat-${encodeURIComponent(record.slug.normalize("NFC"))}`,
+    );
     if (seen.has(author.canonicalId)) {
       throw new Error("SOURCE_CATALOG_AUTHOR_DUPLICATE");
     }
@@ -59,13 +60,12 @@ export function parseCatalogInventory(input: unknown): CatalogInventory {
 }
 
 export function canonicalPoemIdFromLegacySlug(slug: string): string {
-  return sourcePoemUrl(sourcePoemIdFromLegacySlug(slug)).canonicalId;
+  return canonicalPoemUrl(`/poem${sourcePoemIdFromLegacySlug(slug)}.html`)
+    .canonicalId;
 }
 
 export function sourcePoemIdFromLegacySlug(slug: string): string {
-  try {
-    return sourcePoemIdFromSlug(slug);
-  } catch {
-    throw new Error("SOURCE_LEGACY_POEM_SLUG_INVALID");
-  }
+  const match = /^poem([1-9]\d*)$/.exec(slug);
+  if (!match?.[1]) throw new Error("SOURCE_LEGACY_POEM_SLUG_INVALID");
+  return match[1];
 }

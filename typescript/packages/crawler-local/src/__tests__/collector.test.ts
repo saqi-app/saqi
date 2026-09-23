@@ -9,11 +9,13 @@ import type {
 } from "@saqi/source-adapter";
 import { configureSource, SourceProjectionError } from "@saqi/source-adapter";
 import type { BrowserContext, Page, Response } from "playwright-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   AbortableSerialQueue,
   assertFeedProgress,
+  authorPaginationStateFromProjection,
+  canonicalAuthorPaginationUrl,
   classifyCloudflareChallengeEvidence,
   classifyPoemStructureEvidence,
   effectiveMinimumSourceGapMs,
@@ -21,9 +23,12 @@ import {
   extractFeedConfigurationFromInlineScripts,
   type FeedConfiguration,
   type FeedHttpResult,
+  feedManifestNeedsPaginationFallback,
   isAllowedBrowserRequest,
   isCloudflareChallengeEvidence,
+  isLoopbackCdpEndpoint,
   manifestDigest,
+  paginationPageNeedsProgress,
   parseFeedHttpResult,
   resolveCloudflareChallenge,
   resolveNavigationDocument,
@@ -51,16 +56,7 @@ import {
 } from "../persistence/artifact-store";
 import { CURRENT_SCHEMA_VERSION, Ledger } from "../persistence/ledger";
 import { inputHash } from "../persistence/work-key";
-import { CAPTURED_SOURCE_PROFILE } from "./support/source-profile";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
-
-beforeEach(() => {
-  configureSource({
-    name: "source",
-    origin: "https://source.invalid",
-    profile: CAPTURED_SOURCE_PROFILE,
-  });
-});
 
 const testArtifactStore = (root: string): ArtifactStore =>
   new ArtifactStore(join(root, "artifacts"), { minimumFreeBytes: 0 });
@@ -79,16 +75,16 @@ class FakeBrowser implements CollectorBrowser {
   ): Promise<AuthorPoemManifestProjection> {
     this.manifestCalls += 1;
     return {
-      authorHref: "https://source.invalid/writers/test",
+      authorHref: "https://source.invalid/cat-test",
       challengeDetected: false,
       declaredPoemCountText: "2",
       kind: "author_poem_manifest",
       poems: [
-        { href: "/works/2", title: "ثان", verseCountText: "1" },
-        { href: "/works/1", title: "أول", verseCountText: "1" },
+        { href: "/poem2.html", title: "ثان", verseCountText: "1" },
+        { href: "/poem1.html", title: "أول", verseCountText: "1" },
       ],
       schemaVersion: 1,
-      sourceUrl: "https://source.invalid/writers/test",
+      sourceUrl: "https://source.invalid/cat-test",
       terminal: true,
     };
   }
@@ -100,7 +96,7 @@ class FakeBrowser implements CollectorBrowser {
   ): Promise<PoemDetailProjection> {
     this.poemCalls += 1;
     return {
-      authorHref: "/writers/test",
+      authorHref: "/cat-test",
       challengeDetected: false,
       declaredVerseCountText: "1",
       kind: "poem_detail",
@@ -149,14 +145,14 @@ class LaneBrowser implements CollectorBrowser {
     authorValue: string,
   ): Promise<AuthorPoemManifestProjection> {
     this.calls.push(`author:${authorValue}`);
-    const base = authorValue.endsWith("/writers/one") ? 1_000 : 2_000;
+    const base = authorValue.endsWith("cat-one") ? 1_000 : 2_000;
     return {
       authorHref: authorValue,
       challengeDetected: false,
       declaredPoemCountText: String(this.#poemsPerManifest),
       kind: "author_poem_manifest",
       poems: Array.from({ length: this.#poemsPerManifest }, (_, index) => ({
-        href: `/works/${String(base + index + 1)}`,
+        href: `/poem${String(base + index + 1)}.html`,
         title: `قصيدة ${String(index + 1)}`,
         verseCountText: "1",
       })),
@@ -288,17 +284,34 @@ class MissingFeedConfigurationBrowser extends FakeBrowser {
   }
 }
 
+class NonterminalManifestBrowser extends FakeBrowser {
+  override async collectAuthorManifest(
+    authorValue: string,
+    signal: AbortSignal,
+  ): Promise<AuthorPoemManifestProjection> {
+    this.manifestCalls += 1;
+    if (authorValue.endsWith("cat-stuck")) {
+      throw new SourceBrowserError(
+        "SOURCE_MANIFEST_NONTERMINAL",
+        "author pagination did not prove completion",
+      );
+    }
+    const manifest = await super.collectAuthorManifest(authorValue, signal);
+    return { ...manifest, authorHref: authorValue, sourceUrl: authorValue };
+  }
+}
+
 class CrossAuthorDuplicateBrowser extends FakeBrowser {
   override async collectAuthorManifest(
     authorValue: string,
   ): Promise<AuthorPoemManifestProjection> {
     this.manifestCalls += 1;
     const poems = [
-      { href: "/works/42", title: "قصيدة", verseCountText: "1" },
+      { href: "/poem42.html", title: "قصيدة", verseCountText: "1" },
       ...(authorValue.endsWith("poet-two")
         ? [
             {
-              href: "/works/43",
+              href: "/poem43.html",
               title: "قصيدة أخرى",
               verseCountText: "1",
             },
@@ -356,7 +369,7 @@ class TransientProjectionBrowser extends FakeBrowser {
     if (this.poemCalls < 3)
       throw new SourceProjectionError("SOURCE_POEM_CONTENT_EMPTY");
     return {
-      authorHref: "/writers/test",
+      authorHref: "/cat-test",
       challengeDetected: false,
       declaredVerseCountText: "1",
       kind: "poem_detail",
@@ -391,6 +404,17 @@ class CapacityDropArtifactStore extends ArtifactStore {
 }
 
 describe("browser request policy", () => {
+  it.each([
+    ["http://127.0.0.1:9223/", true],
+    ["http://localhost:9223/", true],
+    ["https://127.0.0.1:9223/", false],
+    // eslint-disable-next-line unicorn/prefer-https -- An HTTP remote host must be rejected explicitly.
+    ["http://example.com:9223/", false],
+    ["http://127.0.0.1:9223/json", false],
+  ])("classifies CDP endpoint %s", (value, expected) => {
+    expect(isLoopbackCdpEndpoint(value)).toBe(expected);
+  });
+
   it("enforces the empirically safe source-gap floor", () => {
     expect(effectiveMinimumSourceGapMs()).toBe(13_000);
     expect(effectiveMinimumSourceGapMs(0)).toBe(13_000);
@@ -399,12 +423,19 @@ describe("browser request policy", () => {
   });
 
   it.each([
-    ["https://source.invalid/writers/test", "document", true, true],
-    ["https://source.invalid/works/1", "document", true, true],
-    ["https://source.invalid/directory/1", "document", true, true],
-    ["https://source.invalid/writers/1/feed?cursor=x", "xhr", false, false],
+    ["https://source.invalid/cat-test", "document", true, true],
+    ["https://source.invalid/poem1.html", "document", true, true],
+    ["https://source.invalid/authers-1", "document", true, true],
+    ["https://source.invalid/authers-1?cursor=opaque", "document", true, true],
     [
-      "https://source.invalid/writers/1/feed?cursor=x&token=y",
+      "https://source.invalid/authers-1?cursor=x&extra=y",
+      "document",
+      true,
+      false,
+    ],
+    ["https://source.invalid/cat-1/poems-feed?cursor=x", "xhr", false, false],
+    [
+      "https://source.invalid/cat-1/poems-feed?cursor=x&token=y",
       "fetch",
       false,
       true,
@@ -412,7 +443,7 @@ describe("browser request policy", () => {
     ["https://source.invalid/app.js", "script", false, false],
     ["https://source.invalid/ad.jpg", "image", false, false],
     ["https://evil.example/app.js", "script", false, false],
-    ["https://source.invalid/works/1?x=1", "document", true, false],
+    ["https://source.invalid/poem1.html?x=1", "document", true, false],
   ])("classifies %s", (url, resourceType, isNavigationRequest, expected) => {
     expect(
       isAllowedBrowserRequest({ isNavigationRequest, resourceType, url }),
@@ -533,6 +564,58 @@ describe("abortable serial queue", () => {
 });
 
 describe("Chrome profile ownership", () => {
+  it("bounds browser queue starvation without disrupting the active owner", async () => {
+    const profileDirectory = mkdtempSync(join(tmpdir(), "saqi-queue-wait-"));
+    const launch = Promise.withResolvers<BrowserContext>();
+    const launchStarted = Promise.withResolvers<undefined>();
+    const activeController = new AbortController();
+    let connected = true;
+    const browser = {
+      close: vi.fn(async () => {
+        connected = false;
+      }),
+      isConnected: () => connected,
+    };
+    const context = {
+      browser: () => browser,
+      close: vi.fn(),
+      on: vi.fn(),
+      route: vi.fn(async () => undefined),
+      setDefaultNavigationTimeout: vi.fn(),
+    } as unknown as BrowserContext;
+    const collector = await SourceChromeCollector.create({
+      authorOperationTimeoutMs: 10_000,
+      launchPersistentContext: vi.fn(() => {
+        launchStarted.resolve(undefined);
+        return launch.promise;
+      }),
+      poemOperationTimeoutMs: 10,
+      profileDirectory,
+    });
+    const active = collector.collectAuthorManifest(
+      "https://source.invalid/cat-poet-Test",
+      activeController.signal,
+    );
+    await launchStarted.promise;
+
+    await expect(
+      collector.collectPoemDetail(
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({
+      code: "SOURCE_POEM_OPERATION_TIMEOUT",
+      message: "Poem collection exceeded its browser queue wait deadline",
+    });
+    expect(browser.close).not.toHaveBeenCalled();
+
+    activeController.abort(new Error("test complete"));
+    launch.resolve(context);
+    await expect(active).rejects.toThrow("test complete");
+    await collector.close();
+  });
+
   it("classifies launch failures and releases the profile for automatic retry", async () => {
     const profileDirectory = mkdtempSync(join(tmpdir(), "saqi-launch-fail-"));
     const collector = await SourceChromeCollector.create({
@@ -544,8 +627,8 @@ describe("Chrome profile ownership", () => {
 
     await expect(
       collector.collectPoemDetail(
-        "https://source.invalid/works/1",
-        "https://source.invalid/writers/poet-Test",
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({
@@ -588,15 +671,17 @@ describe("Chrome profile ownership", () => {
       route: vi.fn(async () => undefined),
       setDefaultNavigationTimeout: vi.fn(),
     } as unknown as BrowserContext;
+    const onSourceRequest = vi.fn(async () => undefined);
     const collector = await SourceChromeCollector.create({
       launchPersistentContext: vi.fn(async () => context),
+      onSourceRequest,
       profileDirectory,
     });
 
     await expect(
       collector.collectPoemDetail(
-        "https://source.invalid/works/1",
-        "https://source.invalid/writers/poet-Test",
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({
@@ -604,6 +689,10 @@ describe("Chrome profile ownership", () => {
       retryable: true,
     });
     expect(closePage).toHaveBeenCalledOnce();
+    expect(onSourceRequest).toHaveBeenCalledExactlyOnceWith({
+      outcome: "failed",
+      surface: "navigation",
+    });
     expect(browser.isConnected()).toBe(true);
     await collector.close();
     const replacement = await SourceChromeCollector.create({
@@ -638,8 +727,8 @@ describe("Chrome profile ownership", () => {
 
     await expect(
       collector.collectPoemDetail(
-        "https://source.invalid/works/1",
-        "https://source.invalid/writers/poet-Test",
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: "SOURCE_POEM_OPERATION_TIMEOUT" });
@@ -656,7 +745,7 @@ describe("Chrome profile ownership", () => {
       code: "SOURCE_AUTHOR_OPERATION_TIMEOUT",
       collect: (collector: SourceChromeCollector) =>
         collector.collectAuthorManifest(
-          "https://source.invalid/writers/poet-Test",
+          "https://source.invalid/cat-poet-Test",
           new AbortController().signal,
         ),
       timeout: "authorOperationTimeoutMs",
@@ -665,7 +754,8 @@ describe("Chrome profile ownership", () => {
       code: "SOURCE_INVENTORY_OPERATION_TIMEOUT",
       collect: (collector: SourceChromeCollector) =>
         collector.collectAuthorInventoryPage(
-          "https://source.invalid/directory/1",
+          "https://source.invalid/authers-1",
+          1,
           new AbortController().signal,
         ),
       timeout: "inventoryOperationTimeoutMs",
@@ -773,8 +863,8 @@ describe("Chrome profile ownership", () => {
     });
     await expect(
       collector.collectPoemDetail(
-        "https://source.invalid/works/1",
-        "https://source.invalid/writers/poet-Test",
+        "https://source.invalid/poem1.html",
+        "https://source.invalid/cat-poet-Test",
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: "SOURCE_NAVIGATION_FAILED" });
@@ -782,8 +872,8 @@ describe("Chrome profile ownership", () => {
     now += 13_000;
     await expect(
       collector.collectPoemDetail(
-        "https://source.invalid/works/2",
-        "https://source.invalid/writers/poet-Test",
+        "https://source.invalid/poem2.html",
+        "https://source.invalid/cat-poet-Test",
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: "SOURCE_NAVIGATION_FAILED" });
@@ -828,8 +918,8 @@ describe("Chrome profile ownership", () => {
       profileDirectory,
     });
     const collecting = collector.collectPoemDetail(
-      "https://source.invalid/works/1",
-      "https://source.invalid/writers/poet-Test",
+      "https://source.invalid/poem1.html",
+      "https://source.invalid/cat-poet-Test",
       new AbortController().signal,
     );
     await launchStarted.promise;
@@ -882,8 +972,8 @@ describe("Chrome profile ownership", () => {
       profileDirectory,
     });
     const collecting = collector.collectPoemDetail(
-      "https://source.invalid/works/1",
-      "https://source.invalid/writers/poet-Test",
+      "https://source.invalid/poem1.html",
+      "https://source.invalid/cat-poet-Test",
       new AbortController().signal,
     );
     await launchStarted.promise;
@@ -922,8 +1012,8 @@ describe("Chrome profile ownership", () => {
       shutdownGraceMs: 10,
     });
     const collecting = collector.collectPoemDetail(
-      "https://source.invalid/works/1",
-      "https://source.invalid/writers/poet-Test",
+      "https://source.invalid/poem1.html",
+      "https://source.invalid/cat-poet-Test",
       new AbortController().signal,
     );
     await launchStarted.promise;
@@ -981,7 +1071,7 @@ describe("Chrome profile ownership", () => {
 });
 
 describe("Cloudflare challenge recovery", () => {
-  const authorHref = "https://source.invalid/writers/435";
+  const authorHref = "https://source.invalid/cat-435";
 
   function navigationResponse(options: {
     readonly body: string;
@@ -1005,9 +1095,8 @@ describe("Cloudflare challenge recovery", () => {
     [{ html: "<script>window._cf_chl_opt={}</script>" }],
     [
       {
-        scriptSources: [
-          "https://source.invalid/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1",
-        ],
+        scriptSources:
+          "/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1",
         title: "Just a moment...",
       },
     ],
@@ -1021,9 +1110,7 @@ describe("Cloudflare challenge recovery", () => {
       isCloudflareChallengeEvidence({
         bodyText: "صفحة قصيدة عربية عادية",
         hasTurnstileElement: true,
-        scriptSources: [
-          "https://challenges.cloudflare.com/turnstile/v0/api.js",
-        ],
+        scriptSources: "https://challenges.cloudflare.com/turnstile/v0/api.js",
         title: "عنوان القصيدة",
       }),
     ).toBe(false);
@@ -1045,14 +1132,6 @@ describe("Cloudflare challenge recovery", () => {
         hasTurnstileElement: true,
       }),
     ).toBeNull();
-    expect(
-      classifyCloudflareChallengeEvidence({
-        bodyText: "Verify you are human",
-        scriptSources: [
-          "https://challenges.cloudflare.com.evil.example/turnstile/v0/api.js",
-        ],
-      }),
-    ).toBe("managed_challenge");
   });
 
   it("does not classify an ordinary poem document as a challenge", () => {
@@ -1113,11 +1192,11 @@ describe("Cloudflare challenge recovery", () => {
         hasManagedChallengeElement: true,
         hasChallengeOption: true,
         readyState: "complete",
-        scriptSources: ["https://source.invalid/cdn-cgi/challenge-platform/"],
+        scriptSources: "/cdn-cgi/challenge-platform/",
         targetReady: false,
         title: "Just a moment...",
       })),
-      url: () => "https://source.invalid/works/1",
+      url: () => "https://source.invalid/poem1.html",
     } as unknown as Page;
     const response = {
       allHeaders: vi.fn(async () => ({})),
@@ -1128,7 +1207,7 @@ describe("Cloudflare challenge recovery", () => {
         page,
         response,
         "<script>window._cf_chl_opt={}</script>",
-        "https://source.invalid/works/1",
+        "https://source.invalid/poem1.html",
         new AbortController().signal,
         {
           now: () => now,
@@ -1159,7 +1238,7 @@ describe("Cloudflare challenge recovery", () => {
         hasManagedChallengeElement: true,
         hasChallengeOption: true,
         readyState: "complete",
-        scriptSources: ["https://source.invalid/cdn-cgi/challenge-platform/"],
+        scriptSources: "/cdn-cgi/challenge-platform/",
         targetReady: false,
         title: "Just a moment...",
       },
@@ -1168,7 +1247,7 @@ describe("Cloudflare challenge recovery", () => {
         hasManagedChallengeElement: false,
         hasChallengeOption: false,
         readyState: "complete",
-        scriptSources: [],
+        scriptSources: "",
         targetReady: true,
         title: "عنوان القصيدة",
       },
@@ -1177,7 +1256,7 @@ describe("Cloudflare challenge recovery", () => {
         hasManagedChallengeElement: false,
         hasChallengeOption: false,
         readyState: "complete",
-        scriptSources: [],
+        scriptSources: "",
         targetReady: true,
         title: "عنوان القصيدة",
       },
@@ -1190,7 +1269,7 @@ describe("Cloudflare challenge recovery", () => {
     });
     const page = {
       evaluate,
-      url: () => "https://source.invalid/works/1",
+      url: () => "https://source.invalid/poem1.html",
     } as unknown as Page;
     const response = {
       allHeaders: vi.fn(async () => ({})),
@@ -1200,7 +1279,7 @@ describe("Cloudflare challenge recovery", () => {
         page,
         response,
         "<script>window._cf_chl_opt={}</script>",
-        "https://source.invalid/works/1",
+        "https://source.invalid/poem1.html",
         new AbortController().signal,
         {
           now: () => now,
@@ -1217,8 +1296,8 @@ describe("Cloudflare challenge recovery", () => {
 
   it("resolves a bounded 403 challenge and returns settled author HTML", async () => {
     let now = 0;
-    const settledHtml = `<html><body>1 قصيدة<a href="/works/1">قصيدة</a>
-      <script>var poemsEndpoint="/writers/435/feed";
+    const settledHtml = `<html><body>1 قصيدة<a href="/poem1.html">قصيدة</a>
+      <script>var poemsEndpoint="/cat-435/poems-feed";
       var nextPoemsCursor="cursor-settled";
       const headers={"X-Feed-Token":"token-settled"};</script></body></html>`;
     const challenge = {
@@ -1227,7 +1306,7 @@ describe("Cloudflare challenge recovery", () => {
       hasManagedChallengeElement: true,
       hasTurnstileElement: true,
       readyState: "complete",
-      scriptSources: ["https://source.invalid/cdn-cgi/challenge-platform/"],
+      scriptSources: "/cdn-cgi/challenge-platform/",
       targetReady: false,
       title: "Just a moment...",
     };
@@ -1237,7 +1316,7 @@ describe("Cloudflare challenge recovery", () => {
       hasManagedChallengeElement: false,
       hasTurnstileElement: false,
       readyState: "complete",
-      scriptSources: [],
+      scriptSources: "",
       targetReady: true,
       title: "شاعر",
     };
@@ -1279,7 +1358,7 @@ describe("Cloudflare challenge recovery", () => {
     expect(html).toBe(settledHtml);
     expect(extractFeedConfigurationFromDocument(html, authorHref)).toEqual({
       cursor: "cursor-settled",
-      endpoint: "https://source.invalid/writers/435/feed",
+      endpoint: "https://source.invalid/cat-435/poems-feed",
       token: "token-settled",
     });
   });
@@ -1324,7 +1403,7 @@ describe("Cloudflare challenge recovery", () => {
         hasChallengeOption: true,
         hasManagedChallengeElement: true,
         readyState: "complete",
-        scriptSources: ["https://source.invalid/cdn-cgi/challenge-platform/"],
+        scriptSources: "/cdn-cgi/challenge-platform/",
         targetReady: false,
         title: "Just a moment...",
       })
@@ -1356,7 +1435,7 @@ describe("poem structure evidence", () => {
   it("keeps a positive free-verse marker authoritative over h3 layout", () => {
     const representativeFreeVerseFixture = {
       classicalLineNodesPresent: true,
-      metadataLabels: ["general works", "free verse"],
+      metadataLabels: ["قصائد عامه", "التفعيله"],
     } as const;
     expect(
       classifyPoemStructureEvidence(
@@ -1373,13 +1452,13 @@ describe("poem structure evidence", () => {
 
 describe("author manifest verification", () => {
   const base: AuthorPoemManifestProjection = {
-    authorHref: "https://source.invalid/writers/test",
+    authorHref: "https://source.invalid/cat-test",
     challengeDetected: false,
     declaredPoemCountText: "1",
     kind: "author_poem_manifest",
-    poems: [{ href: "/works/1", title: "قصيدة", verseCountText: "2" }],
+    poems: [{ href: "/poem1.html", title: "قصيدة", verseCountText: "2" }],
     schemaVersion: 1,
-    sourceUrl: "https://source.invalid/writers/test",
+    sourceUrl: "https://source.invalid/cat-test",
     terminal: true,
   };
 
@@ -1389,7 +1468,7 @@ describe("author manifest verification", () => {
         ...base,
         poems: [
           {
-            href: "https://source.invalid/works/1",
+            href: "https://source.invalid/poem1.html",
             title: " قصيدة ",
             verseCountText: "٢ بيت",
           },
@@ -1413,9 +1492,87 @@ describe("author manifest verification", () => {
 });
 
 describe("author feed protocol", () => {
+  it.each([
+    { collected: 216, declared: 216, exhausted: false, fallback: false },
+    { collected: 210, declared: 216, exhausted: false, fallback: true },
+    { collected: 216, declared: null, exhausted: true, fallback: false },
+    { collected: 216, declared: null, exhausted: false, fallback: true },
+  ])(
+    "falls back from an incomplete feed only when pagination proof is needed",
+    ({ collected, declared, exhausted, fallback }) => {
+      expect(
+        feedManifestNeedsPaginationFallback(declared, collected, exhausted),
+      ).toBe(fallback);
+    },
+  );
+
+  it.each([
+    { after: 215, allowCovered: true, before: 215, failure: false },
+    { after: 30, allowCovered: false, before: 30, failure: true },
+    { after: 31, allowCovered: false, before: 30, failure: false },
+  ])(
+    "classifies covered pagination progress %#",
+    ({ after, allowCovered, before, failure }) => {
+      expect(paginationPageNeedsProgress(before, after, allowCovered)).toBe(
+        failure,
+      );
+    },
+  );
+
+  it.each([
+    [{ count: 0, nextUrl: "" }, { kind: "absent" }],
+    [{ count: 1, nextUrl: "" }, { kind: "terminal" }],
+    [
+      { count: 1, nextUrl: "https://source.invalid/cat-test?cursor=next" },
+      {
+        href: "https://source.invalid/cat-test?cursor=next",
+        kind: "next",
+      },
+    ],
+  ] as const)(
+    "classifies author paginator projection %#",
+    (input, expected) => {
+      expect(authorPaginationStateFromProjection(input)).toEqual(expected);
+    },
+  );
+
+  it("rejects multiple poem paginator landmarks", () => {
+    expect(() =>
+      authorPaginationStateFromProjection({ count: 2, nextUrl: "" }),
+    ).toThrow(
+      expect.objectContaining({ code: "SOURCE_PAGINATION_URL_AMBIGUOUS" }),
+    );
+  });
+
+  it("accepts only one bounded cursor on the same author URL", () => {
+    expect(
+      canonicalAuthorPaginationUrl(
+        "https://source.invalid/cat-test?cursor=abc_123-XYZ",
+        "https://source.invalid/cat-test",
+      ),
+    ).toEqual({
+      cursor: "abc_123-XYZ",
+      href: "https://source.invalid/cat-test?cursor=abc_123-XYZ",
+    });
+  });
+
+  it.each([
+    "https://other.invalid/cat-test?cursor=abc",
+    "https://source.invalid/cat-other?cursor=abc",
+    "https://source.invalid/cat-test?cursor=abc&sort=latest",
+    "https://source.invalid/cat-test?cursor=abc#fragment",
+    "https://source.invalid/cat-test?cursor=bad%20cursor",
+  ])("rejects an unsafe author pagination URL: %s", (value) => {
+    expect(() =>
+      canonicalAuthorPaginationUrl(value, "https://source.invalid/cat-test"),
+    ).toThrow(
+      expect.objectContaining({ code: "SOURCE_PAGINATION_URL_INVALID" }),
+    );
+  });
+
   const configuration: FeedConfiguration = {
     cursor: "start",
-    endpoint: "https://source.invalid/writers/435/feed",
+    endpoint: "https://source.invalid/cat-435/poems-feed",
     token: "signed-token",
   };
 
@@ -1431,7 +1588,7 @@ describe("author feed protocol", () => {
       contentType: "application/json; charset=utf-8",
       retryAfter: null,
       status: 200,
-      url: "https://source.invalid/writers/435/feed?cursor=start&token=signed-token",
+      url: "https://source.invalid/cat-435/poems-feed?cursor=start&token=signed-token",
       ...overrides,
     };
   }
@@ -1440,24 +1597,24 @@ describe("author feed protocol", () => {
     expect(
       extractFeedConfigurationFromInlineScripts(
         [
-          `var poemsEndpoint = "https://source.invalid/writers/435/feed";
+          `var poemsEndpoint = "https://source.invalid/cat-435/poems-feed";
            var nextPoemsCursor = "cursor-1";
            headers: { "X-Feed-Token": "token-1" };`,
         ],
-        "https://source.invalid/writers/poet-Mutanabi",
+        "https://source.invalid/cat-poet-Mutanabi",
       ),
     ).toEqual({
       cursor: "cursor-1",
-      endpoint: "https://source.invalid/writers/435/feed",
+      endpoint: "https://source.invalid/cat-435/poems-feed",
       token: "token-1",
     });
     expect(() =>
       extractFeedConfigurationFromInlineScripts(
         [
-          `const endpoint = "/writers/poet-evil/feed";
+          `const endpoint = "/cat-poet-evil/poems-feed";
            const cursor = "x"; const feedToken = "y";`,
         ],
-        "https://source.invalid/writers/435",
+        "https://source.invalid/cat-435",
       ),
     ).toThrow(
       expect.objectContaining({ code: "SOURCE_FEED_ENDPOINT_INVALID" }),
@@ -1468,41 +1625,29 @@ describe("author feed protocol", () => {
     expect(
       extractFeedConfigurationFromDocument(
         `<html><head>
-          <script src="https://evil.example/feed">var cursor="evil";</script>
-          <script>var poemsEndpoint="/writers/435/feed";
+          <script src="https://evil.example/poems-feed">var cursor="evil";</script>
+          <script>var poemsEndpoint="/cat-435/poems-feed";
             var nextPoemsCursor="cursor-raw";
             const headers={"X-Feed-Token":"token-raw"};</script>
         </head></html>`,
-        "https://source.invalid/writers/poet-Mutanabi",
+        "https://source.invalid/cat-poet-Mutanabi",
       ),
     ).toEqual({
       cursor: "cursor-raw",
-      endpoint: "https://source.invalid/writers/435/feed",
+      endpoint: "https://source.invalid/cat-435/poems-feed",
       token: "token-raw",
-    });
-    expect(
-      extractFeedConfigurationFromDocument(
-        `<script>var poemsEndpoint="/writers/435/feed";
-          var nextPoemsCursor="cursor-tab";
-          const headers={"X-Feed-Token":"token-tab"};</script\t\n data-extra>`,
-        "https://source.invalid/writers/poet-Mutanabi",
-      ),
-    ).toEqual({
-      cursor: "cursor-tab",
-      endpoint: "https://source.invalid/writers/435/feed",
-      token: "token-tab",
     });
   });
 
   it("accepts exact feed JSON and treats only protocol exhaustion as terminal", () => {
     expect(
       parseFeedHttpResult(
-        response({ html: "<a href='/works/1'>قصيدة</a>", next_cursor: "2" }),
+        response({ html: "<a href='/poem1.html'>قصيدة</a>", next_cursor: "2" }),
         configuration,
         "start",
       ),
     ).toEqual({
-      html: "<a href='/works/1'>قصيدة</a>",
+      html: "<a href='/poem1.html'>قصيدة</a>",
       nextCursor: "2",
       terminal: false,
     });
@@ -1600,7 +1745,7 @@ describe("author feed protocol", () => {
     [
       response(
         { html: "x", next_cursor: "2" },
-        { url: "https://source.invalid/writers/435/feed?cursor=wrong" },
+        { url: "https://source.invalid/cat-435/poems-feed?cursor=wrong" },
       ),
       "SOURCE_FEED_REDIRECT",
     ],
@@ -1659,21 +1804,17 @@ describe("author feed protocol", () => {
 
 describe("collector coordinator", () => {
   it("claims v28 collection rows in the externally configured namespace", async () => {
-    configureSource({
-      name: "archive",
-      origin: "https://source.invalid",
-      profile: CAPTURED_SOURCE_PROFILE,
-    });
+    configureSource({ name: "archive", origin: "https://source.invalid" });
     const root = mkdtempSync(join(tmpdir(), "saqi-collector-compat-"));
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
     try {
       expect(ledger.doctor().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       const input = {
-        authorHref: "https://source.invalid/writers/test",
-        poemHref: "https://source.invalid/works/1",
+        authorHref: "https://source.invalid/cat-test",
+        poemHref: "https://source.invalid/poem1.html",
       };
       const seeded = ledger.seed({
-        implementationVersion: "archive-chrome-v4",
+        implementationVersion: "archive-chrome-v5",
         input,
         inputHash: inputHash(input),
         kind: "archive_poem_detail",
@@ -1695,7 +1836,7 @@ describe("collector coordinator", () => {
       expect(browser.poemCalls).toBe(1);
       const current = seedAuthorManifest(
         ledger,
-        "https://source.invalid/writers/current",
+        "https://source.invalid/cat-current",
       );
       expect(ledger.get(current.workKey)).toMatchObject({
         implementationVersion: collectorImplementationVersion(),
@@ -1705,8 +1846,8 @@ describe("collector coordinator", () => {
       expect(ledger.get(current.workKey)?.kind).toBe("archive_author_manifest");
 
       const currentPoemInput = {
-        authorHref: "https://source.invalid/writers/current",
-        poemHref: "https://source.invalid/works/2",
+        authorHref: "https://source.invalid/cat-current",
+        poemHref: "https://source.invalid/poem2.html",
       };
       const currentPoem = ledger.seedPoems([
         {
@@ -1725,7 +1866,7 @@ describe("collector coordinator", () => {
 
       const conflictingInput = {
         ...currentPoemInput,
-        authorHref: "https://source.invalid/writers/conflict",
+        authorHref: "https://source.invalid/cat-conflict",
       };
       expect(
         ledger.seedPoems([
@@ -1742,11 +1883,7 @@ describe("collector coordinator", () => {
       await coordinator.close();
     } finally {
       ledger.close();
-      configureSource({
-        name: "source",
-        origin: "https://source.invalid",
-        profile: CAPTURED_SOURCE_PROFILE,
-      });
+      configureSource({ name: "source", origin: "https://source.invalid" });
     }
   });
 
@@ -1762,8 +1899,8 @@ describe("collector coordinator", () => {
     });
     const seedDetail = (poemId: number, priority: number) => {
       const input = {
-        authorHref: "https://source.invalid/writers/test",
-        poemHref: `https://source.invalid/works/${String(poemId)}`,
+        authorHref: "https://source.invalid/cat-test",
+        poemHref: `https://source.invalid/poem${String(poemId)}.html`,
       };
       return ledger.seed({
         implementationVersion: collectorImplementationVersion(),
@@ -1826,9 +1963,7 @@ describe("collector coordinator", () => {
       random: () => 0,
       retryDelayMs: 1,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-test");
     try {
       await expect(
         coordinator.run(new AbortController().signal),
@@ -1893,10 +2028,10 @@ describe("collector coordinator", () => {
       retryDelayMs: 60_000,
     });
     const timedOut = coordinator.seedAuthor(
-      "https://source.invalid/writers/first",
+      "https://source.invalid/cat-first",
       1,
     );
-    coordinator.seedAuthor("https://source.invalid/writers/second");
+    coordinator.seedAuthor("https://source.invalid/cat-second");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 2 }),
@@ -1923,9 +2058,7 @@ describe("collector coordinator", () => {
       minimumOriginGapMs: 0,
       retryDelayMs: 60_000,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/first",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-first");
 
     await expect(
       coordinator.run(new AbortController().signal),
@@ -1956,7 +2089,7 @@ describe("collector coordinator", () => {
       retryDelayMs: 1,
     });
     const challenged = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
+      "https://source.invalid/cat-test",
     );
     const startedAt = Date.now();
     await expect(
@@ -2002,7 +2135,7 @@ describe("collector coordinator", () => {
     ).toMatchObject({ state: "waiting" });
 
     const untouched = coordinator.seedAuthor(
-      "https://source.invalid/writers/still-pending",
+      "https://source.invalid/cat-still-pending",
     );
     const eventsBefore = ledger.eventCount(untouched.workKey);
     await expect(
@@ -2045,7 +2178,7 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
     const now = Date.now();
     const origin = ledger.claimOrigin("https://source.invalid", now, 10_000);
     if (origin.state !== "claimed") throw new Error("expected origin lease");
@@ -2125,7 +2258,7 @@ describe("collector coordinator", () => {
       random: () => 0,
       retryDelayMs: 1,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal),
@@ -2148,7 +2281,7 @@ describe("collector coordinator", () => {
       random: () => 0,
       retryDelayMs: 1,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 1 }),
@@ -2172,7 +2305,7 @@ describe("collector coordinator", () => {
       retryDelayMs: 1,
     });
     for (const slug of ["one", "two", "three"]) {
-      coordinator.seedAuthor(`https://source.invalid/writers/${slug}`);
+      coordinator.seedAuthor(`https://source.invalid/cat-${slug}`);
     }
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 3 }),
@@ -2199,7 +2332,7 @@ describe("collector coordinator", () => {
       random: () => 0,
       retryDelayMs: 1,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/missing-feed");
+    coordinator.seedAuthor("https://source.invalid/cat-missing-feed");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 1 }),
@@ -2210,6 +2343,58 @@ describe("collector coordinator", () => {
       stopReason: null,
     });
     ledger.close();
+  });
+
+  it("bounds nonterminal manifest retries without gating other authors", async () => {
+    vi.useFakeTimers();
+    try {
+      const root = mkdtempSync(join(tmpdir(), "saqi-manifest-isolation-"));
+      const ledger = Ledger.open(join(root, "ledger.sqlite3"));
+      const browser = new NonterminalManifestBrowser();
+      const coordinator = new CollectorCoordinator({
+        artifacts: testArtifactStore(root),
+        browser,
+        ledger,
+        minimumOriginGapMs: 0,
+        random: () => 0,
+        retryDelayMs: 1,
+      });
+      const stuck = coordinator.seedAuthor(
+        "https://source.invalid/cat-stuck",
+        1,
+      );
+      coordinator.seedAuthor("https://source.invalid/cat-healthy");
+
+      await expect(
+        coordinator.run(new AbortController().signal, { maximum: 2 }),
+      ).resolves.toMatchObject({ processed: 2, succeeded: 1 });
+      expect(ledger.status().origins[0]).toMatchObject({
+        consecutiveFailures: 0,
+        cooldownUntil: 0,
+        stopReason: null,
+      });
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(5);
+        await coordinator.run(new AbortController().signal, {
+          includedWorkKeys: [stuck.workKey],
+          maximum: 1,
+        });
+      }
+      expect(ledger.get(stuck.workKey)).toMatchObject({
+        attemptCount: 3,
+        lastErrorCode: "SOURCE_MANIFEST_NONTERMINAL",
+        state: "dead_letter",
+      });
+      expect(ledger.status().origins[0]).toMatchObject({
+        consecutiveFailures: 0,
+        cooldownUntil: 0,
+        stopReason: null,
+      });
+      ledger.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("flags and rejects one canonical poem claimed by two authors", async () => {
@@ -2223,8 +2408,8 @@ describe("collector coordinator", () => {
       minimumOriginGapMs: 0,
     });
     const firstInput = {
-      authorHref: "https://source.invalid/writers/poet-one",
-      poemHref: "https://source.invalid/works/42",
+      authorHref: "https://source.invalid/cat-poet-one",
+      poemHref: "https://source.invalid/poem42.html",
       refreshGeneration: "generation-1",
     };
     ledger.seed({
@@ -2241,7 +2426,7 @@ describe("collector coordinator", () => {
 
     const manifest = seedAuthorManifest(
       ledger,
-      "https://source.invalid/writers/poet-two",
+      "https://source.invalid/cat-poet-two",
       0,
       "generation-2",
     );
@@ -2294,7 +2479,7 @@ describe("collector coordinator", () => {
         random: () => 0,
         retryDelayMs: 1,
       });
-      coordinator.seedAuthor("https://source.invalid/writers/test");
+      coordinator.seedAuthor("https://source.invalid/cat-test");
       await coordinator.run(new AbortController().signal, { maximum: 1 });
       await coordinator.run(new AbortController().signal, { maximum: 1 });
       expect(ledger.status().byState).toMatchObject({
@@ -2341,7 +2526,7 @@ describe("collector coordinator", () => {
         random: () => 0,
         retryDelayMs: 1,
       });
-      coordinator.seedAuthor("https://source.invalid/writers/test");
+      coordinator.seedAuthor("https://source.invalid/cat-test");
       await coordinator.run(new AbortController().signal, { maximum: 1 });
       let terminalOriginRetryAt: number | undefined;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -2396,28 +2581,367 @@ describe("collector coordinator", () => {
     const ledger = Ledger.open(":memory:");
     const url = authorUrlFromCatalogSlug("المعري");
     expect(url).toBe(
-      "https://source.invalid/writers/%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
+      "https://source.invalid/cat-%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
     );
     expect(seedAuthorManifest(ledger, url).inserted).toBe(true);
     expect(seedAuthorManifest(ledger, url).inserted).toBe(false);
     ledger.close();
   });
 
-  it("uses explicit refresh generations for incremental manifests", () => {
+  it("deduplicates unchanged refreshes and rescrapes changed inventory", () => {
     const ledger = Ledger.open(":memory:");
     const inventory = parseCatalogInventory([{ slug: "test" }]);
     expect(seedAuthorManifests(ledger, inventory)[0]?.inserted).toBe(true);
     expect(seedAuthorManifests(ledger, inventory)[0]?.inserted).toBe(false);
     expect(
       seedAuthorManifests(ledger, inventory, 0, "2026-08")[0]?.inserted,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       seedAuthorManifests(ledger, inventory, 0, "2026-08")[0]?.inserted,
     ).toBe(false);
+    const changed = parseCatalogInventory([{ poemCount: 1, slug: "test" }]);
+    expect(
+      seedAuthorManifests(ledger, changed, 0, "2026-09")[0]?.inserted,
+    ).toBe(true);
     expect(() =>
       seedAuthorManifests(ledger, inventory, 0, "bad generation"),
     ).toThrow();
     expect(ledger.status().total).toBe(2);
+    expect(ledger.status().byState).toMatchObject({ imported: 1, pending: 1 });
+    ledger.close();
+  });
+
+  it("coalesces stale unclaimed generations without rewriting evidence", () => {
+    const ledger = Ledger.open(":memory:");
+    const authorHref = authorUrlFromCatalogSlug("test");
+    const seedLegacy = (generation: string, priority: number) => {
+      const input = { authorHref, refreshGeneration: generation };
+      return ledger.seed(
+        {
+          implementationVersion: collectorImplementationVersion(),
+          input,
+          inputHash: inputHash(input),
+          kind: collectionWorkKinds().authorManifest,
+          priority,
+          schemaVersion: collectorSchemaVersion(),
+        },
+        1,
+      );
+    };
+    const succeeded = seedLegacy("old-succeeded", 4);
+    const dead = seedLegacy("old-dead", 3);
+    const running = seedLegacy("old-running", 2);
+    const pending = seedLegacy("old-pending", 1);
+    const requirements = {
+      implementationVersion: collectorImplementationVersion(),
+      schemaVersion: collectorSchemaVersion(),
+    };
+    const successClaim = ledger.claim(
+      "success",
+      10,
+      1_000,
+      [collectionWorkKinds().authorManifest],
+      requirements,
+    );
+    if (!successClaim) throw new Error("Expected succeeded author claim");
+    ledger.succeed(successClaim, "a".repeat(64), 11);
+    const deadClaim = ledger.claim(
+      "dead",
+      12,
+      1_000,
+      [collectionWorkKinds().authorManifest],
+      requirements,
+    );
+    if (!deadClaim) throw new Error("Expected dead-letter author claim");
+    ledger.deadLetter(deadClaim, "SOURCE_TEST_TERMINAL", 13);
+    const runningClaim = ledger.claim(
+      "running",
+      14,
+      1_000,
+      [collectionWorkKinds().authorManifest],
+      requirements,
+    );
+    if (!runningClaim) throw new Error("Expected running author claim");
+    const pendingEvents = ledger.eventCount(pending.workKey);
+
+    const replacement = seedAuthorManifests(
+      ledger,
+      parseCatalogInventory([{ poemCount: 1, slug: "test" }]),
+      0,
+      "current",
+    )[0];
+    if (!replacement) throw new Error("Expected stable replacement");
+
+    expect(ledger.get(succeeded.workKey)?.state).toBe("succeeded");
+    expect(ledger.get(dead.workKey)?.state).toBe("dead_letter");
+    expect(ledger.get(running.workKey)?.state).toBe("running");
+    expect(ledger.get(pending.workKey)?.state).toBe("imported");
+    expect(ledger.eventCount(pending.workKey)).toBe(pendingEvents + 1);
+    expect(ledger.get(replacement.workKey)?.state).toBe("pending");
+    expect(
+      ledger.coalesceAuthorManifestWork([
+        { authorHref, replacementWorkKey: replacement.workKey },
+      ]),
+    ).toBe(0);
+    ledger.close();
+  });
+
+  it.each([
+    [
+      "count",
+      { poemCount: 2, name: "Original" },
+      { poemCount: 3, name: "Original" },
+    ],
+    [
+      "name",
+      { poemCount: 2, name: "Original" },
+      { poemCount: 2, name: "Changed" },
+    ],
+    ["unknown count", { name: "Original" }, { name: "Changed" }],
+  ])(
+    "retains monotonic inventory revisions across A-B-A %s changes",
+    (_label, a, b) => {
+      const ledger = Ledger.open(":memory:");
+      const seed = (value: typeof a) => {
+        const inventory = parseCatalogInventory([
+          {
+            slug: "test",
+            poemCount: "poemCount" in value ? value.poemCount : null,
+          },
+        ]);
+        return seedAuthorManifests(ledger, {
+          ...inventory,
+          authors: inventory.authors.map((author) => ({
+            ...author,
+            name: value.name,
+          })),
+        })[0];
+      };
+      const first = seed(a);
+      const second = seed(b);
+      const returned = seed(a);
+      if (!first || !second || !returned)
+        throw new Error("Missing author seed");
+      expect(
+        new Set([first.workKey, second.workKey, returned.workKey]).size,
+      ).toBe(3);
+      expect(ledger.get(first.workKey)?.state).toBe("imported");
+      expect(ledger.get(second.workKey)?.state).toBe("imported");
+      expect(ledger.get(returned.workKey)).toMatchObject({
+        state: "pending",
+        input: { inventoryRevision: 2 },
+      });
+      expect(seed(a)).toEqual({ inserted: false, workKey: returned.workKey });
+      ledger.close();
+    },
+  );
+
+  it("does not reuse succeeded A evidence after a collected B revision", () => {
+    const ledger = Ledger.open(":memory:");
+    const seed = (poemCount: number) =>
+      seedAuthorManifests(
+        ledger,
+        parseCatalogInventory([{ slug: "test", poemCount }]),
+      )[0];
+    const first = seed(2);
+    const complete = () => {
+      const claim = ledger.claim("test", Date.now(), 1_000, [
+        collectionWorkKinds().authorManifest,
+      ]);
+      if (!claim) throw new Error("Missing author claim");
+      ledger.succeed(claim, "a".repeat(64));
+    };
+    complete();
+    const second = seed(3);
+    complete();
+    const returned = seed(2);
+    expect(returned?.inserted).toBe(true);
+    expect(returned?.workKey).not.toBe(first?.workKey);
+    expect(ledger.get(first?.workKey ?? "")?.state).toBe("succeeded");
+    expect(ledger.get(second?.workKey ?? "")?.state).toBe("succeeded");
+    expect(ledger.get(returned?.workKey ?? "")?.state).toBe("pending");
+    ledger.close();
+  });
+
+  it("does not let delayed imported replacement A retire newer pending B", () => {
+    const ledger = Ledger.open(":memory:");
+    const seed = (poemCount: number) =>
+      seedAuthorManifests(
+        ledger,
+        parseCatalogInventory([{ slug: "test", poemCount }]),
+      )[0];
+    const a = seed(2);
+    const b = seed(3);
+    if (!a || !b) throw new Error("Missing author seed");
+    expect(ledger.get(a.workKey)?.state).toBe("imported");
+    expect(
+      ledger.coalesceAuthorManifestWork([
+        {
+          authorHref: authorUrlFromCatalogSlug("test"),
+          replacementWorkKey: a.workKey,
+        },
+      ]),
+    ).toBe(0);
+    expect(ledger.get(b.workKey)?.state).toBe("pending");
+    ledger.close();
+  });
+
+  it("rolls back inventory seeding when atomic coalescing rejects conflicting replacements", () => {
+    const ledger = Ledger.open(":memory:");
+    const definitions = [2, 3].map((inventoryPoemCount) => {
+      const input = {
+        authorHref: authorUrlFromCatalogSlug("test"),
+        inventoryPoemCount,
+      };
+      return {
+        kind: collectionWorkKinds().authorManifest,
+        input,
+        inputHash: inputHash(input),
+        implementationVersion: collectorImplementationVersion(),
+        schemaVersion: collectorSchemaVersion(),
+        priority: 0,
+      };
+    });
+    expect(() => ledger.seedInventoryAuthorManifests(definitions)).toThrow(
+      "Conflicting author-manifest replacements",
+    );
+    expect(ledger.status().total).toBe(0);
+    ledger.close();
+  });
+
+  it("retains maximum durable revision after a newer legacy inventory row", () => {
+    const ledger = Ledger.open(":memory:");
+    const seed = (poemCount: number) =>
+      seedAuthorManifests(
+        ledger,
+        parseCatalogInventory([{ slug: "test", poemCount }]),
+      )[0];
+    const a = seed(2);
+    seed(3);
+    const returned = seed(2);
+    const input = {
+      authorHref: authorUrlFromCatalogSlug("test"),
+      inventoryPoemCount: 4,
+      refreshGeneration: "legacy-after-revision-two",
+    };
+    const legacy = ledger.seed({
+      kind: collectionWorkKinds().authorManifest,
+      input,
+      inputHash: inputHash(input),
+      implementationVersion: collectorImplementationVersion(),
+      schemaVersion: collectorSchemaVersion(),
+      priority: 0,
+    });
+    const fresh = seed(2);
+    if (!a || !returned || !fresh) throw new Error("Missing author seed");
+    expect(fresh.inserted).toBe(true);
+    expect(fresh.workKey).not.toBe(a.workKey);
+    expect(fresh.workKey).not.toBe(returned.workKey);
+    expect(ledger.get(fresh.workKey)).toMatchObject({
+      state: "pending",
+      input: { inventoryRevision: 3 },
+    });
+    expect(ledger.get(legacy.workKey)?.state).toBe("imported");
+    expect(seed(2)?.workKey).toBe(fresh.workKey);
+    ledger.close();
+  });
+
+  it("does not reuse imported revision-zero evidence behind identical legacy metadata", () => {
+    const ledger = Ledger.open(":memory:");
+    const inventory = parseCatalogInventory([{ slug: "test", poemCount: 2 }]);
+    const stable = seedAuthorManifests(ledger, inventory)[0];
+    if (!stable) throw new Error("Missing stable author seed");
+    const input = {
+      authorHref: authorUrlFromCatalogSlug("test"),
+      inventoryPoemCount: 2,
+      refreshGeneration: "late-identical-legacy",
+    };
+    const legacy = ledger.seed({
+      kind: collectionWorkKinds().authorManifest,
+      input,
+      inputHash: inputHash(input),
+      implementationVersion: collectorImplementationVersion(),
+      schemaVersion: collectorSchemaVersion(),
+      priority: 0,
+    });
+    ledger.coalesceAuthorManifestWork([
+      { authorHref: input.authorHref, replacementWorkKey: legacy.workKey },
+    ]);
+    expect(ledger.get(stable.workKey)?.state).toBe("imported");
+    const fresh = seedAuthorManifests(ledger, inventory)[0];
+    if (!fresh) throw new Error("Missing fresh author seed");
+    expect(fresh.inserted).toBe(true);
+    expect(fresh.workKey).not.toBe(stable.workKey);
+    expect(ledger.get(fresh.workKey)).toMatchObject({
+      state: "pending",
+      input: { inventoryRevision: 1 },
+    });
+    expect(ledger.get(legacy.workKey)?.state).toBe("imported");
+    expect(seedAuthorManifests(ledger, inventory)[0]?.workKey).toBe(
+      fresh.workKey,
+    );
+    ledger.close();
+  });
+
+  it("never retires a newer row using older succeeded replacement evidence", () => {
+    const ledger = Ledger.open(":memory:");
+    const a = seedAuthorManifest(ledger, authorUrlFromCatalogSlug("test"));
+    const claim = ledger.claim("test", Date.now(), 1_000, [
+      collectionWorkKinds().authorManifest,
+    ]);
+    if (!claim) throw new Error("Missing author claim");
+    ledger.succeed(claim, "a".repeat(64));
+    const b = seedAuthorManifest(
+      ledger,
+      authorUrlFromCatalogSlug("test"),
+      0,
+      undefined,
+      "New name",
+    );
+    expect(
+      ledger.coalesceAuthorManifestWork([
+        {
+          authorHref: authorUrlFromCatalogSlug("test"),
+          replacementWorkKey: a.workKey,
+        },
+      ]),
+    ).toBe(0);
+    expect(ledger.get(b.workKey)?.state).toBe("pending");
+    ledger.close();
+  });
+
+  it("coalesces only mapped authors and rejects conflicting replacements atomically", () => {
+    const ledger = Ledger.open(":memory:");
+    const first = seedAuthorManifest(ledger, authorUrlFromCatalogSlug("first"));
+    const unrelated = seedAuthorManifest(
+      ledger,
+      authorUrlFromCatalogSlug("unrelated"),
+    );
+    const replacement = seedAuthorManifest(
+      ledger,
+      authorUrlFromCatalogSlug("first"),
+      0,
+      undefined,
+      "Updated name",
+    );
+    const authorHref = authorUrlFromCatalogSlug("first");
+    expect(() =>
+      ledger.coalesceAuthorManifestWork([
+        { authorHref, replacementWorkKey: replacement.workKey },
+        { authorHref, replacementWorkKey: first.workKey },
+      ]),
+    ).toThrow("Conflicting author-manifest replacements");
+    expect(ledger.get(first.workKey)?.state).toBe("pending");
+    expect(ledger.get(replacement.workKey)?.state).toBe("pending");
+    expect(
+      ledger.coalesceAuthorManifestWork([
+        { authorHref, replacementWorkKey: replacement.workKey },
+        { authorHref, replacementWorkKey: replacement.workKey },
+      ]),
+    ).toBe(1);
+    expect(ledger.get(first.workKey)?.state).toBe("imported");
+    expect(ledger.get(replacement.workKey)?.state).toBe("pending");
+    expect(ledger.get(unrelated.workKey)?.state).toBe("pending");
     ledger.close();
   });
 
@@ -2436,7 +2960,7 @@ describe("collector coordinator", () => {
     expect(
       seedAuthorManifest(
         ledger,
-        "https://source.invalid/writers/test",
+        "https://source.invalid/cat-test",
         0,
         "generation-1",
         "شاعر قديم",
@@ -2449,7 +2973,7 @@ describe("collector coordinator", () => {
     expect(
       seedAuthorManifest(
         ledger,
-        "https://source.invalid/writers/test",
+        "https://source.invalid/cat-test",
         0,
         "generation-1",
         "شاعر قديم",
@@ -2472,7 +2996,7 @@ describe("collector coordinator", () => {
     expect(
       seedAuthorManifest(
         ledger,
-        "https://source.invalid/writers/test",
+        "https://source.invalid/cat-test",
         0,
         "generation-2",
         "شاعر محدث",
@@ -2483,7 +3007,7 @@ describe("collector coordinator", () => {
     ).resolves.toMatchObject({ processed: 1, stopped: "idle", succeeded: 1 });
     expect(resumedBrowser).toMatchObject({ manifestCalls: 1, poemCalls: 2 });
     expect(
-      ledger.sourceAuthorMetadata("https://source.invalid/writers/test"),
+      ledger.sourceAuthorMetadata("https://source.invalid/cat-test"),
     ).toEqual({
       authorNameArabic: "شاعر محدث",
       refreshGeneration: "generation-2",
@@ -2506,7 +3030,7 @@ describe("collector coordinator", () => {
       minimumOriginGapMs: 0,
       retryDelayMs: 1,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
 
     const first = await coordinator.run(new AbortController().signal);
     expect(first).toMatchObject({
@@ -2532,7 +3056,7 @@ describe("collector coordinator", () => {
   it("resolves equal-timestamp author metadata deterministically", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-author-metadata-"));
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
-    const href = "https://source.invalid/writers/test";
+    const href = "https://source.invalid/cat-test";
     ledger.recordSourceAuthorMetadata(href, "شاعر ب", "generation-b", 42);
     ledger.recordSourceAuthorMetadata(href, "شاعر ا", "generation-a", 42);
     ledger.recordSourceAuthorMetadata(href, "شاعر ج", "generation-c", 42);
@@ -2543,11 +3067,29 @@ describe("collector coordinator", () => {
     ledger.close();
   });
 
+  it("resolves author metadata across canonically equivalent transport paths", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-author-metadata-nfc-"));
+    const ledger = Ledger.open(join(root, "ledger.sqlite3"));
+    const normalized = "https://source.invalid/cat-poet-%E1%B9%ACarif";
+    const decomposed = "https://source.invalid/cat-poet-T%CC%A3arif";
+    ledger.recordSourceAuthorMetadata(
+      normalized,
+      "طريف",
+      "inventory-generation",
+      42,
+    );
+    expect(ledger.sourceAuthorMetadata(decomposed)).toEqual({
+      authorNameArabic: "طريف",
+      refreshGeneration: "inventory-generation",
+    });
+    ledger.close();
+  });
+
   it("revisions author metadata only when exact durable material changes", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-author-revision-"));
     const path = join(root, "ledger.sqlite3");
     const ledger = Ledger.open(path);
-    const href = "https://source.invalid/writers/test";
+    const href = "https://source.invalid/cat-test";
     expect(ledger.sourceAuthorMetadataRevision()).toBe(0);
     ledger.recordSourceAuthorMetadata(href, "شاعر", "generation-a", 42);
     expect(ledger.sourceAuthorMetadataRevision()).toBe(1);
@@ -2572,17 +3114,17 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/one", 1);
-    coordinator.seedAuthor("https://source.invalid/writers/two");
+    coordinator.seedAuthor("https://source.invalid/cat-one", 1);
+    coordinator.seedAuthor("https://source.invalid/cat-two");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 22 }),
     ).resolves.toMatchObject({ processed: 22, succeeded: 22 });
-    expect(browser.calls[0]).toBe("author:https://source.invalid/writers/one");
+    expect(browser.calls[0]).toBe("author:https://source.invalid/cat-one");
     expect(
       browser.calls.slice(1, 21).every((call) => call.startsWith("detail:")),
     ).toBe(true);
-    expect(browser.calls[21]).toBe("author:https://source.invalid/writers/two");
+    expect(browser.calls[21]).toBe("author:https://source.invalid/cat-two");
     ledger.close();
   });
 
@@ -2596,19 +3138,17 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/one", 1);
-    coordinator.seedAuthor("https://source.invalid/writers/two");
+    coordinator.seedAuthor("https://source.invalid/cat-one", 1);
+    coordinator.seedAuthor("https://source.invalid/cat-two");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 102 }),
     ).resolves.toMatchObject({ processed: 102, succeeded: 102 });
-    expect(browser.calls[0]).toBe("author:https://source.invalid/writers/one");
+    expect(browser.calls[0]).toBe("author:https://source.invalid/cat-one");
     expect(
       browser.calls.slice(1, 101).every((call) => call.startsWith("detail:")),
     ).toBe(true);
-    expect(browser.calls[101]).toBe(
-      "author:https://source.invalid/writers/two",
-    );
+    expect(browser.calls[101]).toBe("author:https://source.invalid/cat-two");
     expect(coordinator.scheduleSnapshot()).toEqual({
       detailBurst: 100,
       detailsSinceManifest: 0,
@@ -2629,14 +3169,12 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/one");
+    coordinator.seedAuthor("https://source.invalid/cat-one");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 1 }),
     ).resolves.toMatchObject({ processed: 1, succeeded: 1 });
-    expect(browser.calls).toEqual([
-      "author:https://source.invalid/writers/one",
-    ]);
+    expect(browser.calls).toEqual(["author:https://source.invalid/cat-one"]);
     ledger.close();
   });
 
@@ -2663,7 +3201,7 @@ describe("collector coordinator", () => {
           throw new Error("synthetic advisory failure");
       },
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 2 }),
@@ -2691,10 +3229,10 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    first.seedAuthor("https://source.invalid/writers/one");
+    first.seedAuthor("https://source.invalid/cat-one");
     await first.run(new AbortController().signal, { maximum: 1 });
     await first.close();
-    seedAuthorManifest(ledger, "https://source.invalid/writers/two");
+    seedAuthorManifest(ledger, "https://source.invalid/cat-two");
 
     const restartedBrowser = new LaneBrowser();
     const restarted = new CollectorCoordinator({
@@ -2725,9 +3263,7 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal),
@@ -2754,9 +3290,7 @@ describe("collector coordinator", () => {
       minimumOriginGapMs: 0,
       retryDelayMs: 1_000,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal),
@@ -2790,8 +3324,8 @@ describe("collector coordinator", () => {
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
     const artifacts = testArtifactStore(root);
     const poemInput = {
-      authorHref: "https://source.invalid/writers/test",
-      poemHref: "https://source.invalid/works/1",
+      authorHref: "https://source.invalid/cat-test",
+      poemHref: "https://source.invalid/poem1.html",
     };
     ledger.seed({
       implementationVersion: "source-chrome-prior",
@@ -2816,7 +3350,7 @@ describe("collector coordinator", () => {
       minimumOriginGapMs: 0,
       retryDelayMs: 1,
     });
-    coordinator.seedAuthor("https://source.invalid/writers/test");
+    coordinator.seedAuthor("https://source.invalid/cat-test");
     await expect(
       coordinator.run(new AbortController().signal),
     ).resolves.toMatchObject({ processed: 2, succeeded: 2 });
@@ -2829,7 +3363,7 @@ describe("collector coordinator", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-supersede-"));
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
     const browser = new FakeBrowser();
-    const input = { authorHref: "https://source.invalid/writers/test" };
+    const input = { authorHref: "https://source.invalid/cat-test" };
     const obsolete = ledger.seed({
       implementationVersion: "source-chrome-v3",
       input,
@@ -2867,9 +3401,7 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 100,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 1 }),
@@ -2900,9 +3432,7 @@ describe("collector coordinator", () => {
       ledger,
       minimumOriginGapMs: 0,
     });
-    const seeded = coordinator.seedAuthor(
-      "https://source.invalid/writers/test",
-    );
+    const seeded = coordinator.seedAuthor("https://source.invalid/cat-test");
 
     await expect(
       coordinator.run(new AbortController().signal, { maximum: 1 }),

@@ -115,9 +115,54 @@ const structuredData = [
   openGraphType="article"
   structuredData={structuredData}
 >
-  {primaryTranslation && (
+  {(primaryTranslation || poem.insights) && (
     <div slot="header-actions" class="poem-tools" role="group" aria-label="Poem tools">
-      <TranslationModel tracks={translationTracks} />
+      {primaryTranslation && <TranslationModel tracks={translationTracks} />}
+      {poem.insights && (
+        <details class="poem-tool-details">
+          <summary class="poem-tool">
+            <span class="insights-dot" aria-hidden="true"></span>
+            <span>Insights</span>
+          </summary>
+          <section class="poem-tool-panel insights-panel" aria-labelledby="insights-title">
+            <h2 id="insights-title" class="poem-tool-panel-title">Poem insights</h2>
+            <p>{poem.insights.summary}</p>
+            <div role="group" aria-labelledby="insights-themes">
+              <h3 id="insights-themes" class="poem-tool-section-title">Themes</h3>
+              <ul>{poem.insights.themes.map((theme) => <li>{theme}</li>)}</ul>
+            </div>
+            <div role="group" aria-labelledby="insights-context">
+              <h3 id="insights-context" class="poem-tool-section-title">Historical context</h3>
+              <p>{poem.insights.historicalContext}</p>
+            </div>
+            <div role="group" aria-labelledby="insights-devices">
+              <h3 id="insights-devices" class="poem-tool-section-title">Literary devices</h3>
+              <ul>{poem.insights.literaryDevices.map((device) => <li>{device}</li>)}</ul>
+            </div>
+            <div role="group" aria-labelledby="insights-culture">
+              <h3 id="insights-culture" class="poem-tool-section-title">Cultural significance</h3>
+              <p>{poem.insights.culturalSignificance}</p>
+            </div>
+            <div role="group" aria-labelledby="insights-lines">
+              <h3 id="insights-lines" class="poem-tool-section-title">Notable lines</h3>
+              {poem.insights.notableLines.map((notable) => (
+                <blockquote>
+                  <p class="notable-line" lang="ar" dir="rtl">{notable.line}</p>
+                  <p>{notable.explanation}</p>
+                </blockquote>
+              ))}
+            </div>
+            {poem.insightsModel && (
+              <p class="insights-attribution">
+                Analysis by {poem.insightsModel}
+                {poem.insightsReasoningEffort
+                  ? ` · ${poem.insightsReasoningEffort} reasoning`
+                  : ""}
+              </p>
+            )}
+          </section>
+        </details>
+      )}
     </div>
   )}
   <nav class="breadcrumbs poem-identity" aria-label="Breadcrumb">

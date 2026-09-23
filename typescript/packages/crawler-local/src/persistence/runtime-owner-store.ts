@@ -1,7 +1,6 @@
 import type Database from "better-sqlite3";
 import { z } from "zod";
 
-import { CURRENT_SCHEMA_VERSION } from "./baseline-schema.js";
 import {
   RuntimeOwnerKindSchema,
   type RuntimeOwnerRecord,
@@ -10,9 +9,7 @@ import {
   RuntimeOwnerRowSchema,
 } from "./runtime-owner-schema.js";
 
-const VersionSchema = z.strictObject({
-  version: z.literal(CURRENT_SCHEMA_VERSION),
-});
+const VersionSchema = z.strictObject({ version: z.literal(35) });
 export interface RuntimeOwnerFence {
   readonly epoch: number;
   readonly record: RuntimeOwnerRecord;
@@ -33,8 +30,8 @@ interface RuntimeOwnerPort {
 }
 export class RuntimeOwnerBusyError extends Error {
   readonly record: RuntimeOwnerRecord;
-  constructor(record: RuntimeOwnerRecord, options?: ErrorOptions) {
-    super(`Runtime owner already held by pid ${String(record.pid)}`, options);
+  constructor(record: RuntimeOwnerRecord) {
+    super(`Runtime owner already held by pid ${String(record.pid)}`);
     this.name = "RuntimeOwnerBusyError";
     this.record = record;
   }

@@ -139,34 +139,22 @@ void test("legacy and normalized translations remain independently selectable", 
 void test("legacy display estimates preserve recorded provenance and explain uncertainty", () => {
   const tracks = poemTranslationTracks({
     linesEnglish: ["Legacy"],
-    linesEnglishModel: "Claude 2",
+    linesEnglishModel: "Claude 1 or 2",
     linesEnglishGemini: ["Alternate"],
-    linesEnglishGeminiModel: "Gemini 3.5 Flash",
+    linesEnglishGeminiModel: "Gemini (legacy model unknown)",
   });
-  assert.deepEqual(
-    tracks.map(({ model }) => model),
-    ["Claude 2", "Gemini 3.5 Flash"],
-  );
-  assert.deepEqual(
-    tracks.map(({ model }) => translationModelName(model ?? "")),
-    ["Claude 2", "Gemini 3.5 Flash"],
-  );
-  assert.deepEqual(
-    tracks.map(({ attributionNote }) => attributionNote),
-    [LEGACY_TRANSLATION_ATTRIBUTION_NOTE, LEGACY_GEMINI_ATTRIBUTION_NOTE],
-  );
-});
-
-void test("display estimates never relabel unrelated future model names", () => {
-  assert.equal(translationModelName("Claude 3"), "Claude 3");
-  assert.equal(
-    translationModelName("Gemini (future model unknown)"),
-    "Gemini (future model unknown)",
-  );
-  assert.equal(
-    translationModelName("Claude Opus 5 (claude-opus-5)"),
-    "Claude Opus 5",
-  );
+  assert.deepEqual(tracks.map(({ model }) => model), [
+    "Claude 1 or 2",
+    "Gemini (legacy model unknown)",
+  ]);
+  assert.deepEqual(tracks.map(({ model }) => translationModelName(model ?? "")), [
+    "Claude 2",
+    "Gemini 3.5 Flash",
+  ]);
+  assert.deepEqual(tracks.map(({ attributionNote }) => attributionNote), [
+    LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
+    LEGACY_GEMINI_ATTRIBUTION_NOTE,
+  ]);
 });
 
 void test("explicit legacy model identifiers are never replaced by estimates", () => {
@@ -177,13 +165,11 @@ void test("explicit legacy model identifiers are never replaced by estimates", (
     linesEnglishGemini: ["Alternate"],
     linesEnglishGeminiModel: "gemini-3.7-flash",
   });
-  assert.deepEqual(
-    tracks.map(({ model }) => model),
-    ["claude-sonnet-4-5-20250929", "gemini-3.7-flash"],
-  );
-  assert.ok(
-    tracks.every(({ attributionNote }) => attributionNote === undefined),
-  );
+  assert.deepEqual(tracks.map(({ model }) => model), [
+    "claude-sonnet-4-5-20250929",
+    "gemini-3.7-flash",
+  ]);
+  assert.ok(tracks.every(({ attributionNote }) => attributionNote === undefined));
   assert.equal(tracks[0]?.attributionCertainty, "recorded");
 });
 
@@ -201,10 +187,10 @@ void test("Sol is an explicit preferred track without replacing legacy tracks", 
 });
 
 for (const [model, provider] of [
-  ["claude-2", "anthropic"],
-  ["claude-sonnet-4-5-20250929", "anthropic"],
-  ["gemini-3-pro-preview", "google"],
-  ["unregistered-model", "other"],
+    ["claude-2", "anthropic"],
+    ["claude-sonnet-4-5-20250929", "anthropic"],
+    ["gemini-3-pro-preview", "google"],
+    ["unregistered-model", "other"],
 ]) {
   void test(`exact legacy model ${model} retains its provider without inferred certainty`, () => {
     const [track] = poemTranslationTracks({

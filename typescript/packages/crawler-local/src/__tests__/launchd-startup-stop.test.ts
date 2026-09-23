@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 
 import { Ledger } from "../persistence/ledger.js";
@@ -11,6 +12,7 @@ import {
   readServiceEnabled,
   writeServiceEnabled,
 } from "../runtime/service-enabled-control.js";
+import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
 const { execute } = vi.hoisted(() => ({ execute: vi.fn() }));
@@ -24,6 +26,60 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 describe("stop during unacknowledged managed startup", () => {
+  it("historical owner authority disables service without migrating or signaling unverified PID", async () => {
+    const root = trackedMkdtempSync(join(tmpdir(), "saqi-historical-stop-"));
+    const database = new Database(join(root, "ledger.sqlite3"));
+    initializeLegacyLedgerSchema(database, 34);
+    database.exec(
+      "INSERT INTO runtime_control VALUES('service_enabled',1),('legacy_service_imported',1),('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1)",
+    );
+    const configPath = join(root, "config.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ schemaVersion: 1, stateDirectory: root }),
+    );
+    execute.mockResolvedValue({
+      stdout: "state = running\npid = 12345\nexit timeout = 180\n",
+      stderr: "",
+    });
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    try {
+      await expect(
+        controlLaunchdService({
+          action: "stop",
+          configPath,
+          label: "net.saqi.test",
+        }),
+      ).rejects.toThrow(
+        "LAUNCHD_STOP_DISABLED_BUT_UNACKNOWLEDGED: RUNTIME_OWNER_AUTHORITY_UNAVAILABLE",
+      );
+      expect(
+        database.prepare("SELECT version FROM local_schema").get(),
+      ).toEqual({ version: 34 });
+      expect(
+        database
+          .prepare(
+            "SELECT enabled FROM runtime_control WHERE control_key='service_enabled'",
+          )
+          .get(),
+      ).toEqual({ enabled: 0 });
+      expect(
+        database
+          .prepare(
+            "SELECT control_key,enabled FROM runtime_control WHERE control_key IN ('global_paused','paid_work_paused') ORDER BY control_key",
+          )
+          .all(),
+      ).toEqual([
+        { control_key: "global_paused", enabled: 1 },
+        { control_key: "paid_work_paused", enabled: 1 },
+      ]);
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      kill.mockRestore();
+      database.close();
+      execute.mockClear();
+    }
+  });
   it("disables future recovery while refusing to signal an unverified process", async () => {
     const root = trackedMkdtempSync(join(tmpdir(), "saqi-startup-stop-"));
     Ledger.initialize(join(root, "ledger.sqlite3")).close();

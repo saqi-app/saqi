@@ -1,8 +1,8 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { configureSource, parseAuthorPoemManifest } from "@saqi/source-adapter";
-import { beforeEach, describe, expect, it } from "vitest";
+import { parseAuthorPoemManifest } from "@saqi/source-adapter";
+import { describe, expect, it } from "vitest";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler";
 import {
@@ -24,16 +24,7 @@ import {
 } from "../persistence/production-baseline-planner";
 import { inputHash } from "../persistence/work-key";
 import { prepareCollectedPoem } from "../publication/corpus-import-actions";
-import { CAPTURED_SOURCE_PROFILE } from "./support/source-profile";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
-
-beforeEach(() => {
-  configureSource({
-    name: "source",
-    origin: "https://source.invalid",
-    profile: CAPTURED_SOURCE_PROFILE,
-  });
-});
 
 const AUTHOR_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -51,7 +42,7 @@ function productionPoem(index: number): Record<string, unknown> {
     id: `00000000-0000-4000-8000-${suffix}`,
     insights: missingInsights ? null : { summary: "exists" },
     name_arabic: `قصيدة ${String(index + 1)}`,
-    slug: `work-${String(index + 1)}`,
+    slug: `poem${String(index + 1)}`,
     translation: noTranslation ? null : { lines: ["exists"] },
     translation_gemini: null,
   };
@@ -307,15 +298,15 @@ describe("production baseline planner", () => {
         source: {
           author: {
             canonicalId: "source:author:mutanabi",
-            href: "https://source.invalid/writers/mutanabi",
-            path: "/writers/mutanabi",
+            href: "https://source.invalid/cat-mutanabi",
+            path: "/cat-mutanabi",
             slug: "mutanabi",
           },
           canonicalId: "source:poem:1",
-          href: "https://source.invalid/works/1",
+          href: "https://source.invalid/poem1.html",
           lines: ["بيت 1"],
           numericId: "1",
-          slug: "work-1",
+          slug: "poem1",
           structure: "free_verse",
           title: "قصيدة 1",
           verses: null,
@@ -515,7 +506,7 @@ describe("production baseline planner", () => {
           canonicalSourceId: "source:poem:78927",
           poemId: "00000000-0000-4000-8000-000000078927",
           reason: "missing_arabic_title_and_content",
-          slug: "work-78927",
+          slug: "poem78927",
         },
       ],
       ineligiblePoems: 1,
@@ -561,10 +552,10 @@ describe("production baseline planner", () => {
     const artifacts = new ArtifactStore(join(root, "artifacts"), {
       minimumFreeBytes: 0,
     });
-    const authorHref = "https://source.invalid/writers/test";
+    const authorHref = "https://source.invalid/cat-test";
     const priorInput = {
       authorHref,
-      poemHref: "https://source.invalid/works/2",
+      poemHref: "https://source.invalid/poem2.html",
     };
     ledger.seed({
       implementationVersion: collectorImplementationVersion(),
@@ -586,7 +577,7 @@ describe("production baseline planner", () => {
       declaredPoemCountText: "3",
       kind: "author_poem_manifest",
       poems: [1, 2, 3].map((id) => ({
-        href: `/works/${String(id)}`,
+        href: `/poem${String(id)}.html`,
         title: `قصيدة ${String(id)}`,
         verseCountText: "1",
       })),
@@ -619,13 +610,13 @@ describe("production baseline planner", () => {
 
   it("repairs orphans only from certified manifest and identity evidence", () => {
     const manifest = parseAuthorPoemManifest({
-      authorHref: "https://source.invalid/writers/test",
+      authorHref: "https://source.invalid/cat-test",
       challengeDetected: false,
       declaredPoemCountText: "1",
       kind: "author_poem_manifest",
-      poems: [{ href: "/works/1", title: "قصيدة", verseCountText: "1" }],
+      poems: [{ href: "/poem1.html", title: "قصيدة", verseCountText: "1" }],
       schemaVersion: 1,
-      sourceUrl: "https://source.invalid/writers/test",
+      sourceUrl: "https://source.invalid/cat-test",
       terminal: true,
     });
     const orphan = {
@@ -721,17 +712,17 @@ describe("production baseline planner", () => {
     ]);
     expect(detail?.work.input).toEqual(
       expect.objectContaining({
-        authorHref: "https://source.invalid/writers/mutanabi",
+        authorHref: "https://source.invalid/cat-mutanabi",
         authorNameArabic: "المتنبي",
         refreshGeneration:
           "legacy-sol-0000000000000000000000000000000000000000",
       }),
     );
     expect(String(detail?.work.input["poemHref"])).toMatch(
-      /^https:\/\/source\.invalid\/works\/[12]$/,
+      /^https:\/\/source\.invalid\/poem[12]\.html$/,
     );
     expect(
-      ledger.sourceAuthorMetadata("https://source.invalid/writers/mutanabi"),
+      ledger.sourceAuthorMetadata("https://source.invalid/cat-mutanabi"),
     ).toEqual({
       authorNameArabic: "المتنبي",
       refreshGeneration: "legacy-sol-0000000000000000000000000000000000000000",
@@ -743,8 +734,8 @@ describe("production baseline planner", () => {
   it("creates one manifest-scoped refresh after completed detail work", async () => {
     const ledger = Ledger.open(":memory:");
     const input = {
-      authorHref: "https://source.invalid/writers/mutanabi",
-      poemHref: "https://source.invalid/works/1",
+      authorHref: "https://source.invalid/cat-mutanabi",
+      poemHref: "https://source.invalid/poem1.html",
     };
     ledger.seed({
       implementationVersion: collectorImplementationVersion(),
@@ -804,7 +795,7 @@ describe("production baseline planner", () => {
       poems: values([productionPoem(0)]),
     });
     expect(
-      ledger.sourceAuthorMetadata("https://source.invalid/writers/mutanabi"),
+      ledger.sourceAuthorMetadata("https://source.invalid/cat-mutanabi"),
     ).toBeNull();
     expect(
       ledger
@@ -819,8 +810,8 @@ describe("production baseline planner", () => {
   it("raises active recovery work to explicit priority 1000", async () => {
     const ledger = Ledger.open(":memory:");
     const input = {
-      authorHref: "https://source.invalid/writers/mutanabi",
-      poemHref: "https://source.invalid/works/1",
+      authorHref: "https://source.invalid/cat-mutanabi",
+      poemHref: "https://source.invalid/poem1.html",
     };
     ledger.seed({
       implementationVersion: collectorImplementationVersion(),

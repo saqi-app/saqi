@@ -3,7 +3,6 @@ import { existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { DEFAULT_SOURCE_ADAPTER_PROFILE } from "@saqi/source-adapter";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,7 +13,6 @@ import { loadLaunchdSourceConfiguration } from "../runtime/source-keychain.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
 const CLI = resolve(import.meta.dirname, "../cli.ts");
-const PROFILE = JSON.stringify(DEFAULT_SOURCE_ADAPTER_PROFILE);
 
 describe("CLI source initialization policy", () => {
   it.each(["available", "missing"])(
@@ -38,7 +36,7 @@ const replacement = () => { throw new Error("Unexpected synchronous fixture call
 replacement[promisify.custom] = async (file, args) => {
   if (file !== "/usr/bin/security") throw new Error("Unexpected fixture subprocess");
   if (${JSON.stringify(mode)} === "missing") throw new Error("Fixture Keychain unavailable");
-  return { stdout: args.includes("saqi-source-name") ? "managed-source" : args.includes("saqi-source-base-url") ? "https://managed.example" : ${JSON.stringify(JSON.stringify(DEFAULT_SOURCE_ADAPTER_PROFILE))}, stderr: "" };
+  return { stdout: args.includes("saqi-source-name") ? "managed-source" : "https://managed.example", stderr: "" };
 };
 childProcess.execFile = replacement;
 syncBuiltinESMExports();
@@ -48,7 +46,6 @@ syncBuiltinESMExports();
         ...process.env,
         SAQI_SOURCE_NAME: "environment-source",
         SAQI_SOURCE_BASE_URL: "https://environment.example",
-        SAQI_SOURCE_ADAPTER_CONFIG: PROFILE,
       };
       const invoke = () =>
         execFileSync(
@@ -109,7 +106,6 @@ syncBuiltinESMExports();
                 ...environment,
                 SAQI_SOURCE_NAME: "managed-source",
                 SAQI_SOURCE_BASE_URL: "https://managed.example",
-                SAQI_SOURCE_ADAPTER_CONFIG: PROFILE,
               },
               stdio: "pipe",
               timeout: 20_000,
@@ -127,7 +123,7 @@ syncBuiltinESMExports();
     },
   );
 
-  it.each(["doctor", "init", "resume-paid", "status", "verify"])(
+  it.each(["init", "resume-paid", "status", "verify", "verify-source"])(
     "loads config-bound ledger command %s from Keychain",
     (command) => {
       expect(
@@ -170,6 +166,10 @@ syncBuiltinESMExports();
     "-h",
     "help",
     "health",
+    "doctor",
+    "completion-plan",
+    "clear-source-failures",
+    "clear-source-stop",
     "fetch-resolution",
     "install-service",
     "install-runtime",
@@ -183,7 +183,7 @@ syncBuiltinESMExports();
     expect(cliSourceInitialization(command)).toBe("none");
   });
 
-  it.each(["run", "init", "status", "doctor", "seed-author", undefined])(
+  it.each(["run", "init", "status", "seed-author", undefined])(
     "keeps ordinary command %s on explicit environment configuration",
     (command) => {
       expect(cliSourceInitialization(command)).toBe("environment");

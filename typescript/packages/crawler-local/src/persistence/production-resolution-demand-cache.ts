@@ -2055,16 +2055,18 @@ export class ProductionResolutionDemandCache {
           )
           .all(bounded),
       PublicationWakeupRowSchema,
-    ).map((row) => ({
-      modelKey: row.model_key,
-      poemId: row.poem_id,
-      resolution: {
-        expectedPointerVersion: row.expected_pointer_version,
-        sourceRevisionId: row.source_revision_id,
-        writerEpoch: row.writer_epoch,
-      },
-      workKey: row.work_key,
-    }));
+    ).map((row) => {
+      return {
+        modelKey: row.model_key,
+        poemId: row.poem_id,
+        resolution: {
+          expectedPointerVersion: row.expected_pointer_version,
+          sourceRevisionId: row.source_revision_id,
+          writerEpoch: row.writer_epoch,
+        },
+        workKey: row.work_key,
+      };
+    });
   }
 
   acknowledgePublicationWakeups(workKeys: readonly string[]): number {

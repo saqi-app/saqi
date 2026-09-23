@@ -9,6 +9,7 @@ import {
 import {
   PoemEnrichmentInputSchema,
   PoemEnrichmentOutputV2Schema,
+  PoemEnrichmentOutputV3Schema,
   PoemEnrichmentReviewSchema,
   ReviewHighestSeveritySchema,
 } from "./enrichment.js";
@@ -221,7 +222,10 @@ export const EnrichmentPublicationV2ItemSchema = z
       id: IdentifierSchema,
       model: ModelSchema,
       modelKey: ModelKeySchema,
-      payload: PoemEnrichmentOutputV2Schema,
+      payload: z.union([
+        PoemEnrichmentOutputV3Schema,
+        PoemEnrichmentOutputV2Schema,
+      ]),
       payloadHash: HashSchema,
       promptVersion: PromptVersionSchema,
       reasoningEffort: ReasoningEffortSchema,

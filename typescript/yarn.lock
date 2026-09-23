@@ -3711,11 +3711,9 @@ __metadata:
     "@saqi/precedent-iso": "workspace:^"
     "@saqi/precedent-node": "workspace:^"
     "@tailwindcss/postcss": "npm:^4.3.3"
-    "@types/better-sqlite3": "npm:^9.6.0"
     "@types/node": "npm:26.4.1"
     "@types/react": "npm:^19.2.18"
     "@types/react-dom": "npm:19.2.7"
-    better-sqlite3: "npm:^13.0.3"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
     drizzle-orm: "npm:^0.45.2"
@@ -3782,7 +3780,6 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:^10.0.1"
     "@saqi/precedent-iso": "workspace:^"
-    "@saqi/source-adapter": "workspace:^"
     "@types/better-sqlite3": "npm:^9.6.0"
     better-sqlite3: "npm:^13.0.3"
     drizzle-orm: "npm:^0.45.2"
@@ -9622,9 +9619,9 @@ __metadata:
   linkType: hard
 
 "node-releases@npm:^2.0.54":
-  version: 2.0.54
-  resolution: "node-releases@npm:2.0.54"
-  checksum: 10/36380abbe4ce6f5bfec7dab13fa8174e67d2c316a9cbedcd01196bd37dbec99ca7214caf7a91f05d27ae17657d5cb55f39c53db216a7992fd9a2e29966ebd2ba
+  version: 2.0.55
+  resolution: "node-releases@npm:2.0.55"
+  checksum: 10/1ca12c725eeaf9d4645a4ed159c19ae5ce8303a0063443c95fb5d97edc21c0d3c6d55ae7d96ae21724ca73800ea0149ea60af73f3ed0ddb10f0b05da84d36efc
   languageName: node
   linkType: hard
 

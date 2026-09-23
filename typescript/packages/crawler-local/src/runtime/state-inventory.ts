@@ -49,6 +49,7 @@ export interface StateInventory {
     readonly safeToOperate: boolean;
   };
   readonly inertCandidates: readonly string[];
+  readonly retiredProviderKeys: readonly StateInventorySchedulerRecord[];
   readonly rootEntries: {
     readonly inspected: number;
     readonly truncated: boolean;
@@ -62,6 +63,13 @@ const MAXIMUM_ROOT_ENTRIES = 256;
 const MAXIMUM_SCHEDULER_BYTES = 64 * 1024;
 const CURRENT_SOL_KEY = "provider-v10:sol";
 const LEGACY_SOL_KEY = "provider:sol";
+const RETIRED_KEYS = [
+  "provider-v10:agy",
+  "provider-v10:claude",
+  "provider:agy",
+  "provider:claude",
+] as const;
+
 const SURFACES = [
   ["ledger.sqlite3", "authoritative_sqlite"],
   ["production-resolution-demand.sqlite3", "authoritative_sqlite"],
@@ -92,6 +100,14 @@ const LEGACY_SCHEDULER_FILES = [
 
 const INERT_FIXED_NAMES: ReadonlySet<string> = new Set([
   "sol-scheduler.json.v9",
+  "agy-scheduler.json",
+  "agy-scheduler-v8.json",
+  "agy-scheduler-v9.json",
+  "agy-scheduler-v10.json",
+  "claude-scheduler.json",
+  "claude-scheduler-v8.json",
+  "claude-scheduler-v9.json",
+  "claude-scheduler-v10.json",
 ]);
 
 export async function inspectStateInventory(options: {
@@ -124,6 +140,9 @@ export async function inspectStateInventory(options: {
         authority.schemaVersion <= CURRENT_SCHEDULER_STATE_SCHEMA_VERSION,
     },
     inertCandidates: inertCandidates(rootEntries.names),
+    retiredProviderKeys: RETIRED_KEYS.map((key) =>
+      inspectSchedulerRecord(options.ledger, key),
+    ),
     rootEntries: {
       inspected: rootEntries.inspected,
       truncated: rootEntries.truncated,

@@ -4,6 +4,7 @@ import {
   approvedEnrichmentProfileByModelKey,
   approvedEnrichmentValidations,
   LEGACY_ENRICHMENT_PROFILES,
+  PoemEnrichmentOutputV3Schema,
   PoemWordGlossesSchema,
   READABLE_ENRICHMENT_PROFILES,
   type ReadableEnrichmentProfile,
@@ -182,29 +183,6 @@ const validatedModelArtifactSql = (profile: ReadableEnrichmentProfile) =>
       .all.map((validation) => approvedValidationSql(validation))
       .join("\n    AND ")}`;
 
-// Historical pointers were authenticated before the runtime became Codex-only.
-// They remain readable when their source binding and both review stages are
-// intact, but this predicate is never used by publication admission.
-const HISTORICAL_VALIDATED_MODEL_ARTIFACT = `artifact.model_key <> 'sol-5.6'
-    AND EXISTS (
-      SELECT 1 FROM model_enrichment_validation accepted
-      WHERE accepted.artifact_id = artifact.id
-        AND accepted.validator_version = artifact.prompt_version
-        AND accepted.validator_key LIKE '%-fidelity-review'
-        AND accepted.attempt = 1
-        AND accepted.outcome = 'pass'
-        AND accepted.highest_severity IN ('none', 'minor')
-    )
-    AND EXISTS (
-      SELECT 1 FROM model_enrichment_validation accepted
-      WHERE accepted.artifact_id = artifact.id
-        AND accepted.validator_version = artifact.prompt_version
-        AND accepted.validator_key LIKE '%-grounding-review'
-        AND accepted.attempt = 2
-        AND accepted.outcome = 'pass'
-        AND accepted.highest_severity IN ('none', 'minor')
-    )`;
-
 const requiredModelProfile = (modelKey: string): ApprovedEnrichmentProfile => {
   const profile = approvedEnrichmentProfileByModelKey(modelKey);
   if (!profile)
@@ -213,29 +191,12 @@ const requiredModelProfile = (modelKey: string): ApprovedEnrichmentProfile => {
 };
 const SOL_PROFILE = requiredModelProfile("sol-5.6");
 const LEGACY_SOL_PROFILE = LEGACY_ENRICHMENT_PROFILES[0];
-const VALIDATED_MODEL_PUBLICATION = [
-  ...READABLE_ENRICHMENT_PROFILES.map(
-    (profile) => `(${validatedModelPublicationSql(profile)})`,
-  ),
-  `(p.active_source_revision_id IS NOT NULL
-    AND EXISTS (
-      SELECT 1
-      FROM poem_model_publication_pointer publication
-      JOIN model_enrichment_artifact artifact
-        ON artifact.id = publication.enrichment_artifact_id
-      WHERE publication.poem_id = p.id
-        AND publication.source_revision_id = p.active_source_revision_id
-        AND artifact.source_revision_id = p.active_source_revision_id
-        AND publication.model_key = artifact.model_key
-        AND ${HISTORICAL_VALIDATED_MODEL_ARTIFACT}
-    ))`,
-].join("\n    OR ");
-const VALIDATED_MODEL_ARTIFACT = [
-  ...READABLE_ENRICHMENT_PROFILES.map(
-    (profile) => `(${validatedModelArtifactSql(profile)})`,
-  ),
-  `(${HISTORICAL_VALIDATED_MODEL_ARTIFACT})`,
-].join("\n    OR ");
+const VALIDATED_MODEL_PUBLICATION = READABLE_ENRICHMENT_PROFILES.map(
+  (profile) => `(${validatedModelPublicationSql(profile)})`,
+).join("\n    OR ");
+const VALIDATED_MODEL_ARTIFACT = READABLE_ENRICHMENT_PROFILES.map(
+  (profile) => `(${validatedModelArtifactSql(profile)})`,
+).join("\n    OR ");
 const MODEL_DISPLAY_ORDER_SQL = APPROVED_ENRICHMENT_PROFILES.map(
   (profile) =>
     `WHEN ${sqlText(profile.modelKey)} THEN ${String(profile.displayOrder)}`,
@@ -276,18 +237,10 @@ const LEGACY_SOL_ENRICHMENT_COLUMN = `CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATI
 const MODEL_AVAILABILITY_METADATA_SQL = (
   field: "displayName" | "modelVendorKey",
 ) =>
-  `COALESCE(CASE artifact.model_key ${READABLE_ENRICHMENT_PROFILES.map(
+  `CASE artifact.model_key ${READABLE_ENRICHMENT_PROFILES.map(
     (profile) =>
       `WHEN ${sqlText(profile.modelKey)} THEN ${sqlText(profile[field])}`,
-  ).join(" ")} END, ${
-    field === "displayName"
-      ? "artifact.model"
-      : `CASE
-          WHEN lower(artifact.model) LIKE 'claude-%' THEN 'anthropic'
-          WHEN lower(artifact.model) LIKE 'gemini-%' THEN 'google'
-          ELSE 'other'
-        END`
-  })`;
+  ).join(" ")} END`;
 
 // List metadata uses the existing validated publication authority. Detail pages
 // retain full payload validation; lists do not transfer or reparse gloss payloads.
@@ -378,6 +331,8 @@ const PoemRowSchema = z.object({
   nameEnglish: z.string().nullable(),
   nameEnglishLegacy: z.string().nullable(),
   contentArabic: z.string(),
+  enrichmentAgy: z.string().nullable(),
+  enrichmentClaude: z.string().nullable(),
   enrichmentSol: z.string().nullable(),
   translation: z.string().nullable(),
   translationGemini: z.string().nullable(),
@@ -422,6 +377,7 @@ const ModelEnrichmentSchema = z.strictObject({
         lines: z.array(SafeCatalogLineSchema).min(1).max(2_000),
       }),
     }),
+    PoemEnrichmentOutputV3Schema,
     z.strictObject({
       schemaId: z.literal("saqi.poem-enrichment-output"),
       schemaVersion: z.literal(2),
@@ -672,7 +628,8 @@ function optionalModelEnrichment(
               })),
             },
           }
-        : { insights: payload.insights }),
+        : {}),
+      ...("insights" in payload ? { insights: payload.insights } : {}),
     };
   } catch {
     return undefined;
@@ -734,6 +691,16 @@ function poemFromRow(
     ),
     optionalModelEnrichment(
       row.enrichmentSol,
+      sourceLines.length,
+      retainedLineIndexes,
+    ),
+    optionalModelEnrichment(
+      row.enrichmentClaude,
+      sourceLines.length,
+      retainedLineIndexes,
+    ),
+    optionalModelEnrichment(
+      row.enrichmentAgy,
       sourceLines.length,
       retainedLineIndexes,
     ),
@@ -884,6 +851,8 @@ const BASE_POEM_COLUMNS = `p.id,
   p.insights`;
 
 const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  NULL AS enrichmentAgy,
+  NULL AS enrichmentClaude,
   NULL AS enrichmentSol,
   NULL AS translationSol,
   NULL AS insightsSol,
@@ -891,6 +860,8 @@ const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
   NULL AS solReasoningEffort`;
 
 const LEGACY_ENRICHMENT_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  NULL AS enrichmentAgy,
+  NULL AS enrichmentClaude,
   ${LEGACY_SOL_ENRICHMENT_COLUMN} AS enrichmentSol,
   CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
     THEN p.translation_sol ELSE NULL END AS translationSol,
@@ -906,6 +877,8 @@ const LEGACY_ENRICHMENT_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
     ELSE NULL END AS solReasoningEffort`;
 
 const MINIMAL_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  NULL AS enrichmentAgy,
+  NULL AS enrichmentClaude,
   NULL AS enrichmentSol,
   NULL AS translationSol,
   NULL AS insightsSol,
@@ -1219,6 +1192,7 @@ export class CatalogRepository implements CatalogReader {
 
   async #loadDynamicModelEnrichments(poemId: string): Promise<string[]> {
     const registryRows = await this.#loadRegistryModelEnrichments(poemId);
+    if (registryRows) return registryRows;
     try {
       const result = await this.#database
         .prepare(
@@ -1238,14 +1212,6 @@ export class CatalogRepository implements CatalogReader {
             AND artifact.source_revision_id = p.active_source_revision_id
             AND publication.model_key = artifact.model_key
             AND (${VALIDATED_MODEL_ARTIFACT})
-            ${
-              registryRows === null
-                ? ""
-                : `AND NOT EXISTS (
-                  SELECT 1 FROM model_enrichment_artifact_profile bound
-                  WHERE bound.artifact_id = artifact.id
-                )`
-            }
           ORDER BY CASE artifact.model_key
               ${MODEL_DISPLAY_ORDER_SQL}
               ELSE 2147483647
@@ -1255,10 +1221,9 @@ export class CatalogRepository implements CatalogReader {
         )
         .bind(poemId)
         .all();
-      const fallbackRows = ModelEnrichmentRowSchema.array()
+      return ModelEnrichmentRowSchema.array()
         .parse(result.results)
         .map(({ enrichment }) => enrichment);
-      return [...(registryRows ?? []), ...fallbackRows];
     } catch (error) {
       if (isMissingSchemaError(error)) return [];
       throw error;

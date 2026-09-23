@@ -1,7 +1,4 @@
-import type {
-  ExecutionContext,
-  ScheduledController,
-} from "@cloudflare/workers-types";
+import type { ExecutionContext } from "@cloudflare/workers-types";
 
 import openNextHandler from "./.open-next/worker.js";
 import { type AccessEnv, verifyAccessIdentity } from "./src/lib/access";
@@ -17,11 +14,6 @@ interface AccessWorker {
     env: AccessEnv,
     context: ExecutionContext
   ) => Promise<Response>;
-  readonly scheduled: (
-    controller: ScheduledController,
-    env: AccessEnv,
-    context: ExecutionContext
-  ) => void;
 }
 
 const FORWARDED_IDENTITY_HEADERS: ReadonlySet<string> = new Set([
@@ -89,36 +81,6 @@ const WORKER: AccessWorker = Object.freeze({
     );
     return secureOperationsResponse(response, request);
   },
-  scheduled(
-    _controller: ScheduledController,
-    env: AccessEnv,
-    context: ExecutionContext
-  ) {
-    context.waitUntil(runSourceLineageMaintenance(env, context));
-  },
 });
-
-async function runSourceLineageMaintenance(
-  env: AccessEnv,
-  context: ExecutionContext
-): Promise<void> {
-  const request = new Request(`${OPS_ORIGIN}/api/source-lineage-maintenance`, {
-    body: JSON.stringify({ maxPages: 2 }),
-    headers: {
-      "content-type": "application/json",
-      host: new URL(OPS_ORIGIN).host,
-      origin: OPS_ORIGIN,
-      "sec-fetch-mode": "cors",
-      "sec-fetch-site": "same-origin",
-    },
-    method: "POST",
-  });
-  const response = await openNextHandler.fetch(request, env, context);
-  if (!response.ok) {
-    throw new Error(
-      `SOURCE_LINEAGE_MAINTENANCE_HTTP_${String(response.status)}`
-    );
-  }
-}
 
 export default WORKER;

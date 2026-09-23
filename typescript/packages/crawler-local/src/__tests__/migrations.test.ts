@@ -1,303 +1,1171 @@
+import { hash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
-import { expect, test } from "vitest";
-import { z } from "zod";
+import { describe, expect, test } from "vitest";
 
+import { Ledger } from "../persistence/ledger.js";
 import {
   CURRENT_SCHEMA_VERSION,
-  FRESH_BASELINE_SQL,
-} from "../persistence/baseline-schema.js";
-import { LedgerMigrator } from "../persistence/migrations.js";
+  MIGRATIONS,
+} from "../persistence/migrations.js";
+import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
+import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
-test("fresh initialization installs the complete source-neutral v36 baseline", () => {
-  const database = new Database(":memory:");
-  const migrator = new LedgerMigrator(database);
-  expect(migrator.migrate()).toBe(CURRENT_SCHEMA_VERSION);
-  expect(migrator.migrate()).toBe(CURRENT_SCHEMA_VERSION);
-  expect(database.prepare("SELECT total_changes()").pluck().get()).toBe(7);
-  expect(database.prepare("PRAGMA integrity_check").pluck().get()).toBe("ok");
-  expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-  expect(
-    database
-      .prepare("SELECT version FROM local_schema WHERE singleton=1")
-      .pluck()
-      .get(),
-  ).toBe(36);
-  expect(
-    database
-      .prepare(
-        `SELECT name FROM sqlite_schema
-         WHERE name IN ('retired_scheduler_state','work_item_poem_definition_unique')`,
-      )
-      .all(),
-  ).toEqual([]);
-  const schemaText = database
-    .prepare("SELECT group_concat(sql, '') FROM sqlite_schema")
-    .pluck()
-    .get();
-  expect(schemaText).toEqual(expect.any(String));
-  expect(schemaText).not.toMatch(/\/poem|source\.invalid/u);
-  database.close();
-});
+const migrate = (database: Database.Database): number =>
+  migrateHistoricalFixture(database);
 
-test("the fresh baseline is fully transactional", () => {
-  const database = new Database(":memory:");
-  expect(() =>
-    database.transaction(() => {
-      database.exec(FRESH_BASELINE_SQL);
-      throw new Error("injected failure");
-    })(),
-  ).toThrow("injected failure");
-  expect(
-    database
-      .prepare("SELECT name FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*'")
-      .all(),
-  ).toEqual([]);
-  database.close();
-});
-
-test("v35 upgrade preserves retained rows and converges on the fresh object manifest", () => {
-  const upgraded = new Database(":memory:");
-  initializeVersion35Fixture(upgraded);
-  const before = retainedRows(upgraded);
-  const countsBefore = retainedTableCounts(upgraded);
-  expect(new LedgerMigrator(upgraded).migrate()).toBe(36);
-  expect(retainedRows(upgraded)).toEqual(before);
-  expect(retainedTableCounts(upgraded)).toEqual(countsBefore);
-  expect(upgraded.prepare("PRAGMA integrity_check").pluck().get()).toBe("ok");
-  expect(upgraded.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-  expect(
-    upgraded
-      .prepare(
-        "SELECT name FROM sqlite_schema WHERE name='retired_scheduler_state'",
-      )
-      .get(),
-  ).toBeUndefined();
-
-  const fresh = new Database(":memory:");
-  new LedgerMigrator(fresh).migrate();
-  expect(schemaManifest(upgraded)).toEqual(schemaManifest(fresh));
-  fresh.close();
-  upgraded.close();
-});
-
-test.each([
-  ["held owner", { held: true, running: false }],
-  ["running work", { held: false, running: true }],
-] as const)(
-  "v35 upgrade refuses %s without partial writes",
-  (_name, options) => {
+describe("ledger schema migrations", () => {
+  test("schema 32 adds a ready range index and preserves priority paging on upgrade", () => {
     const database = new Database(":memory:");
-    initializeVersion35Fixture(database, options);
-    const before = schemaManifest(database);
-    expect(() => new LedgerMigrator(database).migrate()).toThrow();
-    expect(schemaManifest(database)).toEqual(before);
-    expect(
-      database.prepare("SELECT version FROM local_schema").pluck().get(),
-    ).toBe(35);
-    database.close();
-  },
-);
-
-test("a compatibility DDL failure rolls back prior schema changes", () => {
-  const database = new Database(":memory:");
-  initializeVersion35Fixture(database);
-  database.exec("DROP TRIGGER poem_identity_reject_delete");
-  expect(() => new LedgerMigrator(database).migrate()).toThrow();
-  expect(
+    database.exec(
+      "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT; INSERT INTO local_schema VALUES(1, 0)",
+    );
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 31) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const configured = currentSource();
     database
       .prepare(
-        "SELECT name FROM sqlite_schema WHERE name='poem_work_requires_registered_identity_insert'",
+        "INSERT INTO local_source_identity(singleton, source_name, source_origin) VALUES(1, ?, ?)",
       )
-      .pluck()
-      .get(),
-  ).toBe("poem_work_requires_registered_identity_insert");
-  expect(
-    database.prepare("SELECT version FROM local_schema").pluck().get(),
-  ).toBe(35);
-  database.close();
-});
+      .run(configured.name, configured.origin);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('work_item_fanout_resolution_ready', 'work_item_fanout_resolution_pending') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([
+      { name: "work_item_fanout_resolution_pending" },
+      { name: "work_item_fanout_resolution_ready" },
+    ]);
+    database.close();
+  });
+  test("seeds and advances the author metadata revision from schema 21", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 21) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    database
+      .prepare(
+        `INSERT INTO source_author_metadata(
+           source_name, author_href, author_name_arabic,
+           refresh_generation, observed_at
+         ) VALUES('source', ?, ?, ?, ?)`,
+      )
+      .run("https://source.invalid/cat-test", "شاعر", "generation-a", 1);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'table' AND name = 'fanout_priority_hint'`,
+        )
+        .get(),
+    ).toEqual({ name: "fanout_priority_hint" });
+    expect(
+      database
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'index'
+             AND name = 'work_item_fanout_resolution_pending'`,
+        )
+        .get(),
+    ).toEqual({ name: "work_item_fanout_resolution_pending" });
+    expect(
+      database
+        .prepare(
+          "SELECT revision FROM source_author_metadata_revision WHERE singleton = 1",
+        )
+        .get(),
+    ).toEqual({ revision: 1 });
+    database
+      .prepare(
+        `UPDATE source_author_metadata SET author_name_arabic = ?
+         WHERE source_name = 'source' AND author_href = ?`,
+      )
+      .run("شاعر محدث", "https://source.invalid/cat-test");
+    expect(
+      database
+        .prepare(
+          "SELECT revision FROM source_author_metadata_revision WHERE singleton = 1",
+        )
+        .get(),
+    ).toEqual({ revision: 2 });
+    database.close();
+  });
 
-test.each([0, 1, 34])("schema %i fails closed", (version) => {
-  const database = new Database(":memory:");
-  database.exec(
-    `CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT;
-     INSERT INTO local_schema VALUES(1, ${String(version)});`,
-  );
-  expect(() => new LedgerMigrator(database).migrate()).toThrow(
-    "PUBLIC_BASELINE_REQUIRES_ARCHIVED_SCHEMA35_UPGRADE",
-  );
-  expect(
-    database.prepare("SELECT version FROM local_schema").pluck().get(),
-  ).toBe(version);
-  database.close();
-});
-
-test("unversioned nonempty and future schemas fail closed", () => {
-  const unversioned = new Database(":memory:");
-  unversioned.exec("CREATE TABLE existing(value TEXT) STRICT");
-  expect(() => new LedgerMigrator(unversioned).migrate()).toThrow(
-    "RUNTIME_OWNER_UNVERSIONED_NONEMPTY_LEDGER",
-  );
-  expect(
-    unversioned.prepare("SELECT name FROM sqlite_schema").pluck().all(),
-  ).toContain("existing");
-  unversioned.close();
-
-  const future = new Database(":memory:");
-  future.exec(
-    "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT; INSERT INTO local_schema VALUES(1, 37)",
-  );
-  expect(() => new LedgerMigrator(future).migrate()).toThrow(
-    "newer than supported",
-  );
-  future.close();
-});
-
-function initializeVersion35Fixture(
-  database: Database.Database,
-  options: { readonly held?: boolean; readonly running?: boolean } = {},
-): void {
-  database.exec(
-    FRESH_BASELINE_SQL.replace("CHECK(version = 36)", "CHECK(version >= 0)"),
-  );
-  const source = currentSource();
-  database.prepare("INSERT INTO local_schema VALUES(1, 35)").run();
-  database
-    .prepare("INSERT INTO local_source_identity VALUES(1, ?, ?)")
-    .run(source.name, source.origin);
-  database.exec(`
-    INSERT INTO ledger_status_clock(singleton) VALUES(1);
-    INSERT INTO source_author_metadata_revision VALUES(1, 0);
-    INSERT INTO sol_poem_milestone_backfill VALUES('succeeded',0,0,NULL),('imported',0,0,NULL);
-    INSERT INTO runtime_owner(singleton,epoch,held,owner_kind,pid,run_id,config_digest,started_at)
-      VALUES(1,${options.held ? "1,1,'supervisor',123,'00000000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','2026-01-01T00:00:00.000Z'" : "0,0,NULL,NULL,NULL,NULL,NULL"});
-  `);
-  database.exec(`
-    DROP TRIGGER poem_identity_reject_conflicting_insert;
-    DROP TRIGGER poem_identity_requires_configured_source_insert;
-    DROP TRIGGER poem_identity_reject_identity_update;
-    DROP TRIGGER poem_identity_reject_delete;
-    DROP TRIGGER poem_work_requires_registered_identity_insert;
-    DROP TRIGGER poem_work_reject_duplicate_definition_insert;
-    DROP TRIGGER poem_work_requires_registered_identity_update;
-    DROP INDEX work_item_poem_definition_lookup;
-    DROP TABLE poem_identity;
-    CREATE TABLE poem_identity(
-      source_name TEXT NOT NULL, poem_href TEXT NOT NULL,
-      poem_numeric_id TEXT, author_href TEXT NOT NULL,
-      first_work_key TEXT NOT NULL, created_at INTEGER NOT NULL,
-      PRIMARY KEY(source_name, poem_href)
-    ) STRICT;
-    CREATE UNIQUE INDEX work_item_poem_definition_unique
-      ON work_item(implementation_version,schema_version,input_hash)
-      WHERE kind='private_poem_detail';
-    CREATE TRIGGER poem_identity_reject_conflicting_insert BEFORE INSERT ON poem_identity BEGIN SELECT 1; END;
-    CREATE TRIGGER poem_identity_reject_identity_update BEFORE UPDATE ON poem_identity BEGIN SELECT 1; END;
-    CREATE TRIGGER poem_identity_reject_delete BEFORE DELETE ON poem_identity BEGIN SELECT 1; END;
-    CREATE TRIGGER poem_work_requires_registered_identity_insert BEFORE INSERT ON work_item BEGIN SELECT 1; END;
-    CREATE TRIGGER poem_work_reject_duplicate_definition_insert BEFORE INSERT ON work_item BEGIN SELECT 1; END;
-    CREATE TRIGGER poem_work_requires_registered_identity_update BEFORE UPDATE ON work_item BEGIN SELECT 1; END;
-    DROP TRIGGER source_author_metadata_requires_configured_source_insert;
-    DROP TRIGGER source_author_metadata_requires_configured_source_update;
-    DROP TRIGGER source_author_metadata_revision_insert;
-    DROP TRIGGER source_author_metadata_revision_update;
-    DROP TABLE source_author_metadata;
-    CREATE TABLE source_author_metadata(
-      source_name TEXT NOT NULL, author_href TEXT NOT NULL,
-      author_name_arabic TEXT NOT NULL, refresh_generation TEXT NOT NULL,
-      observed_at INTEGER NOT NULL, PRIMARY KEY(source_name,author_href)
-    ) STRICT;
-    CREATE TRIGGER source_author_metadata_revision_insert AFTER INSERT ON source_author_metadata BEGIN SELECT 1; END;
-    CREATE TRIGGER source_author_metadata_revision_update AFTER UPDATE ON source_author_metadata BEGIN SELECT 1; END;
-    CREATE TABLE retired_scheduler_state(state_key TEXT PRIMARY KEY, state_json TEXT NOT NULL) STRICT;
-    CREATE TRIGGER retired_scheduler_state_reject_update BEFORE UPDATE ON retired_scheduler_state BEGIN SELECT 1; END;
-    CREATE TRIGGER retired_scheduler_state_reject_delete BEFORE DELETE ON retired_scheduler_state BEGIN SELECT 1; END;
-  `);
-  database
-    .prepare(
-      "INSERT INTO poem_identity(source_name,poem_href,poem_numeric_id,author_href,first_work_key,created_at) VALUES(?,?,?,?,?,?)",
-    )
-    .run(
-      source.name,
-      `${source.origin}/work/42`,
-      "42",
-      `${source.origin}/writer/a`,
-      "a".repeat(64),
-      1,
-    );
-  database
-    .prepare("INSERT INTO source_author_metadata VALUES(?,?,?,?,?)")
-    .run(source.name, `${source.origin}/writer/a`, "شاعر", "generation", 1);
-  database
-    .prepare("INSERT INTO retired_scheduler_state VALUES('old','{}')")
-    .run();
-  database
-    .prepare(
-      "INSERT INTO scheduler_state(state_key,state_json,state_digest,updated_at) VALUES('retained','{}',?,1)",
-    )
-    .run("b".repeat(64));
-  if (options.running)
+  test("adds version-nineteen binding metadata without rebuilding work items", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 18) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
     database
       .prepare(
         `INSERT INTO work_item(
-           work_key,kind,input_json,input_hash,schema_version,
-           implementation_version,state,available_at,lease_owner,lease_token,
-           lease_epoch,lease_expires_at,created_at,updated_at
-         ) VALUES(?,?,?,?,?,?,'running',1,'owner','token',1,2,1,1)`,
+           work_key, kind, input_json, input_hash, schema_version,
+           implementation_version, state, available_at, created_at, updated_at
+         ) VALUES(?, 'poem-enrichment-sol', '{}', ?, 'input@1', 'sol-5.6',
+                  'succeeded', 1, 1, 1)`,
       )
-      .run("c".repeat(64), "test", "{}", "d".repeat(64), "v1", "v1");
-}
+      .run("a".repeat(64), "b".repeat(64));
 
-function retainedRows(database: Database.Database): unknown {
-  return {
-    poem: database
-      .prepare(
-        "SELECT source_name,poem_href,author_href,first_work_key,created_at FROM poem_identity",
-      )
-      .all(),
-    scheduler: database.prepare("SELECT * FROM scheduler_state").all(),
-    source: database.prepare("SELECT * FROM source_author_metadata").all(),
-  };
-}
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database.prepare(`SELECT work_key, kind FROM work_item`).get(),
+    ).toEqual({ kind: "poem-enrichment-sol", work_key: "a".repeat(64) });
+    expect(
+      database
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'table'
+             AND name IN ('canonical_translation_binding', 'publication_derivation')
+           ORDER BY name`,
+        )
+        .all(),
+    ).toEqual([
+      { name: "canonical_translation_binding" },
+      { name: "publication_derivation" },
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'table' AND name = 'fanout_detail_material'`,
+        )
+        .get(),
+    ).toEqual({ name: "fanout_detail_material" });
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    database.close();
+  });
 
-function schemaManifest(database: Database.Database): unknown {
-  return database
-    .prepare(
-      `SELECT type,name,tbl_name FROM sqlite_schema
-       WHERE name NOT GLOB 'sqlite_*' ORDER BY type,name,tbl_name`,
-    )
-    .all();
-}
+  test("initialization and repeated migration are idempotent", () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "saqi-migrate-")),
+      "ledger.sqlite3",
+    );
+    const ledger = Ledger.open(path);
+    ledger.close();
+    const database = new Database(path);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    const row = database.prepare("SELECT version FROM local_schema").get() as {
+      version: number;
+    };
+    expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
+    database.close();
+  });
 
-function retainedTableCounts(
-  database: Database.Database,
-): Readonly<Record<string, number>> {
-  const tables = z.array(z.string()).parse(
+  test("retires obsolete provider scheduler keys only behind valid Sol authority", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 27) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const authority = schedulerState(10);
+    const authorityDigest = hash("sha256", authority, "hex");
+    const obsolete = schedulerState(9);
+    const obsoleteDigest = hash("sha256", obsolete, "hex");
+    const insert = database.prepare(
+      `INSERT INTO scheduler_state(
+         state_key, state_json, state_digest, updated_at
+       ) VALUES(?, ?, ?, ?)`,
+    );
+    insert.run("provider-v10:sol", authority, authorityDigest, 10);
+    for (const key of [
+      "provider-v10:agy",
+      "provider-v10:claude",
+      "provider:agy",
+      "provider:claude",
+    ])
+      insert.run(key, obsolete, obsoleteDigest, 5);
+    insert.run("unrelated-state", "{}", "f".repeat(64), 1);
+
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare(
+          `SELECT state_key FROM scheduler_state
+           ORDER BY state_key`,
+        )
+        .all(),
+    ).toEqual([
+      { state_key: "provider-v10:sol" },
+      { state_key: "unrelated-state" },
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT state_key, state_json, state_digest, updated_at,
+                  authority_state_digest
+             FROM retired_scheduler_state ORDER BY state_key`,
+        )
+        .all(),
+    ).toEqual(
+      [
+        "provider-v10:agy",
+        "provider-v10:claude",
+        "provider:agy",
+        "provider:claude",
+      ].map((stateKey) => ({
+        authority_state_digest: authorityDigest,
+        state_digest: obsoleteDigest,
+        state_json: obsolete,
+        state_key: stateKey,
+        updated_at: 5,
+      })),
+    );
+    expect(() =>
+      database
+        .prepare(
+          `DELETE FROM retired_scheduler_state
+           WHERE state_key = 'provider:agy'`,
+        )
+        .run(),
+    ).toThrow("RETIRED_SCHEDULER_STATE_IMMUTABLE");
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    database.close();
+  });
+
+  test("preserves obsolete scheduler keys when Sol authority is invalid", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 27) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const serialized = schedulerState(10);
+    const insert = database.prepare(
+      `INSERT INTO scheduler_state(
+         state_key, state_json, state_digest, updated_at
+       ) VALUES(?, ?, ?, 1)`,
+    );
+    insert.run("provider-v10:sol", serialized, "0".repeat(64));
+    insert.run("provider-v10:agy", serialized, "1".repeat(64));
+
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM scheduler_state").get(),
+    ).toEqual({ count: 2 });
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM retired_scheduler_state")
+        .get(),
+    ).toEqual({ count: 0 });
+    database.close();
+  });
+
+  test("adds a bounded Sol milestone projection without startup history backfill", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 26) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const historicalKey = "a".repeat(64);
+    const liveKey = "c".repeat(64);
+    const insertWork = database.prepare(
+      `INSERT INTO work_item(
+          work_key, kind, input_json, input_hash, schema_version,
+          implementation_version, state, available_at, created_at, updated_at
+        ) VALUES(?, 'poem-enrichment-sol', '{}', ?, 'input@1', 'sol-v1',
+                 'succeeded', 1, 1, 1)`,
+    );
+    insertWork.run(historicalKey, "b".repeat(64));
+    insertWork.run(liveKey, "d".repeat(64));
     database
       .prepare(
-        `SELECT name FROM sqlite_schema
-       WHERE type='table' AND name NOT GLOB 'sqlite_*'
-         AND name <> 'retired_scheduler_state'
-       ORDER BY name`,
+        `INSERT INTO work_event(
+          event_id, work_key, event_type, payload_json, created_at
+        ) VALUES(?, ?, ?, ?, ?)`,
       )
-      .pluck()
-      .all(),
-  );
-  return Object.fromEntries(
-    tables.map((name) => {
-      if (!/^[a-z_]+$/u.test(name))
-        throw new Error("Unsafe fixture table name");
-      return [
-        name,
-        z
-          .number()
-          .int()
-          .nonnegative()
-          .parse(
-            database.prepare(`SELECT COUNT(*) FROM ${name}`).pluck().get(),
-          ),
-      ];
-    }),
-  );
+      .run("old-success", historicalKey, "succeeded", "{}", 10);
+    database
+      .prepare(
+        `INSERT INTO work_event(
+          event_id, work_key, event_type, payload_json, created_at
+        ) VALUES(?, ?, ?, ?, ?)`,
+      )
+      .run("old-bad-import", liveKey, "imported", '{"unexpected":true}', 12);
+
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM sol_poem_milestone")
+        .get(),
+    ).toEqual({
+      count: 0,
+    });
+    expect(
+      database
+        .prepare(
+          `SELECT event_type, cursor_sequence, high_watermark, completed_at
+             FROM sol_poem_milestone_backfill ORDER BY event_type`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        completed_at: null,
+        cursor_sequence: 0,
+        event_type: "imported",
+        high_watermark: 2,
+      },
+      {
+        completed_at: null,
+        cursor_sequence: 0,
+        event_type: "succeeded",
+        high_watermark: 2,
+      },
+    ]);
+    const insertEvent = database.prepare(
+      `INSERT INTO work_event(
+        event_id, work_key, event_type, payload_json, created_at
+      ) VALUES(?, ?, ?, ?, ?)`,
+    );
+    insertEvent.run("new-success", liveKey, "succeeded", "{}", 20);
+    insertEvent.run(
+      "bad-import",
+      liveKey,
+      "imported",
+      '{"unexpected":true}',
+      30,
+    );
+    insertEvent.run(
+      "good-import",
+      liveKey,
+      "imported",
+      JSON.stringify({ artifactHash: "c".repeat(64) }),
+      40,
+    );
+    expect(
+      database
+        .prepare(
+          `SELECT milestone, completed_at FROM sol_poem_milestone ORDER BY milestone`,
+        )
+        .all(),
+    ).toEqual([
+      { completed_at: 20, milestone: "generated" },
+      { completed_at: 40, milestone: "published" },
+    ]);
+    const ledger = new Ledger(database);
+    expect(ledger.backfillSolPoemMilestones("succeeded", 1, 50)).toMatchObject({
+      complete: false,
+      inserted: 1,
+      processed: 1,
+    });
+    expect(ledger.backfillSolPoemMilestones("succeeded", 1, 51)).toMatchObject({
+      complete: true,
+      inserted: 0,
+      processed: 0,
+    });
+    expect(ledger.backfillSolPoemMilestones("imported", 1, 51)).toMatchObject({
+      complete: false,
+      invalid: 1,
+      inserted: 0,
+      processed: 1,
+    });
+    expect(ledger.backfillSolPoemMilestones("imported", 1, 52)).toMatchObject({
+      complete: true,
+      invalid: 0,
+      inserted: 0,
+      processed: 0,
+    });
+    expect(
+      database
+        .prepare(
+          `SELECT work_key, milestone, completed_at
+             FROM sol_poem_milestone ORDER BY completed_at`,
+        )
+        .all(),
+    ).toEqual([
+      { completed_at: 10, milestone: "generated", work_key: historicalKey },
+      { completed_at: 20, milestone: "generated", work_key: liveKey },
+      { completed_at: 40, milestone: "published", work_key: liveKey },
+    ]);
+    const plan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT COUNT(*) FROM sol_poem_milestone
+          WHERE implementation_version = ? AND schema_version = ?
+            AND milestone = ? AND completed_at > ? AND completed_at <= ?`,
+      )
+      .all("sol-v1", "input@1", "generated", 0, 100);
+    expect(JSON.stringify(plan)).toContain("sol_poem_milestone_profile_time");
+    const highWatermarkPlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN
+         WITH high_watermark(value) AS (
+           SELECT COALESCE(MAX(sequence), 0) FROM work_event
+         )
+         SELECT 'succeeded', value FROM high_watermark
+         UNION ALL SELECT 'imported', value FROM high_watermark`,
+      )
+      .all();
+    expect(JSON.stringify(highWatermarkPlan)).not.toContain("SCAN work_event");
+    ledger.close();
+  });
+
+  test("backfills version-eighteen status aggregates and maintains them", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 17) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const insertWork = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, last_error_code,
+        created_at, updated_at
+      ) VALUES(?, 'poem-enrichment-sol', '{}', ?, 'input@1', 'sol-v1',
+               ?, ?, ?, 1, ?)`);
+    insertWork.run("a".repeat(64), "b".repeat(64), "succeeded", 1, null, 2);
+    insertWork.run(
+      "c".repeat(64),
+      "d".repeat(64),
+      "retry_wait",
+      100,
+      "SOURCE_TIMEOUT",
+      3,
+    );
+    const insertEvent = database.prepare(`INSERT INTO work_event(
+        event_id, work_key, event_type, payload_json, created_at
+      ) VALUES(?, ?, ?, ?, ?)`);
+    insertEvent.run("success", "a".repeat(64), "succeeded", "{}", 2);
+    insertEvent.run(
+      "failure",
+      "c".repeat(64),
+      "retry_wait",
+      JSON.stringify({ errorCode: "SOURCE_TIMEOUT" }),
+      3,
+    );
+    database
+      .prepare(
+        `INSERT INTO paid_operation_reconciliation(
+        operation_key, work_key, attempt_id, state, next_reconcile_at,
+        first_observed_at, updated_at
+      ) VALUES(?, ?, 'attempt-1', 'unknown', 10, 4, 4)`,
+      )
+      .run("e".repeat(64), "c".repeat(64));
+
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare(
+          `SELECT state, item_count FROM ledger_state_count ORDER BY state`,
+        )
+        .all(),
+    ).toEqual([
+      { item_count: 1, state: "retry_wait" },
+      { item_count: 1, state: "succeeded" },
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT error_code, item_count FROM ledger_profile_error_count`,
+        )
+        .get(),
+    ).toEqual({ error_code: "SOURCE_TIMEOUT", item_count: 1 });
+    expect(
+      database
+        .prepare(
+          `SELECT available_at, item_count FROM ledger_profile_availability_count`,
+        )
+        .get(),
+    ).toEqual({ available_at: 100, item_count: 1 });
+
+    database
+      .prepare(
+        `UPDATE work_item SET state = 'succeeded', last_error_code = NULL,
+          updated_at = 5 WHERE work_key = ?`,
+      )
+      .run("c".repeat(64));
+    database
+      .prepare(
+        `UPDATE paid_operation_reconciliation
+         SET state = 'reconciled', last_reconciled_at = 5, updated_at = 5
+         WHERE operation_key = ?`,
+      )
+      .run("e".repeat(64));
+    expect(database.prepare(`SELECT * FROM ledger_error_count`).all()).toEqual(
+      [],
+    );
+    expect(
+      database.prepare(`SELECT * FROM ledger_profile_availability_count`).all(),
+    ).toEqual([]);
+    expect(
+      database
+        .prepare(`SELECT state, item_count FROM paid_operation_state_count`)
+        .all(),
+    ).toEqual([{ item_count: 1, state: "reconciled" }]);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    database.close();
+  });
+
+  test("upgrades a mixed-profile version-twelve ledger with a targeted recovery index", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 12) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const insert = database.prepare(`INSERT INTO work_item(
+      work_key, kind, input_json, input_hash, schema_version,
+      implementation_version, state, available_at, last_error_code,
+      created_at, updated_at
+    ) VALUES(?, 'poem-enrichment-sol', ?, ?, 'input@1', ?, 'pending', 1, ?, 1, ?)`);
+    for (const [digit, implementationVersion, errorCode, updatedAt] of [
+      ["1", "sol-current", "CODEX_OPERATION_OUTCOME_UNKNOWN", 10],
+      ["2", "sol-obsolete", "CODEX_OPERATION_OUTCOME_UNKNOWN", 9],
+      ["3", "sol-current", "CODEX_RATE_LIMITED", 8],
+    ] as const) {
+      insert.run(
+        digit.repeat(64),
+        JSON.stringify({ digit }),
+        digit.repeat(64),
+        implementationVersion,
+        errorCode,
+        updatedAt,
+      );
+    }
+
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare(
+          `SELECT work_key FROM work_item INDEXED BY work_item_unknown_recovery
+           WHERE state IN ('pending','retry_wait','quota_wait','dead_letter')
+             AND kind = 'poem-enrichment-sol'
+             AND implementation_version = 'sol-current'
+             AND schema_version = 'input@1'
+             AND last_error_code = 'CODEX_OPERATION_OUTCOME_UNKNOWN'
+             AND updated_at <= 20
+             AND (state = 'dead_letter' OR available_at <= 20)
+           ORDER BY updated_at, created_at, work_key`,
+        )
+        .all(),
+    ).toEqual([{ work_key: "1".repeat(64) }]);
+    const sql = database
+      .prepare<[], { sql: string }>(
+        "SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = 'work_item_unknown_recovery'",
+      )
+      .get()?.sql;
+    expect(sql).toContain(
+      "last_error_code = 'CODEX_OPERATION_OUTCOME_UNKNOWN'",
+    );
+    expect(sql).not.toContain("last_error_code IS NOT NULL");
+    database.close();
+  });
+
+  test("converges two pre-opened migration connections after one advances the schema", () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "saqi-migrate-concurrent-")),
+      "ledger.sqlite3",
+    );
+    const bootstrap = new Database(path);
+    bootstrap.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 12) continue;
+      bootstrap.exec(migration.statements);
+      bootstrap
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    bootstrap.close();
+
+    const first = new Database(path);
+    const second = new Database(path);
+    first.pragma("busy_timeout = 5000");
+    second.pragma("busy_timeout = 5000");
+    expect(migrate(first)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrate(second)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      second
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_schema WHERE type = 'index' AND name = 'work_item_unknown_recovery'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    first.close();
+    second.close();
+  });
+
+  test("rolls back version thirteen when its index cannot be installed", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 12) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    database.exec(
+      "CREATE INDEX work_item_unknown_recovery ON work_item(work_key)",
+    );
+
+    expect(() => migrate(database)).toThrow(/already exists/u);
+    expect(
+      database
+        .prepare("SELECT version FROM local_schema WHERE singleton = 1")
+        .get(),
+    ).toEqual({ version: 12 });
+    expect(
+      database
+        .prepare<[], { sql: string }>(
+          "SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = 'work_item_unknown_recovery'",
+        )
+        .get()?.sql,
+    ).toBe("CREATE INDEX work_item_unknown_recovery ON work_item(work_key)");
+    database.close();
+  });
+
+  test("upgrades a version-one database without losing work", () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "saqi-migrate-")),
+      "ledger.sqlite3",
+    );
+    const database = new Database(path);
+    database.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    database.exec(MIGRATIONS[0]!.statements);
+    database.prepare("UPDATE local_schema SET version = 1").run();
+    database
+      .prepare(
+        `INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version, implementation_version,
+        available_at, created_at, updated_at
+      ) VALUES(?, 'test', '{}', ?, 'v1', 'v1', 1, 1, 1)`,
+      )
+      .run("a".repeat(64), "b".repeat(64));
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM work_item").get(),
+    ).toEqual({ count: 1 });
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM checkpoint").get(),
+    ).toEqual({ count: 0 });
+    const indexes = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+      .all() as { name: string }[];
+    expect(indexes.map(({ name }) => name)).toContain("checkpoint_latest_kind");
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_item_expired_lease",
+    );
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_event_completed_scan",
+    );
+    expect(indexes.map(({ name }) => name)).toContain("work_item_error_code");
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_item_ready_priority",
+    );
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_item_unknown_recovery",
+    );
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_item_profile_state",
+    );
+    expect(indexes.map(({ name }) => name)).toContain(
+      "work_item_kind_error_code",
+    );
+    expect(
+      database
+        .prepare<[], { name: string }>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'poem_identity'",
+        )
+        .get()?.name,
+    ).toBe("poem_identity");
+    const claimPlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT work_key FROM work_item INDEXED BY work_item_ready_priority
+         WHERE state IN ('pending','retry_wait','quota_wait') AND available_at <= ?
+           AND kind IN (?) AND implementation_version = ? AND schema_version = ?
+         ORDER BY priority DESC, created_at, work_key LIMIT 1`,
+      )
+      .all(1, "test", "v1", "v1") as { detail: string }[];
+    expect(
+      claimPlan.some(({ detail }) =>
+        detail.includes("work_item_ready_priority"),
+      ),
+    ).toBe(true);
+    expect(
+      claimPlan.some(({ detail }) => detail.includes("USE TEMP B-TREE")),
+    ).toBe(false);
+    const recoveryPlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT work_key FROM work_item INDEXED BY work_item_unknown_recovery
+         WHERE state IN ('pending','retry_wait','quota_wait','dead_letter')
+           AND kind = ?
+           AND implementation_version = ? AND schema_version = ?
+           AND last_error_code = 'CODEX_OPERATION_OUTCOME_UNKNOWN'
+           AND updated_at <= ?
+           AND (state = 'dead_letter' OR available_at <= ?)
+         ORDER BY updated_at, created_at, work_key LIMIT 1`,
+      )
+      .all("test", "v1", "v1", 1, 1) as {
+      detail: string;
+    }[];
+    expect(
+      recoveryPlan.some(({ detail }) =>
+        detail.includes("work_item_unknown_recovery"),
+      ),
+    ).toBe(true);
+    expect(
+      recoveryPlan.some(({ detail }) => detail.includes("USE TEMP B-TREE")),
+    ).toBe(false);
+    const profilePlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT state, COUNT(*) AS count
+         FROM work_item INDEXED BY work_item_profile_state
+         WHERE kind = ? AND implementation_version = ? AND schema_version = ?
+         GROUP BY state`,
+      )
+      .all("test", "v1", "v1") as { detail: string }[];
+    expect(
+      profilePlan.some(({ detail }) =>
+        detail.includes("work_item_profile_state"),
+      ),
+    ).toBe(true);
+    expect(
+      profilePlan.some(({ detail }) => detail.includes("USE TEMP B-TREE")),
+    ).toBe(false);
+    const kindErrorPlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT kind, last_error_code, COUNT(*) AS count
+         FROM work_item INDEXED BY work_item_kind_error_code
+         WHERE last_error_code IS NOT NULL
+         GROUP BY kind, last_error_code`,
+      )
+      .all() as { detail: string }[];
+    expect(
+      kindErrorPlan.some(({ detail }) =>
+        detail.includes("work_item_kind_error_code"),
+      ),
+    ).toBe(true);
+    expect(
+      kindErrorPlan.some(({ detail }) => detail.includes("USE TEMP B-TREE")),
+    ).toBe(false);
+    database
+      .prepare(
+        `INSERT INTO work_event(event_id, work_key, event_type, payload_json, created_at)
+         VALUES('completed-a', ?, 'succeeded', '{}', 2)`,
+      )
+      .run("a".repeat(64));
+    const queryPlan = database
+      .prepare(
+        `EXPLAIN QUERY PLAN
+         SELECT work_event.sequence
+         FROM work_event
+         JOIN work_item ON work_item.work_key = work_event.work_key
+         WHERE work_event.sequence > ? AND work_event.sequence <= ?
+           AND work_event.event_type = 'succeeded'
+           AND work_item.kind IN (?)
+         ORDER BY work_event.sequence LIMIT ?`,
+      )
+      .all(0, 10, "test", 250) as { detail: string }[];
+    expect(
+      queryPlan.some(({ detail }) =>
+        detail.includes("work_event_completed_scan"),
+      ),
+    ).toBe(true);
+    database.close();
+  });
+
+  test("keeps work definitions immutable while allowing lifecycle updates", () => {
+    const database = new Database(":memory:");
+    migrate(database);
+    database
+      .prepare(
+        `INSERT INTO work_item(
+          work_key, kind, input_json, input_hash, schema_version,
+          implementation_version, available_at, created_at, updated_at
+        ) VALUES (?, 'test', '{}', ?, 'v1', 'v1', 1, 1, 1)`,
+      )
+      .run("a".repeat(64), "b".repeat(64));
+
+    expect(() =>
+      database
+        .prepare("UPDATE work_item SET input_json = ? WHERE work_key = ?")
+        .run('{"changed":true}', "a".repeat(64)),
+    ).toThrow(/WORK_ITEM_DEFINITION_IMMUTABLE/u);
+    expect(() =>
+      database
+        .prepare("UPDATE work_item SET priority = 10 WHERE work_key = ?")
+        .run("a".repeat(64)),
+    ).not.toThrow();
+    expect(() =>
+      database
+        .prepare("UPDATE work_item SET priority = 1000001 WHERE work_key = ?")
+        .run("a".repeat(64)),
+    ).toThrow(/WORK_ITEM_DEFINITION_INVALID/u);
+    expect(
+      database
+        .prepare("SELECT priority FROM work_item WHERE work_key = ?")
+        .pluck()
+        .get("a".repeat(64)),
+    ).toBe(10);
+    database.close();
+  });
+
+  test("rejects raw SQL work definitions with malformed JSON or hashes", () => {
+    const database = new Database(":memory:");
+    migrate(database);
+    const insert = database.prepare(
+      `INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, available_at, created_at, updated_at
+      ) VALUES (?, 'test', ?, ?, 'v1', 'v1', 1, 1, 1)`,
+    );
+
+    expect(() => insert.run("a".repeat(64), "{", "b".repeat(64))).toThrow(
+      /WORK_ITEM_DEFINITION_INVALID/u,
+    );
+    expect(() => insert.run("a".repeat(64), "[]", "b".repeat(64))).toThrow(
+      /WORK_ITEM_DEFINITION_INVALID/u,
+    );
+    expect(() => insert.run("A".repeat(64), "{}", "b".repeat(64))).toThrow(
+      /WORK_ITEM_DEFINITION_INVALID/u,
+    );
+    expect(() => insert.run("a".repeat(64), "{}", "z".repeat(64))).toThrow(
+      /WORK_ITEM_DEFINITION_INVALID/u,
+    );
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO work_item(
+            work_key, kind, input_json, input_hash, schema_version,
+            implementation_version, priority, available_at, created_at,
+            updated_at
+          ) VALUES (?, '', '{}', ?, 'v1', 'v1', 0, 1, 1, 1)`,
+        )
+        .run("a".repeat(64), "b".repeat(64)),
+    ).toThrow(/WORK_ITEM_DEFINITION_INVALID/u);
+    expect(() =>
+      insert.run("a".repeat(64), "{}", "b".repeat(64)),
+    ).not.toThrow();
+    database.close();
+  });
+
+  test("keeps invalid v8 work repairable before installing definition guards", () => {
+    const database = new Database(":memory:");
+    const migrationsThroughVersionEight = MIGRATIONS.filter(
+      ({ version }) => version <= 8,
+    );
+    for (const migration of migrationsThroughVersionEight) {
+      database.exec(migration.statements);
+    }
+    database.exec(`
+      CREATE TABLE local_schema (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL CHECK(version >= 0)
+      ) STRICT;
+      INSERT INTO local_schema(singleton, version) VALUES(1, 8);
+    `);
+    database
+      .prepare(
+        `INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, available_at, created_at, updated_at
+      ) VALUES(?, 'test', '{', ?, 'v1', 'v1', 1, 1, 1)`,
+      )
+      .run("a".repeat(64), "b".repeat(64));
+
+    expect(() => migrate(database)).toThrow(
+      /WORK_ITEM_DEFINITION_INVALID_MIGRATION: 1 work item/u,
+    );
+    expect(
+      database
+        .prepare("SELECT version FROM local_schema WHERE singleton = 1")
+        .pluck()
+        .get(),
+    ).toBe(8);
+    expect(
+      database
+        .prepare(
+          `SELECT COUNT(*) FROM sqlite_schema
+           WHERE type = 'trigger'
+             AND name = 'work_item_definition_reject_update'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe(0);
+
+    database
+      .prepare("UPDATE work_item SET input_json = '{}' WHERE work_key = ?")
+      .run("a".repeat(64));
+    expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    expect(
+      database
+        .prepare("SELECT version FROM local_schema WHERE singleton = 1")
+        .pluck()
+        .get(),
+    ).toBe(CURRENT_SCHEMA_VERSION);
+    database.close();
+  });
+
+  test("rejects conflicting ownership of one canonical poem in SQL", () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "saqi-poem-identity-")),
+      "ledger.sqlite3",
+    );
+    const ledger = Ledger.open(path);
+    ledger.close();
+    const database = new Database(path);
+    const insert = database.prepare(`INSERT INTO poem_identity(
+      source_name, poem_href, author_href, first_work_key, created_at
+    ) VALUES('source', ?, ?, ?, 1)
+    ON CONFLICT(source_name, poem_href) DO NOTHING`);
+    insert.run(
+      "https://source.invalid/poem42.html",
+      "https://source.invalid/cat-poet-one",
+      "a".repeat(64),
+    );
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem42.html",
+        "https://source.invalid/cat-poet-two",
+        "b".repeat(64),
+      ),
+    ).toThrow(/SOURCE_POEM_DUPLICATE/u);
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem42.html",
+        "https://source.invalid/cat-poet-one",
+        "c".repeat(64),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem42/",
+        "https://source.invalid/cat-poet-one",
+        "d".repeat(64),
+      ),
+    ).toThrow(/CHECK constraint failed/u);
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem0.html",
+        "https://source.invalid/cat-poet-one",
+        "d".repeat(64),
+      ),
+    ).toThrow(/CHECK constraint failed/u);
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem042.html",
+        "https://source.invalid/cat-poet-one",
+        "d".repeat(64),
+      ),
+    ).toThrow(/CHECK constraint failed/u);
+    expect(() =>
+      insert.run(
+        "https://source.invalid/poem9007199254740992.html",
+        "https://source.invalid/cat-poet-one",
+        "d".repeat(64),
+      ),
+    ).toThrow(/CHECK constraint failed/u);
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE poem_identity SET author_href = ? WHERE source_name = 'source' AND poem_href = ?",
+        )
+        .run(
+          "https://source.invalid/cat-poet-two",
+          "https://source.invalid/poem42.html",
+        ),
+    ).toThrow(/SOURCE_POEM_IDENTITY_IMMUTABLE/u);
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE poem_identity SET first_work_key = ? WHERE source_name = 'source' AND poem_href = ?",
+        )
+        .run("e".repeat(64), "https://source.invalid/poem42.html"),
+    ).toThrow(/SOURCE_POEM_IDENTITY_IMMUTABLE/u);
+    expect(() =>
+      database
+        .prepare(
+          "DELETE FROM poem_identity WHERE source_name = 'source' AND poem_href = ?",
+        )
+        .run("https://source.invalid/poem42.html"),
+    ).toThrow(/SOURCE_POEM_IDENTITY_IMMUTABLE/u);
+    const directWork = database.prepare(
+      `INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, available_at, created_at, updated_at
+      ) VALUES(?, 'source_poem_detail', ?, ?, 'projection-v1', 'collector-v1', 1, 1, 1)`,
+    );
+    const registeredInput = JSON.stringify({
+      authorHref: "https://source.invalid/cat-poet-one",
+      poemHref: "https://source.invalid/poem42.html",
+    });
+    directWork.run("1".repeat(64), registeredInput, "2".repeat(64));
+    expect(() =>
+      directWork.run("3".repeat(64), registeredInput, "2".repeat(64)),
+    ).toThrow(/SOURCE_POEM_WORK_DUPLICATE/u);
+    expect(() =>
+      directWork.run(
+        "f".repeat(64),
+        JSON.stringify({
+          authorHref: "https://source.invalid/cat-poet-one",
+          poemHref: "https://source.invalid/poem43.html",
+        }),
+        "f".repeat(64),
+      ),
+    ).toThrow(/SOURCE_POEM_IDENTITY_REQUIRED/u);
+    database.close();
+  });
+
+  test("fails a conflicting version-seven backfill with a stable diagnostic", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 7) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ?")
+        .run(migration.version);
+    }
+    const insert = database.prepare(`INSERT INTO work_item(
+      work_key, kind, input_json, input_hash, schema_version,
+      implementation_version, available_at, created_at, updated_at
+    ) VALUES(?, 'source_poem_detail', ?, ?, 'projection-v1', 'collector-v1', 1, 1, 1)`);
+    for (const [key, author] of [
+      ["a".repeat(64), "https://source.invalid/cat-poet-one"],
+      ["b".repeat(64), "https://source.invalid/cat-poet-two"],
+    ] as const) {
+      const input = JSON.stringify({
+        authorHref: author,
+        poemHref: "https://source.invalid/poem42.html",
+      });
+      insert.run(key, input, key);
+    }
+    expect(() => migrate(database)).toThrow(
+      /SOURCE_POEM_DUPLICATE_MIGRATION.*poem42\.html.*2 authors/u,
+    );
+    expect(database.prepare("SELECT version FROM local_schema").get()).toEqual({
+      version: 7,
+    });
+    database.close();
+  });
+
+  test("refuses to open a schema newer than this binary", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, ${String(CURRENT_SCHEMA_VERSION + 1)});
+    `);
+    expect(() => migrate(database)).toThrow("newer than supported");
+    database.close();
+  });
+});
+
+function schedulerState(schemaVersion: 10 | 9): string {
+  return `${JSON.stringify({
+    ambiguousOutcomeCount: 0,
+    ambiguousWindowStartedAt: 0,
+    configDigest: "a".repeat(64),
+    consecutiveErrors: 0,
+    consecutiveProviderFailures: 0,
+    consecutiveRateLimits: 0,
+    errorDampenerUntil: 0,
+    ewmaLatencyMs: null,
+    pressureEpoch: 0,
+    providerCredentialGeneration: null,
+    providerErrorCode: null,
+    providerUntil: 0,
+    quotaProbeAt: 0,
+    quotaUntil: 0,
+    rateLimitedUntil: 0,
+    recoveryLease: null,
+    samples: 0,
+    schemaVersion,
+    selectedConcurrency: 2,
+    successStreak: 0,
+    updatedAt: 1,
+  })}\n`;
 }

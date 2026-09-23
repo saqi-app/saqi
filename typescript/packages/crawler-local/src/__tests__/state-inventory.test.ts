@@ -3,10 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Ledger } from "../persistence/ledger.js";
+import { MIGRATIONS } from "../persistence/migrations.js";
 import { inspectStateInventory } from "../runtime/state-inventory.js";
+import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
 
 const TEST_ROOTS: string[] = [];
 
@@ -111,17 +114,99 @@ describe("state inventory", () => {
     });
   });
 
-  it("reports only allowlisted inert basenames", async () => {
+  it("reports retired keys and only allowlisted inert basenames", async () => {
     const fixture = createFixture();
+    const serialized = schedulerState(10);
+    fixture.ledger.saveSchedulerState(
+      "provider-v10:agy",
+      serialized,
+      sha256(serialized),
+      null,
+      1,
+    );
+    writeFileSync(join(fixture.root, "claude-scheduler-v9.json"), serialized);
     writeFileSync(join(fixture.root, "PAID_WORK_PAUSED.deploy-170"), "");
     writeFileSync(join(fixture.root, "credential-secret.json"), "private");
 
     const inventory = await inspectStateInventory(fixture);
 
-    expect(inventory.inertCandidates).toEqual(["PAID_WORK_PAUSED.deploy-170"]);
+    expect(inventory.retiredProviderKeys).toContainEqual(
+      expect.objectContaining({ key: "provider-v10:agy", state: "valid" }),
+    );
+    expect(inventory.inertCandidates).toEqual([
+      "PAID_WORK_PAUSED.deploy-170",
+      "claude-scheduler-v9.json",
+    ]);
     expect(JSON.stringify(inventory)).not.toContain("credential-secret");
     expect(JSON.stringify(inventory)).not.toContain(fixture.root);
     fixture.ledger.close();
+  });
+
+  it("shows obsolete provider scheduler keys missing after a guarded upgrade", async () => {
+    const root = createRoot();
+    const path = join(root, "ledger.sqlite3");
+    const database = new Database(path);
+    database.exec(`
+      CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO local_schema VALUES(1, 0);
+    `);
+    for (const migration of MIGRATIONS) {
+      if (migration.version > 27) continue;
+      database.exec(migration.statements);
+      database
+        .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+        .run(migration.version);
+    }
+    const serialized = schedulerState(10);
+    const insert = database.prepare(
+      `INSERT INTO scheduler_state(
+         state_key, state_json, state_digest, updated_at
+       ) VALUES(?, ?, ?, 1)`,
+    );
+    insert.run("provider-v10:sol", serialized, sha256(serialized));
+    for (const key of [
+      "provider-v10:agy",
+      "provider-v10:claude",
+      "provider:agy",
+      "provider:claude",
+    ])
+      insert.run(key, serialized, sha256(serialized));
+    migrateHistoricalFixture(database);
+    database.close();
+
+    const ledger = Ledger.open(path);
+    const inventory = await inspectStateInventory({ ledger, root });
+    expect(inventory.codexScheduler.safeToOperate).toBe(true);
+    expect(inventory.retiredProviderKeys).toEqual([
+      {
+        digestValid: null,
+        key: "provider-v10:agy",
+        schemaVersion: null,
+        state: "missing",
+      },
+      {
+        digestValid: null,
+        key: "provider-v10:claude",
+        schemaVersion: null,
+        state: "missing",
+      },
+      {
+        digestValid: null,
+        key: "provider:agy",
+        schemaVersion: null,
+        state: "missing",
+      },
+      {
+        digestValid: null,
+        key: "provider:claude",
+        schemaVersion: null,
+        state: "missing",
+      },
+    ]);
+    ledger.close();
   });
 
   it("uses bounded root metadata without traversing attempts or artifacts", async () => {
@@ -142,7 +227,7 @@ describe("state inventory", () => {
     });
 
     expect(inventory.rootEntries).toEqual({ inspected: 256, truncated: true });
-    expect(loader).toHaveBeenCalledTimes(2);
+    expect(loader).toHaveBeenCalledTimes(6);
     expect(inventory.surfaces).toHaveLength(16);
   });
 });
