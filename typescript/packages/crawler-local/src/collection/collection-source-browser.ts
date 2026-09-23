@@ -14,6 +14,16 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  type BrowserContext,
+  chromium,
+  type Page,
+  type Request,
+  type Response,
+  type Route,
+} from "playwright-core";
+import { z } from "zod";
+
+import {
   type AuthorInventoryPageProjection,
   AuthorInventoryPageSchema,
   type AuthorPoemManifestProjection,
@@ -25,17 +35,7 @@ import {
   type PoemDetailProjection,
   PROJECTION_SCHEMA_VERSION,
   SourceProjectionError,
-} from "@saqi/source-adapter";
-import {
-  type BrowserContext,
-  chromium,
-  type Page,
-  type Request,
-  type Response,
-  type Route,
-} from "playwright-core";
-import { z } from "zod";
-
+} from "../source-adapter/index.js";
 import type { AuthorInventoryPageBrowser } from "./author-inventory-lane.js";
 import type { CollectorBrowser } from "./collector.js";
 

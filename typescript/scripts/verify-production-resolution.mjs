@@ -6,7 +6,7 @@ import {
   ProductionResolutionApiResponseSchema,
   ProductionResolutionRequestSchema,
 } from "@saqi/precedent-iso";
-import { canonicalJson } from "@saqi/source-adapter";
+import { canonicalJson } from "@saqi/precedent-iso";
 
 const maximumClockSkewMs = 5 * 60_000;
 const maximumScopeLifetimeMs = 60 * 60_000;

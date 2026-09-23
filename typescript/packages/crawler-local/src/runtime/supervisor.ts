@@ -26,7 +26,7 @@ export function supervisorMaximumListeners(
   return (config.sol.enabled ? config.sol.concurrency : 0) + LISTENER_HEADROOM;
 }
 
-export interface SupervisorLaneResult {
+interface SupervisorLaneResult {
   readonly nextWakeAt: null | number;
   readonly restartRequiredCode?: string;
   readonly result: string;
@@ -120,7 +120,7 @@ export interface SupervisorPreflight {
   readonly status: unknown;
 }
 
-export type SupervisorDrainReason = "external" | "maximum_runtime";
+type SupervisorDrainReason = "external" | "maximum_runtime";
 
 export const MAXIMUM_RUNTIME_DRAIN_REASON = "maximum_runtime";
 

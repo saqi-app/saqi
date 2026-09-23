@@ -516,11 +516,6 @@ function prepareRelease(checkout: string, runner: RuntimeBuildRunner): void {
   runner("corepack", ["yarn", "install", "--immutable"], typescript);
   runner(
     "corepack",
-    ["yarn", "workspace", "@saqi/source-adapter", "build"],
-    typescript,
-  );
-  runner(
-    "corepack",
     ["yarn", "workspace", "@saqi/precedent-iso", "build"],
     typescript,
   );

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const WORK_STATES = [
+const WORK_STATES = [
   "pending",
   "running",
   "retry_wait",
@@ -89,7 +89,7 @@ export interface KindProgress {
   readonly total: number;
 }
 
-export interface OriginStatus {
+interface OriginStatus {
   readonly active: boolean;
   readonly consecutiveFailures: number;
   readonly cooldownUntil: number;

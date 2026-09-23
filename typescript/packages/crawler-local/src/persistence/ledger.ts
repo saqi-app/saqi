@@ -11,11 +11,11 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { canonicalAuthorUrl, currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler.js";
+import { canonicalAuthorUrl, currentSource } from "../source-adapter/index.js";
 import { LedgerMigrator } from "./migrations.js";
 import { type PauseControlPort, PauseControls } from "./pause-controls.js";
 import {
@@ -445,7 +445,7 @@ export interface ProviderProfileDiagnostics {
   readonly semanticFailures: number;
 }
 
-export interface PoemMilestoneWindow {
+interface PoemMilestoneWindow {
   readonly last15m: number;
   readonly last1h: number;
   readonly last5m: number;

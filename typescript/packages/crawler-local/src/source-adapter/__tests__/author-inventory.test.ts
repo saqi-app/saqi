@@ -40,7 +40,7 @@ describe("author inventory page certificate", () => {
   it("certifies two stable passes and canonically deduplicates boundaries", async () => {
     const equivalent = pass();
     equivalent[0] = {
-      ...equivalent[0]!,
+      ...equivalent[0],
       nextPageHref: "https://source.invalid/authers-2",
       sourceUrl: "https://source.invalid/authers-1",
     };
@@ -59,7 +59,7 @@ describe("author inventory page certificate", () => {
 
   it("normalizes source presentation noise without losing real authors", async () => {
     const noisy = pass();
-    noisy[0]!.authors[0] = {
+    noisy[0].authors[0] = {
       href: "/cat-poet-%E2%80%8EAhmed-Al-Luwaim",
       name: "أحمد اللويم\n6 قصيدة",
       poemCountText: "6 قصيدة",
@@ -76,7 +76,7 @@ describe("author inventory page certificate", () => {
 
   it("rejects unstable, discontinuous, challenged, and conflicting passes", async () => {
     const unstable = pass();
-    unstable[1]!.authors[1] = {
+    unstable[1].authors[1] = {
       href: "/cat-d",
       name: "دال",
       poemCountText: "1",
@@ -86,19 +86,19 @@ describe("author inventory page certificate", () => {
     );
 
     const gap = pass();
-    gap[1] = { ...gap[1]!, page: 3, sourceUrl: "/authers-3" };
+    gap[1] = { ...gap[1], page: 3, sourceUrl: "/authers-3" };
     await expect(certifyAuthorInventoryPages(gap, pass())).rejects.toThrow(
       "SOURCE_AUTHOR_INVENTORY_PAGE_GAP",
     );
 
     const challenged = pass();
-    challenged[0] = { ...challenged[0]!, challengeDetected: true };
+    challenged[0] = { ...challenged[0], challengeDetected: true };
     await expect(
       certifyAuthorInventoryPages(challenged, pass()),
     ).rejects.toThrow("SOURCE_CHALLENGE");
 
     const conflict = pass();
-    conflict[1]!.authors[0] = {
+    conflict[1].authors[0] = {
       href: "/cat-b",
       name: "اسم مختلف",
       poemCountText: "2",
@@ -110,13 +110,13 @@ describe("author inventory page certificate", () => {
 
   it("requires exact next-page and terminal semantics", async () => {
     const skipped = pass();
-    skipped[0] = { ...skipped[0]!, nextPageHref: "/authers-3" };
+    skipped[0] = { ...skipped[0], nextPageHref: "/authers-3" };
     await expect(certifyAuthorInventoryPages(skipped, skipped)).rejects.toThrow(
       "SOURCE_AUTHOR_INVENTORY_NEXT_PAGE_INVALID",
     );
 
     const early = pass();
-    early[0] = { ...early[0]!, nextPageHref: null, terminal: true };
+    early[0] = { ...early[0], nextPageHref: null, terminal: true };
     await expect(certifyAuthorInventoryPages(early, early)).rejects.toThrow(
       "SOURCE_AUTHOR_INVENTORY_TERMINAL_INVALID",
     );

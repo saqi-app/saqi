@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { CloudflareEnv } from "./cloudflare";
+import { readBoundedJsonBody } from "./read-bounded-json-body";
 
 const MAXIMUM_PURGE_RESPONSE_BYTES = 64 * 1_024;
 const PURGE_TIMEOUT_MS = 10_000;
@@ -28,8 +29,8 @@ export interface PublishedPoemRoute {
 }
 
 export class PublicCacheInvalidationError extends Error {
-  constructor(code: string) {
-    super(code);
+  constructor(code: string, options?: ErrorOptions) {
+    super(code, options);
     this.name = "PublicCacheInvalidationError";
   }
 }
@@ -127,31 +128,5 @@ async function readBoundedJson(
     throw new Error("Response too large");
   }
   if (!response.body) throw new Error("Missing response body");
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  try {
-    for (;;) {
-      // eslint-disable-next-line no-await-in-loop -- Stream chunks must be read sequentially to enforce the byte limit before requesting more data.
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > maximumBytes) {
-        // eslint-disable-next-line no-await-in-loop -- Cancel the owned reader before releasing its lock after exceeding the byte limit.
-        await reader.cancel();
-        throw new Error("Response too large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const body = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  return readBoundedJsonBody(response.body, maximumBytes, "Response too large");
 }

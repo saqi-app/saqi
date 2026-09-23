@@ -106,10 +106,31 @@ main {
 }
 
 .site-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
   position: relative;
   grid-area: actions;
   justify-self: end;
   min-inline-size: 0;
+}
+
+.github-link {
+  display: inline-flex;
+  flex: 0 0 2.75rem;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.75rem;
+  min-block-size: 2.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.github-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .wordmark {

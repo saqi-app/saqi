@@ -2,7 +2,6 @@ import { hash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 
-import { currentSource, type SourceConfiguration } from "@saqi/source-adapter";
 import { z } from "zod";
 
 import {
@@ -11,6 +10,10 @@ import {
   SAQI_CURRENT_POEMS,
 } from "../publication/d1-capacity-preflight.js";
 import { PublicationAuthConfigSchema } from "../publication/publication-auth-client.js";
+import {
+  currentSource,
+  type SourceConfiguration,
+} from "../source-adapter/index.js";
 import { ConcurrencyStore } from "./concurrency-store.js";
 
 const OptionalPathSchema = z.string().min(1).max(4_096).nullable();
@@ -524,7 +527,7 @@ const ConfigSchema = z
     }
   });
 
-export const ScraperOperationConfigSchema = ConfigSchema.transform(
+const ScraperOperationConfigSchema = ConfigSchema.transform(
   (configuration) => ({
     ...configuration,
     stateDirectory: resolve(configuration.stateDirectory),

@@ -288,7 +288,7 @@ export class DemandDrivenProductionResolutionRefresher {
 }
 
 /** Normalizes a stale derived bootstrap onto the currently executable models. */
-export function activeBootstrapRequest(input: unknown) {
+function activeBootstrapRequest(input: unknown) {
   const envelope = ActiveBootstrapEnvelopeSchema.parse(input);
   if (envelope.schemaVersion === 3)
     return ProductionResolutionRequestSchema.parse(envelope);

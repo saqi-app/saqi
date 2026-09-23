@@ -1,7 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { configureSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 
@@ -10,6 +9,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   MIGRATIONS,
 } from "../persistence/migrations.js";
+import { configureSource } from "../source-adapter/index.js";
 import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 

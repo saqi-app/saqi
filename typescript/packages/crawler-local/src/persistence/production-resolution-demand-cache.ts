@@ -27,11 +27,11 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
 import { assertCollectedArtifactBinding } from "../enrichment/local-enrichment-fanout.js";
+import { currentSource } from "../source-adapter/index.js";
 import type { WorkItem } from "./schema.js";
 import { validateFetchedProductionResolutionResponse } from "./scoped-production-resolution.js";
 import {
@@ -1844,8 +1844,11 @@ export class ProductionResolutionDemandCache {
           .get(poemId, modelKey, this.#now()),
       PublicationRowSchema,
     );
-    if (row?.current_source_revision_id === undefined) return null;
-    if (row.current_source_revision_id === null) return null;
+    if (
+      row?.current_source_revision_id === undefined ||
+      row.current_source_revision_id === null
+    )
+      return null;
     if (
       requiredSourceRevisionId !== undefined &&
       row.current_source_revision_id !== requiredSourceRevisionId &&
@@ -2055,18 +2058,16 @@ export class ProductionResolutionDemandCache {
           )
           .all(bounded),
       PublicationWakeupRowSchema,
-    ).map((row) => {
-      return {
-        modelKey: row.model_key,
-        poemId: row.poem_id,
-        resolution: {
-          expectedPointerVersion: row.expected_pointer_version,
-          sourceRevisionId: row.source_revision_id,
-          writerEpoch: row.writer_epoch,
-        },
-        workKey: row.work_key,
-      };
-    });
+    ).map((row) => ({
+      modelKey: row.model_key,
+      poemId: row.poem_id,
+      resolution: {
+        expectedPointerVersion: row.expected_pointer_version,
+        sourceRevisionId: row.source_revision_id,
+        writerEpoch: row.writer_epoch,
+      },
+      workKey: row.work_key,
+    }));
   }
 
   acknowledgePublicationWakeups(workKeys: readonly string[]): number {

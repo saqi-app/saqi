@@ -10,12 +10,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { expect, test } from "vitest";
 
 import { MIGRATIONS } from "../persistence/migrations.js";
 import { stageLegacyOperationSchema34 } from "../persistence/stage-legacy-operation-schema34.js";
+import { currentSource } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 function fixture(version = 33, sourceMismatch = false) {

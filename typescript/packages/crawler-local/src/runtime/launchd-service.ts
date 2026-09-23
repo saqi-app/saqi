@@ -32,7 +32,7 @@ const DEFAULT_EXECUTABLE_SEARCH_PATH = [
   "/sbin",
 ].join(":");
 
-export const LaunchdServiceOptionsSchema = z
+const LaunchdServiceOptionsSchema = z
   .object({
     codexHomePath: AbsolutePathSchema.default(() =>
       resolve(environmentCodexHome() ?? join(DEFAULT_HOME, ".codex")),
@@ -58,9 +58,9 @@ export const LaunchdServiceOptionsSchema = z
   })
   .strict();
 
-export type LaunchdServiceOptions = z.infer<typeof LaunchdServiceOptionsSchema>;
+type LaunchdServiceOptions = z.infer<typeof LaunchdServiceOptionsSchema>;
 
-export interface LaunchdPreflightIssue {
+interface LaunchdPreflightIssue {
   readonly code: string;
   readonly message: string;
 }
@@ -75,7 +75,7 @@ export interface LaunchdPreflightReport {
   readonly plist: string;
 }
 
-export interface LaunchdCodexAuthDiagnostic {
+interface LaunchdCodexAuthDiagnostic {
   readonly authPathHash: string;
   readonly homePathHash: string;
   readonly resolution: "default" | "environment" | "explicit";

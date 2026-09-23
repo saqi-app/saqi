@@ -2,7 +2,6 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { configureSource, currentSource } from "@saqi/source-adapter";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -10,6 +9,7 @@ import {
   loadLaunchdDesiredConfigDigest,
   loadLaunchdSourceConfiguration,
 } from "../runtime/source-keychain.js";
+import { configureSource, currentSource } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 describe("launchd source Keychain loading", () => {

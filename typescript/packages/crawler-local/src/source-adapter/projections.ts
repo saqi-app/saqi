@@ -64,9 +64,6 @@ export const PoemDetailProjectionSchema = z
   })
   .strict();
 
-export type AuthorInventoryProjection = z.infer<
-  typeof AuthorInventoryProjectionSchema
->;
 export type AuthorPoemManifestProjection = z.infer<
   typeof AuthorPoemManifestProjectionSchema
 >;

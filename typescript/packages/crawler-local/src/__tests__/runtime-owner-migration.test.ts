@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { configureSource, currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { expect, test, vi } from "vitest";
 
@@ -15,6 +14,7 @@ import { RuntimeOwnerStore } from "../persistence/runtime-owner-store.js";
 import { importLegacySolOperations } from "../persistence/sol-operation-import.js";
 import { stageLegacyOperationSchema34 } from "../persistence/stage-legacy-operation-schema34.js";
 import { readRunLock } from "../runtime/run-lock.js";
+import { configureSource, currentSource } from "../source-adapter/index.js";
 import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 

@@ -1,7 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { parseAuthorPoemManifest } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler";
@@ -24,6 +23,7 @@ import {
 } from "../persistence/production-baseline-planner";
 import { inputHash } from "../persistence/work-key";
 import { prepareCollectedPoem } from "../publication/corpus-import-actions";
+import { parseAuthorPoemManifest } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const AUTHOR_ID = "00000000-0000-4000-8000-000000000001";

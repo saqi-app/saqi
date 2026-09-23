@@ -1,4 +1,4 @@
-import { currentSource } from "@saqi/source-adapter";
+import { currentSource } from "../source-adapter/index.js";
 
 export interface CollectionWorkKinds {
   readonly authorManifest: string;

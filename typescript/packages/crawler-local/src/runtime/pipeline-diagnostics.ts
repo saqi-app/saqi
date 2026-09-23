@@ -86,14 +86,14 @@ const OriginStateSchema = z.enum([
 const PipelineStateSchema = z.enum(["healthy", "degraded", "blocked"]);
 const QuotaSignalStateSchema = z.enum(["open", "cleared"]);
 
-export const PipelineHealthCheckSchema = z.strictObject({
+const PipelineHealthCheckSchema = z.strictObject({
   code: ErrorCodeSchema,
   detail: z.string().trim().min(1).max(2_000).nullable(),
   retryAt: z.int().nonnegative().nullable(),
   state: HealthCheckStateSchema,
 });
 
-export const PipelineLaneHealthSchema = z.strictObject({
+const PipelineLaneHealthSchema = z.strictObject({
   active: z.int().nonnegative(),
   completed: z.int().nonnegative(),
   failed: z.int().nonnegative(),
@@ -104,7 +104,7 @@ export const PipelineLaneHealthSchema = z.strictObject({
   state: LaneStateSchema,
 });
 
-export const PipelineQueueHealthSchema = z.strictObject({
+const PipelineQueueHealthSchema = z.strictObject({
   active: z.int().nonnegative(),
   deadLetter: z.int().nonnegative(),
   kind: z.string().trim().min(1).max(128),
@@ -117,7 +117,7 @@ export const PipelineQueueHealthSchema = z.strictObject({
   total: z.int().nonnegative(),
 });
 
-export const SolPipelineHealthSchema = z.strictObject({
+const SolPipelineHealthSchema = z.strictObject({
   accepted: z.int().nonnegative(),
   activeInvocations: z.int().nonnegative(),
   invocationConcurrency: z.int().min(1).max(256),
@@ -128,7 +128,7 @@ export const SolPipelineHealthSchema = z.strictObject({
   semanticFailures: z.int().nonnegative(),
 });
 
-export const ZPROVIDER_PIPELINE_HEALTH = SolPipelineHealthSchema.extend({
+const ZPROVIDER_PIPELINE_HEALTH = SolPipelineHealthSchema.extend({
   blockReason: ProviderBlockReasonSchema.nullable().default(null),
   modelKey: z.string().trim().min(1).max(128),
   nextQuotaProbeAt: z.int().nonnegative().nullable().default(null),
@@ -241,7 +241,7 @@ export const ZPIPELINE_HEALTH = PipelineHealthBodySchema.extend({
   state: PipelineStateSchema,
 }).strict();
 
-export const SolQuotaSignalSchema = z
+const SolQuotaSignalSchema = z
   .strictObject({
     configDigest: z.string().regex(/^[a-f\d]{64}$/),
     errorCode: ErrorCodeSchema.nullable(),

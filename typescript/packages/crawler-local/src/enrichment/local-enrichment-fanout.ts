@@ -5,7 +5,6 @@ import {
   PoemEnrichmentInputSchema,
   PoemEnrichmentInputV2Schema,
 } from "@saqi/precedent-iso";
-import { canonicalAuthorUrl, canonicalPoemUrl } from "@saqi/source-adapter";
 import { z } from "zod";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler.js";
@@ -23,6 +22,10 @@ import {
   type CatalogPoemMapping,
   prepareCollectedPoem,
 } from "../publication/corpus-import-actions.js";
+import {
+  canonicalAuthorUrl,
+  canonicalPoemUrl,
+} from "../source-adapter/index.js";
 import type { SolEnrichmentSeedPort } from "./sol-coordinator.js";
 
 const LOCAL_ENRICHMENT_FANOUT_VERSION = "local-enrichment-fanout-v2";

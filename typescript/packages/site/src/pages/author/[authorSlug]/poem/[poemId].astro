@@ -14,8 +14,8 @@ import {
 import { authorPath, englishAuthorLabel, poemPath } from "../../../../lib/routes";
 
 const page = await CatalogRepository.fromD1(env.DB).getPoemPage(
-  Astro.params.authorSlug ?? "",
-  Astro.params.poemId ?? "",
+  Astro.params["authorSlug"] ?? "",
+  Astro.params["poemId"] ?? "",
 );
 if (!page) {
   Astro.response.status = 404;
@@ -304,16 +304,16 @@ const structuredData = [
       const syncTranslation = () => {
         for (const translation of document.querySelectorAll("[data-translation]")) {
           if (!(translation instanceof HTMLElement)) continue;
-          translation.hidden = translation.dataset.translation !== translationSelect.value;
+          translation.hidden = translation.dataset["translation"] !== translationSelect.value;
         }
         for (const icon of document.querySelectorAll("[data-translation-model-icon]")) {
           if (!(icon instanceof HTMLElement)) continue;
-          icon.hidden = icon.dataset.translationModelIcon !== translationSelect.value;
+          icon.hidden = icon.dataset["translationModelIcon"] !== translationSelect.value;
         }
         let hasGlosses = false;
         for (const line of document.querySelectorAll("[data-word-gloss-line]")) {
           if (!(line instanceof HTMLElement)) continue;
-          line.hidden = line.dataset.wordGlossLine !== translationSelect.value;
+          line.hidden = line.dataset["wordGlossLine"] !== translationSelect.value;
           if (!line.hidden) hasGlosses = true;
         }
         for (const fallback of document.querySelectorAll("[data-word-gloss-fallback]")) {
@@ -321,7 +321,7 @@ const structuredData = [
         }
         for (const glossary of document.querySelectorAll("[data-word-glossary]")) {
           if (!(glossary instanceof HTMLElement)) continue;
-          glossary.hidden = glossary.dataset.wordGlossary !== translationSelect.value;
+          glossary.hidden = glossary.dataset["wordGlossary"] !== translationSelect.value;
         }
       };
       translationSelect.addEventListener("change", syncTranslation);
@@ -335,12 +335,12 @@ const structuredData = [
         const surface = popover.querySelector(".word-gloss-surface");
         const meaning = popover.querySelector(".word-gloss-meaning");
         const model = popover.querySelector(".word-gloss-model > span:last-child");
-        if (surface) surface.textContent = trigger.dataset.wordSurface ?? "";
-        if (meaning) meaning.textContent = trigger.dataset.wordMeaning ?? "";
-        if (model) model.textContent = trigger.dataset.wordModel ?? "";
+        if (surface) surface.textContent = trigger.dataset["wordSurface"] ?? "";
+        if (meaning) meaning.textContent = trigger.dataset["wordMeaning"] ?? "";
+        if (model) model.textContent = trigger.dataset["wordModel"] ?? "";
         for (const icon of popover.querySelectorAll("[data-word-provider-icon]")) {
           if (icon instanceof HTMLElement) {
-            icon.hidden = icon.dataset.wordProviderIcon !== trigger.dataset.wordProvider;
+            icon.hidden = icon.dataset["wordProviderIcon"] !== trigger.dataset["wordProvider"];
           }
         }
       };

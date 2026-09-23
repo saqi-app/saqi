@@ -26,7 +26,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "./db-types";
+import type { Database } from "./db-types.js";
 import {
   AUTHOR_TABLE as author,
   CRAWL_IMPORT_BUNDLE_TABLE as bundle,
@@ -40,7 +40,7 @@ import {
   SCRAPER_WRITER_CONTROL_TABLE as writerControl,
   SOURCE_ADMISSION_CLOCK_TABLE as admissionClock,
   SOURCE_REVISION_FINGERPRINT_TABLE as sourceFingerprint,
-} from "./schema";
+} from "./schema.js";
 
 const SINGLETON = 1;
 export interface StageBundleInput {

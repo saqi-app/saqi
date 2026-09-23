@@ -196,10 +196,12 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
     const authorPage = await database.getAuthorPage("good-poet");
     assert.ok(authorPage);
     assert.equal(authorPage.poems.length, 1);
-    assert.equal(authorPage.poems[0]?.hasEnglish, true);
-    assert.equal(authorPage.poems[0]?.hasInsights, false);
+    const [firstPoem] = authorPage.poems;
+    assert.ok(firstPoem);
+    assert.equal(firstPoem.hasEnglish, true);
+    assert.equal(firstPoem.hasInsights, false);
     assert.equal(
-      authorPage.poems[0]?.verses,
+      firstPoem.verses,
       1,
       "verse count comes from content",
     );
@@ -217,16 +219,20 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       }),
     );
     const pageWithBlankTranslation = await database.getAuthorPage("good-poet");
-    assert.equal(pageWithBlankTranslation?.poems[0]?.hasEnglish, false);
-    assert.equal(pageWithBlankTranslation.poems[0]?.hasInsights, true);
+    assert.ok(pageWithBlankTranslation);
+    const [blankTranslationPoem] = pageWithBlankTranslation.poems;
+    assert.ok(blankTranslationPoem);
+    assert.equal(blankTranslationPoem.hasEnglish, false);
+    assert.equal(blankTranslationPoem.hasInsights, true);
     assert.equal(await database.getAuthorPage("empty-poet"), undefined);
 
     const poemPage = await database.getPoemPage("good-poet", "p-valid");
     assert.ok(poemPage);
+    assert.ok(poemPage.poem.insights);
     assert.equal(poemPage.author.id, "a-good");
     assert.equal(poemPage.poem.authorId, poemPage.author.id);
     assert.deepEqual(poemPage.poem.linesArabic, ["سطر أول", "سطر ثان"]);
-    assert.equal(poemPage.poem.insights?.summary, "A concise reading.");
+    assert.equal(poemPage.poem.insights.summary, "A concise reading.");
     assert.equal(poemPage.poem.insightsTrack, "legacy");
     sqlite
       .prepare(
@@ -583,13 +589,16 @@ void test("catalog retries legacy queries when normalized model tables are absen
 
     const authorPage = await database.getAuthorPage("legacy-poet");
     assert.ok(authorPage);
-    assert.equal(authorPage.poems[0]?.hasEnglish, true);
-    assert.equal(authorPage.poems[0]?.hasInsights, true);
+    const [legacyPoem] = authorPage.poems;
+    assert.ok(legacyPoem);
+    assert.equal(legacyPoem.hasEnglish, true);
+    assert.equal(legacyPoem.hasInsights, true);
 
     const poemPage = await database.getPoemPage("legacy-poet", "p-legacy");
     assert.ok(poemPage);
+    assert.ok(poemPage.poem.insights);
     assert.deepEqual(poemPage.poem.linesEnglish, ["A verse"]);
-    assert.equal(poemPage.poem.insights?.summary, "Reading");
+    assert.equal(poemPage.poem.insights.summary, "Reading");
     assert.deepEqual(poemPage.poem.modelEnrichments, undefined);
   } finally {
     sqlite.close();

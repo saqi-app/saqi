@@ -43,9 +43,7 @@ export const SolCredentialObservationSchema = z
         message: "Credential observation classification is inconsistent",
       });
   });
-export type SolCredentialObservation = z.infer<
-  typeof SolCredentialObservationSchema
->;
+type SolCredentialObservation = z.infer<typeof SolCredentialObservationSchema>;
 
 export function credentialObservationClassification(
   before: z.infer<typeof CredentialSnapshotObservationSchema>,

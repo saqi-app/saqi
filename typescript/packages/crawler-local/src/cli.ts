@@ -5,11 +5,6 @@ import { access, lstat, mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { PoemEnrichmentInputSchema } from "@saqi/precedent-iso";
-import {
-  canonicalAuthorUrl,
-  configureSource,
-  currentSource,
-} from "@saqi/source-adapter";
 import { z } from "zod";
 
 import { SourceChromeCollector } from "./collection/collection-source-browser.js";
@@ -88,6 +83,11 @@ import {
 import { inspectStateInventory } from "./runtime/state-inventory.js";
 import { UnifiedSupervisor } from "./runtime/supervisor.js";
 import { UnifiedRigRuntime } from "./runtime/unified-rig.js";
+import {
+  canonicalAuthorUrl,
+  configureSource,
+  currentSource,
+} from "./source-adapter/index.js";
 
 interface Locations {
   readonly artifacts: string;

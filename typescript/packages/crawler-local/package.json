@@ -3,14 +3,6 @@
   "description": "Restart-safe local collection and enrichment coordinator for Saqi",
   "version": "0.0.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
   "bin": {
     "saqi-crawler": "./dist/cli.js"
   },
@@ -31,7 +23,6 @@
   },
   "dependencies": {
     "@saqi/precedent-iso": "workspace:^",
-    "@saqi/source-adapter": "workspace:^",
     "better-sqlite3": "^13.0.3",
     "playwright-core": "1.63.0",
     "zod": "4.6.5"

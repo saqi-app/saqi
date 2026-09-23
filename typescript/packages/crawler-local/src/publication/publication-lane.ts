@@ -33,7 +33,6 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
-import { currentSource } from "@saqi/source-adapter";
 import { z } from "zod";
 
 import { SOURCE_BOUND_PUBLICATION_IMPLEMENTATION_VERSION } from "../enrichment/sol-coordinator.js";
@@ -47,6 +46,7 @@ import {
 import type { WorkClaim } from "../persistence/schema.js";
 import { canonicalJson, inputHash, sha256 } from "../persistence/work-key.js";
 import { HistoricalEnrichmentProviderSchema } from "../ports/provider-contract.js";
+import { currentSource } from "../source-adapter/index.js";
 import { PublishedPoemStructureSchema } from "./corpus-import-actions.js";
 import {
   publicationActionHash,
@@ -263,7 +263,7 @@ export interface PublicationRunSummary {
     | "service_wait";
 }
 
-export interface PublicationLanePort {
+interface PublicationLanePort {
   admitSource(
     item: SourceAdmissionV2Item,
     signal?: AbortSignal,

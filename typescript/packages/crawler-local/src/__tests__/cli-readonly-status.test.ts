@@ -3,7 +3,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { expect, it } from "vitest";
 
@@ -11,6 +10,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   MIGRATIONS,
 } from "../persistence/migrations.js";
+import { currentSource } from "../source-adapter/index.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 const CLI = resolve(import.meta.dirname, "../cli.ts");

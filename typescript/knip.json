@@ -3,31 +3,51 @@
   "workspaces": {
     ".": {
       "entry": [],
-      "project": ["*.mjs"]
+      "project": [
+        "*.mjs"
+      ]
     },
     "packages/precedent-iso": {
-      "project": ["src/**/*.ts"]
+      "project": [
+        "src/**/*.ts"
+      ]
     },
     "packages/precedent-node": {
-      "project": ["src/**/*.ts"],
+      "project": [
+        "src/**/*.ts"
+      ],
       "ignoreIssues": {
-        "src/services/schema.ts": ["exports"]
+        "src/services/schema.ts": [
+          "exports"
+        ]
       }
     },
     "packages/crawler-local": {
-      "entry": ["src/offline-scale-benchmark.ts"],
-      "project": ["src/**/*.ts"]
-    },
-    "packages/source-adapter": {
-      "project": ["src/**/*.ts"]
+      "entry": [
+        "src/offline-scale-benchmark.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
     },
     "packages/operations": {
-      "entry": ["src/app/**/*.{ts,tsx}", "open-next.config.ts"],
-      "project": ["src/**/*.{ts,tsx}", "*.{ts,mjs}"]
+      "entry": [
+        "src/app/**/*.{ts,tsx}",
+        "open-next.config.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "*.{ts,mjs}"
+      ]
     },
     "packages/site": {
-      "entry": ["src/pages/**/*.{astro,ts}"],
-      "project": ["src/**/*.{astro,ts}", "tests/*.{mjs,ts}"]
+      "entry": [
+        "src/pages/**/*.{astro,ts}"
+      ],
+      "project": [
+        "src/**/*.{astro,ts}",
+        "tests/*.{mjs,ts}"
+      ]
     }
   },
   "ignoreDependencies": [
@@ -38,7 +58,12 @@
     "tailwindcss",
     "typescript-eslint"
   ],
-  "ignoreBinaries": ["mkfifo", "plutil"],
-  "ignore": ["eslint.strict.mjs"],
+  "ignoreBinaries": [
+    "mkfifo",
+    "plutil"
+  ],
+  "ignore": [
+    "eslint.strict.mjs"
+  ],
   "ignoreExportsUsedInFile": false
 }

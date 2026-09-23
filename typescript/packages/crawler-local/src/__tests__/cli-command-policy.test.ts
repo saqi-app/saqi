@@ -4,12 +4,12 @@ import { existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { configureSource, currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import { seedAuthorManifest } from "../collection/collector";
 import { Ledger } from "../persistence/ledger";
+import { configureSource, currentSource } from "../source-adapter/index.js";
 import { importEmptyTestOperations } from "./support/import-empty-test-operations.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 

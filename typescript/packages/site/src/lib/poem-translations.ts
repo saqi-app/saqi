@@ -6,7 +6,7 @@ import {
 import type { Poem } from "./snapshot-contract";
 
 export interface TranslationTrack {
-  attributionCertainty?: string;
+  attributionCertainty?: string | undefined;
   attributionNote?: string;
   key: string;
   lines: string[];

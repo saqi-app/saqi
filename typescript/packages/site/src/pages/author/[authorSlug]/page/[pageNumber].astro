@@ -4,9 +4,9 @@ import { env } from "cloudflare:workers";
 import AuthorCatalogPage from "../../../../components/AuthorCatalogPage.astro";
 import { CatalogRepository } from "../../../../lib/catalog";
 
-const pageNumberText = Astro.params.pageNumber ?? "";
+const pageNumberText = Astro.params["pageNumber"] ?? "";
 const pageNumber = /^[1-9]\d*$/u.test(pageNumberText) ? Number(pageNumberText) : 0;
-const authorSlug = Astro.params.authorSlug ?? "";
+const authorSlug = Astro.params["authorSlug"] ?? "";
 const page = await CatalogRepository.fromD1(env.DB).getAuthorPage(
   authorSlug,
   pageNumber,

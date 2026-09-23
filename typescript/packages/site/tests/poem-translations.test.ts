@@ -191,12 +191,13 @@ for (const [model, provider] of [
     ["claude-sonnet-4-5-20250929", "anthropic"],
     ["gemini-3-pro-preview", "google"],
     ["unregistered-model", "other"],
-]) {
+] as const) {
   void test(`exact legacy model ${model} retains its provider without inferred certainty`, () => {
     const [track] = poemTranslationTracks({
       linesEnglish: ["Translation"],
       linesEnglishModel: model,
     });
+    assert.ok(track);
     assert.equal(track.model, model);
     assert.equal(track.provider, provider);
     assert.equal(track.attributionCertainty, undefined);

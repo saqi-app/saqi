@@ -167,7 +167,7 @@ export type SolTaskOutcome =
   | { readonly kind: "success" }
   | { readonly kind: "task_failure" };
 
-export type SolSchedulerBlockReason =
+type SolSchedulerBlockReason =
   | "at_capacity"
   | "circuit_open"
   | "disk_pressure"
