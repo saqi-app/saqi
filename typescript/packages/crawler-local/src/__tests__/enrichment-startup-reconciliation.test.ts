@@ -18,13 +18,22 @@ const HASH = "a".repeat(64);
 const SCHEMA_VERSION = "saqi.poem-enrichment-input@1";
 
 describe("startup provider reconciliation", () => {
+  it("publishes an empty report when no enrichment provider is enabled", () => {
+    expect(reconcileExistingEnrichmentInputs({ providers: [] })).toMatchObject({
+      duplicates: 0,
+      profiles: [],
+      scannedInputs: 0,
+      seeded: 0,
+    });
+  });
+
   it("does not page the current profile when Codex is the only target", () => {
     const ledger = Ledger.open(":memory:");
     seedSol(ledger, input("poem-1"));
     const list = vi.spyOn(ledger, "listWorkDefinitionsAfter");
 
     expect(
-      reconcileExistingEnrichmentInputs({ ledger, providers: ["sol"] }),
+      reconcileExistingEnrichmentInputs({ providers: ["sol"] }),
     ).toMatchObject({ scannedInputs: 0, seeded: 0 });
     expect(list).not.toHaveBeenCalled();
     ledger.close();
@@ -37,7 +46,6 @@ describe("startup provider reconciliation", () => {
 
     expect(
       reconcileExistingEnrichmentInputs({
-        ledger,
         providers: ["sol"],
       }),
     ).toMatchObject({
@@ -47,7 +55,6 @@ describe("startup provider reconciliation", () => {
     });
     expect(
       reconcileExistingEnrichmentInputs({
-        ledger,
         providers: ["sol"],
       }),
     ).toMatchObject({
@@ -61,23 +68,17 @@ describe("startup provider reconciliation", () => {
     ledger.close();
   });
 
-  it("does not scan or seed history even with a small reconciliation bound", () => {
+  it("does not scan or seed history regardless of corpus size", () => {
     const ledger = Ledger.open(":memory:");
     seedSol(ledger, input("poem-1"), 0, "sol-enrichment-v1");
     seedSol(ledger, input("poem-2"), 0, "sol-enrichment-v1");
     expect(
       reconcileExistingEnrichmentInputs({
-        batchSize: 1,
-        ledger,
-        maximumInputs: 1,
         providers: ["sol"],
       }),
     ).toMatchObject({ scannedInputs: 0, seeded: 0 });
     expect(
       reconcileExistingEnrichmentInputs({
-        batchSize: 1,
-        ledger,
-        maximumInputs: 2,
         providers: ["sol"],
       }),
     ).toMatchObject({ duplicates: 0, scannedInputs: 0, seeded: 0 });

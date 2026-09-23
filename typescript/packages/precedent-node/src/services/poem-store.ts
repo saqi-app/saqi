@@ -96,6 +96,7 @@ function rowToLoadedPoem(
   row: typeof poem.$inferSelect,
   modelEnrichments: readonly PoemModelEnrichment[] = [],
 ): LoadedPoem {
+  const poemSummary = rowToPoem(row);
   const contentArabicParsed = PoemContentSchema.safeParse(row.contentArabic);
   const translationParsed = PoemContentSchema.safeParse(row.translation);
   const translationGeminiParsed = PoemContentSchema.safeParse(
@@ -107,15 +108,8 @@ function rowToLoadedPoem(
   );
   const allowLegacySol =
     row.activeSourceRevisionId === null && !hasNormalizedSol;
-  const nameEnglish = row.poemTitleFirstLine ?? row.nameEnglish ?? undefined;
-
   return {
-    id: row.id,
-    slug: row.slug,
-    authorId: row.authorId ?? "",
-    verses: row.verses,
-    nameArabic: row.nameArabic,
-    nameEnglish,
+    ...poemSummary,
     linesArabic: contentArabicParsed.success
       ? contentArabicParsed.data.content
       : [],

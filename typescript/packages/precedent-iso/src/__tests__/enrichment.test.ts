@@ -247,6 +247,25 @@ describe("poem enrichment contracts", () => {
       lineIndex: null,
       severity: "critical",
     });
+
+    const [notable] = output.insights.notableLines;
+    if (!notable) throw new Error("Expected a notable source line");
+    const repeatedNotable = {
+      ...output,
+      insights: {
+        ...output.insights,
+        notableLines: [notable, notable],
+      },
+    };
+    expect(validatePoemEnrichmentV3(INPUT, repeatedNotable).findings).toEqual([
+      { code: "DUPLICATE_NOTABLE_LINE", lineIndex: null, severity: "major" },
+    ]);
+    expect(
+      validatePoemEnrichment(INPUT, {
+        translation: repeatedNotable.translation,
+        insights: repeatedNotable.insights,
+      }).findings,
+    ).toEqual(validatePoemEnrichmentV3(INPUT, repeatedNotable).findings);
   });
 
   it("drops optional parts that do not reconstruct the source token", () => {

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "provenance": {
     "bundleVersion": "7.31.0",
-    "consumerBaseSha": "ea1eb8c5aa42f81accddfb1610d7b610714b47ad",
+    "consumerBaseSha": "86cc7afbcf38cc4cf7d810dab153867bb18209e0",
     "catalogDigest": "c4a15fb82b0e514464afec36bd0458471c3170929f39d662edc97eba95130bf7"
   },
   "diagnostics": [
@@ -252,13 +252,6 @@
       "count": 1
     },
     {
-      "fingerprint": "8c1e3da536edf6ceeef6f5e75d8f1aedc1c8e180ab3be19d1052948e02e628fa",
-      "source": "eslint",
-      "ruleId": "@sarj/no-conditional-empty-object-spread",
-      "path": "typescript/packages/precedent-iso/src/enrichment.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "4efe9bdec8be56d84292a4d3c7788742b9f04ceaa8f702ecd7fe14ce81f530c5",
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
@@ -350,7 +343,7 @@
       "count": 1
     },
     {
-      "fingerprint": "c022ae8e7f267fdab8f88c3875402189676ede2b68cbe90ae199eb722ee9fa30",
+      "fingerprint": "213ba19692daad36cb547cfdfb796ce966ef34719d60b276f1b54fd7e0195f37",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/local-enrichment-fanout.ts",
@@ -385,14 +378,14 @@
       "count": 1
     },
     {
-      "fingerprint": "3302f1a3f9da8b16fe3e0ee17ab0bbcfa0fb58992483ab2831684d1bbcac9964",
+      "fingerprint": "6cdf2a75ffecb20e3859613acb09c3a3bc63e33d5f44b4190ee9224712dfb59b",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "6cdf2a75ffecb20e3859613acb09c3a3bc63e33d5f44b4190ee9224712dfb59b",
+      "fingerprint": "b197b065cbb4d255ca3ffbf10815a1a583ae2fa1562641f03c13debf4eac52ca",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
@@ -406,28 +399,28 @@
       "count": 1
     },
     {
-      "fingerprint": "09127df60aa0f22617f9aebe02354216dd56d08e2a2fa960ebcaed1a4d90915d",
+      "fingerprint": "736b5fc615252052b1e71dc6e2c311e9d88a3ae7120f9aabf80f98ca9e3483a0",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {
-      "fingerprint": "33dec5ebfec65c6d34b95b891655464867e188483b3626b3f055a9c593e66fa5",
+      "fingerprint": "a869a1427bc83eacfa252715f32599167682f04a02cbcd90f4c192706e4929e0",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {
-      "fingerprint": "5d7d606e82d73b1c27c5e80ef1af5c5c3c7c01880322041b52537c75e3e7155f",
+      "fingerprint": "c9162db558452f19e5e561eb1ea34484e84adf12f184063a6460f079ff3584d1",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {
-      "fingerprint": "f8ee04b83ec244e5cf66d38b980272524de84b757201d5d2e4766f0152ff6782",
+      "fingerprint": "9df9b3b93d22df31055f663da495a9decbde91cce5fd98163e83d9b66be0c0fb",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
@@ -504,7 +497,7 @@
       "count": 1
     },
     {
-      "fingerprint": "c54a82d8db85861055fae8d6013234cbbc54bfd2c3451eb9e40276a04672c8f9",
+      "fingerprint": "38de98ed8b53a9544e008cbcdf1598cb471b21aec5583ff6242a4d0ea0bd8832",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/demand-driven-production-resolution-refresher.ts",
@@ -651,35 +644,35 @@
       "count": 1
     },
     {
-      "fingerprint": "370b631da9cf80095c08740a18ab68377538879108287245526c68a80d1684cd",
+      "fingerprint": "360f7512d34b723ac840178d67552ffa408b26677bb1d745a29d271f129cbd11",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "479d4b60656c1deade77396d7e2f3ca043d933ae54395648b335b053c6e92faf",
+      "fingerprint": "53f4afea48af255f32233a09efda8b494b31e66bc7cc6d9d1f518064042f3821",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "67a22df114961d774f036d9572fc05759b370e0c21c14c50e383bd05866d37e5",
+      "fingerprint": "bf91246dfaaacceddf8d8b1bdc07d16051118bcf8877dc5cd0dc246e852e3375",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "ce1fe86fd18eabb695d18dc45fa319dd63b39e20529b2288a6187bdc8fba46d9",
+      "fingerprint": "df9dd09e44eb68e160b14ae75e26d4065fb64a5cdc5542c40f08b284cae18554",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "edff6c7870d7e2c196c1a2256c9433b3f1a14f4c0ec13d8f05cddb464113b92c",
+      "fingerprint": "e7e8e86acdfa74240cb04c8e1a21948339b83656dadc377681c887a6eae20980",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
@@ -693,7 +686,7 @@
       "count": 1
     },
     {
-      "fingerprint": "ffdd52e9aaf3e98f42458a857a2d1ea11de4b43a9c3e17b7dc334172363d31a2",
+      "fingerprint": "99c8975ecfb656c36df9f4e10c6db71fc84ba699088f6fa9e8d0d7a5dcd2c828",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/operations/src/app/api/v2/enrichment-publications/route.ts",
@@ -707,7 +700,7 @@
       "count": 1
     },
     {
-      "fingerprint": "6dc86b7c8f2a8374217a1d52aa789968895ca3b43ae06a376835c20eaf179d97",
+      "fingerprint": "9b8fec1e34fd57fd895849b81159013aa72766701c69589eb6e520b8575a6588",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
@@ -721,7 +714,7 @@
       "count": 1
     },
     {
-      "fingerprint": "e20d12c85239d03fd8ebc2378dc999b9e3d0de334ae216147967fea2fd3b4d94",
+      "fingerprint": "70b0b74c4cb90f0932a0d22b6938fbc7aa134e3a1e7cf6edb3e459f577d2bea4",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/site/src/lib/catalog.ts",
@@ -4557,13 +4550,6 @@
       "count": 2
     },
     {
-      "fingerprint": "ec18dbcd618df980b8bdea67b4e5b0b9090ca44e90299bb3a7be1236d9e8c86e",
-      "source": "eslint",
-      "ruleId": "jsdoc/no-restricted-syntax",
-      "path": "typescript/packages/precedent-iso/src/enrichment.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "40ac44144f357188252451aaa783ab4b5c8c77a712e5c8f1b4315c7c14090d7a",
       "source": "eslint",
       "ruleId": "jsdoc/no-restricted-syntax",
@@ -4701,13 +4687,6 @@
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/crawler-local/src/collection/source-request-telemetry.ts",
-      "count": 2
-    },
-    {
-      "fingerprint": "a83bbc746a8eb08c6ef0a6a73e9d6eca19b221dc83282b785d83578da4ea2ce9",
-      "source": "eslint",
-      "ruleId": "no-restricted-syntax",
-      "path": "typescript/packages/crawler-local/src/enrichment/sol-credential-observation.ts",
       "count": 2
     },
     {

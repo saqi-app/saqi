@@ -251,80 +251,8 @@ export function validatePoemEnrichment(
   input: PoemEnrichmentInput,
   output: PoemEnrichmentOutput,
 ): EnrichmentValidationResult {
-  const findings: EnrichmentValidationFinding[] = [];
-  const translatedLines = output.translation.lines;
-
-  if (translatedLines.length !== input.linesArabic.length) {
-    findings.push({
-      code: "TRANSLATION_LINE_COUNT_MISMATCH",
-      lineIndex: null,
-      severity: "critical",
-    });
-  }
-
-  const comparableLineCount = Math.min(
-    input.linesArabic.length,
-    translatedLines.length,
-  );
-  for (let index = 0; index < comparableLineCount; index += 1) {
-    const source = input.linesArabic[index] ?? "";
-    const translation = translatedLines[index] ?? "";
-    if (source.trim().length === 0 && translation !== "") {
-      findings.push({
-        code: "BLANK_SOURCE_SLOT_CHANGED",
-        lineIndex: index,
-        severity: "critical",
-      });
-    }
-    if (source.trim().length > 0 && translation.trim().length === 0) {
-      findings.push({
-        code: "NONBLANK_SOURCE_LINE_UNTRANSLATED",
-        lineIndex: index,
-        severity: "critical",
-      });
-    }
-    if (translation.trim().length > 0 && REFUSAL.test(translation)) {
-      findings.push({
-        code: "TRANSLATION_REFUSAL_OR_WRAPPER",
-        lineIndex: index,
-        severity: "critical",
-      });
-    }
-    if (
-      translation.trim().length > 0 &&
-      source.trim() === translation.trim() &&
-      ARABIC_SCRIPT.test(source)
-    ) {
-      findings.push({
-        code: "SOURCE_LINE_COPIED_AS_TRANSLATION",
-        lineIndex: index,
-        severity: "major",
-      });
-    }
-  }
-
-  const sourceLines = new Set(
-    input.linesArabic.filter((line) => line.trim().length > 0),
-  );
-  const notableLines = new Set<string>();
-  for (const notable of output.insights.notableLines) {
-    if (!sourceLines.has(notable.line)) {
-      findings.push({
-        code: "NOTABLE_LINE_NOT_IN_SOURCE",
-        lineIndex: null,
-        severity: "critical",
-      });
-    }
-    if (notableLines.has(notable.line)) {
-      findings.push({
-        code: "DUPLICATE_NOTABLE_LINE",
-        lineIndex: null,
-        severity: "major",
-      });
-    }
-    notableLines.add(notable.line);
-  }
-
+  const findings = validateTranslationLines(input, output.translation.lines);
+  findings.push(...validateNotableLines(input, output.insights.notableLines));
   return { findings, passed: findings.length === 0 };
 }
 
@@ -335,7 +263,7 @@ export type DeterministicWordGlossSegment =
 const ARABIC_ORTHOGRAPHIC_RUN =
   /[[\p{Script_Extensions=Arabic}&&[\p{L}\p{N}]]\p{M}]+/gv;
 
-/** Split an Arabic line without normalizing or discarding a single source byte. */
+// Preserve every source byte so gloss segments reconstruct the original line.
 export function tokenizeArabicForGlosses(
   line: string,
 ): DeterministicWordGlossSegment[] {
@@ -365,6 +293,19 @@ export function materializePoemEnrichmentV2(
   rawWire: PoemEnrichmentWireV2,
 ): PoemEnrichmentOutputV2 {
   const wire = PoemEnrichmentWireV2Schema.parse(rawWire);
+  const wordGlosses = materializeWordGlosses(input, wire);
+  return PoemEnrichmentOutputV2Schema.parse({
+    schemaId: ENRICHMENT_OUTPUT_SCHEMA_ID,
+    schemaVersion: ENRICHMENT_OUTPUT_V2_SCHEMA_VERSION,
+    translation: wire.translation,
+    wordGlosses,
+  });
+}
+
+function materializeWordGlosses(
+  input: PoemEnrichmentInput,
+  wire: PoemEnrichmentWireV2,
+): PoemEnrichmentOutputV2["wordGlosses"] {
   if (wire.translation.lines.length !== input.linesArabic.length)
     throw new Error("TRANSLATION_LINE_COUNT_MISMATCH");
   if (wire.wordGlosses.lines.length !== input.linesArabic.length)
@@ -404,21 +345,23 @@ export function materializePoemEnrichmentV2(
         const partsReconstructSource =
           gloss.parts?.map(({ surface }) => surface).join("") ===
           segment.surface;
-        return {
+        const wordSegment: {
+          kind: "word";
+          meaning: string;
+          parts?: typeof gloss.parts;
+          surface: string;
+          tokenIndex: number;
+        } = {
           ...segment,
           meaning: gloss.meaning,
-          ...(partsReconstructSource ? { parts: gloss.parts } : {}),
         };
+        if (partsReconstructSource) wordSegment.parts = gloss.parts;
+        return wordSegment;
       }),
     };
   });
 
-  return PoemEnrichmentOutputV2Schema.parse({
-    schemaId: ENRICHMENT_OUTPUT_SCHEMA_ID,
-    schemaVersion: ENRICHMENT_OUTPUT_V2_SCHEMA_VERSION,
-    translation: wire.translation,
-    wordGlosses: { lines, tokenizerVersion: WORD_GLOSS_TOKENIZER_VERSION },
-  });
+  return { lines, tokenizerVersion: WORD_GLOSS_TOKENIZER_VERSION };
 }
 
 export function materializePoemEnrichmentV3(
@@ -426,12 +369,13 @@ export function materializePoemEnrichmentV3(
   rawWire: PoemEnrichmentWireV3,
 ): PoemEnrichmentOutputV3 {
   const wire = PoemEnrichmentWireV3Schema.parse(rawWire);
-  const { insights, ...wireV2 } = wire;
-  const v2 = materializePoemEnrichmentV2(input, wireV2);
+  const wordGlosses = materializeWordGlosses(input, wire);
   return PoemEnrichmentOutputV3Schema.parse({
-    ...v2,
-    insights,
+    schemaId: ENRICHMENT_OUTPUT_SCHEMA_ID,
     schemaVersion: ENRICHMENT_OUTPUT_V3_SCHEMA_VERSION,
+    translation: wire.translation,
+    wordGlosses,
+    insights: wire.insights,
   });
 }
 
@@ -515,27 +459,36 @@ export function validatePoemEnrichmentV3(
       translation: output.translation,
       wordGlosses: output.wordGlosses,
     }).findings,
+    ...validateNotableLines(input, output.insights.notableLines),
   ];
+  return { findings, passed: findings.length === 0 };
+}
+
+function validateNotableLines(
+  input: PoemEnrichmentInput,
+  notableLines: PoemInsights["notableLines"],
+): EnrichmentValidationFinding[] {
+  const findings: EnrichmentValidationFinding[] = [];
   const sourceLines = new Set(
     input.linesArabic.filter((line) => line.trim().length > 0),
   );
-  const notableLines = new Set<string>();
-  for (const notable of output.insights.notableLines) {
+  const seen = new Set<string>();
+  for (const notable of notableLines) {
     if (!sourceLines.has(notable.line))
       findings.push({
         code: "NOTABLE_LINE_NOT_IN_SOURCE",
         lineIndex: null,
         severity: "critical",
       });
-    if (notableLines.has(notable.line))
+    if (seen.has(notable.line))
       findings.push({
         code: "DUPLICATE_NOTABLE_LINE",
         lineIndex: null,
         severity: "major",
       });
-    notableLines.add(notable.line);
+    seen.add(notable.line);
   }
-  return { findings, passed: findings.length === 0 };
+  return findings;
 }
 
 function validateTranslationLines(
@@ -554,27 +507,29 @@ function validateTranslationLines(
   for (let index = 0; index < count; index += 1) {
     const source = input.linesArabic[index] ?? "";
     const translation = translatedLines[index] ?? "";
-    if (source.trim().length === 0 && translation !== "")
+    const trimmedSource = source.trim();
+    const trimmedTranslation = translation.trim();
+    if (trimmedSource.length === 0 && translation !== "")
       findings.push({
         code: "BLANK_SOURCE_SLOT_CHANGED",
         lineIndex: index,
         severity: "critical",
       });
-    if (source.trim().length > 0 && translation.trim().length === 0)
+    if (trimmedSource.length > 0 && trimmedTranslation.length === 0)
       findings.push({
         code: "NONBLANK_SOURCE_LINE_UNTRANSLATED",
         lineIndex: index,
         severity: "critical",
       });
-    if (translation.trim().length > 0 && REFUSAL.test(translation))
+    if (trimmedTranslation.length > 0 && REFUSAL.test(translation))
       findings.push({
         code: "TRANSLATION_REFUSAL_OR_WRAPPER",
         lineIndex: index,
         severity: "critical",
       });
     if (
-      translation.trim().length > 0 &&
-      source.trim() === translation.trim() &&
+      trimmedTranslation.length > 0 &&
+      trimmedSource === trimmedTranslation &&
       ARABIC_SCRIPT.test(source)
     )
       findings.push({

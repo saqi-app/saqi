@@ -200,10 +200,6 @@ extension RigStore {
         return health?.enrichmentProviders.first { $0.provider == provider }?.invocationConcurrency
     }
 
-    func displayedConcurrency(_ provider: String) -> Int? {
-        requestedConcurrency[provider] ?? configuredConcurrency(provider)
-    }
-
     func concurrencyControlLabel(_ provider: String) -> String {
         Self.concurrencyControlLabel(
             provider: provider,

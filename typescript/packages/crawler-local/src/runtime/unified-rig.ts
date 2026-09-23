@@ -566,7 +566,6 @@ export class UnifiedRigRuntime {
     this.#enrichmentReconciliationStatus = this.#config.startupReconciliation
       .enabled
       ? reconcileExistingEnrichmentInputs({
-          ledger,
           providers: this.#config.sol.enabled ? ["sol"] : [],
         })
       : null;

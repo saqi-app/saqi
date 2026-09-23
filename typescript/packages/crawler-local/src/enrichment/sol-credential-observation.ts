@@ -2,7 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 
 import { z } from "zod";
 
-const OpaqueCredentialGenerationSchema = z.string().regex(/^[a-f\d]{64}$/);
+const OPAQUE_CREDENTIAL_GENERATION_PATTERN = /^[a-f\d]{64}$/;
+const OpaqueCredentialGenerationSchema = z
+  .string()
+  .regex(OPAQUE_CREDENTIAL_GENERATION_PATTERN);
 export const CredentialSnapshotObservationSchema = z.discriminatedUnion(
   "state",
   [
@@ -68,7 +71,11 @@ export function credentialGenerationsEqual(
   left: null | string,
   right: null | string,
 ): boolean {
-  if (typeof left !== "string" || typeof right !== "string")
-    return Object.is(left, right);
+  if (left === null || right === null) return Object.is(left, right);
+  if (
+    !OPAQUE_CREDENTIAL_GENERATION_PATTERN.test(left) ||
+    !OPAQUE_CREDENTIAL_GENERATION_PATTERN.test(right)
+  )
+    return false;
   return timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }

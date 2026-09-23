@@ -163,6 +163,16 @@ export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
     audience: "public",
+    id: "public.collection-insights",
+    method: "GET",
+    path: "/insights",
+    responses: [HTML_RESPONSE],
+    service: "public-site",
+    summary: "Show collection progress and enrichment counts",
+  },
+  {
+    ...EMPTY_INPUT,
+    audience: "public",
     id: "public.legacy-author-page",
     method: "GET",
     params: z.strictObject({ pageNumber: PositiveIntegerSegmentSchema }),

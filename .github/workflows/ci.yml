@@ -81,7 +81,6 @@ jobs:
       - name: Build local runtime dependencies
         if: steps.changes.outputs.crawler_only == 'true'
         run: >-
-          yarn workspace @saqi/source-adapter build &&
           yarn workspace @saqi/precedent-iso build &&
           yarn workspace @saqi/crawler-local build
 
@@ -94,8 +93,6 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: >-
-          yarn workspace @saqi/source-adapter check::format &&
-          yarn workspace @saqi/source-adapter check::types &&
           yarn workspace @saqi/crawler-local check::format &&
           yarn workspace @saqi/crawler-local check::types
 
@@ -108,7 +105,6 @@ jobs:
       - name: Test local runtime
         if: steps.changes.outputs.crawler_only == 'true'
         run: >-
-          yarn workspace @saqi/source-adapter test &&
           yarn workspace @saqi/crawler-local test
 
       - name: Test workspaces

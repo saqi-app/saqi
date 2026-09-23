@@ -161,6 +161,8 @@ export class SolOperationStore
   implements SolOperationClaimPort, SolAttemptObservationPort
 {
   readonly #database: Database.Database;
+  readonly #readCurrentStatement: Database.Statement;
+  readonly #readFencedAttemptStatement: Database.Statement;
 
   constructor(database: Database.Database) {
     this.#database = database;
@@ -170,15 +172,17 @@ export class SolOperationStore
     ForeignKeysEnabledSchema.parse(
       this.#database.pragma("foreign_keys", { simple: true }),
     );
+    // These reads run for every claim and fenced observation. Reuse their
+    // prepared statements so dispatch does not recompile SQL on each call.
+    this.#readCurrentStatement = this.#database.prepare(READ_CURRENT);
+    this.#readFencedAttemptStatement =
+      this.#database.prepare(READ_FENCED_ATTEMPT);
   }
 
   readCurrent(operationKey: string): SolOperationCurrent | undefined {
     return queryOptional(
       { operation: "solOperation.current" },
-      () =>
-        this.#database
-          .prepare(READ_CURRENT)
-          .get(HashSchema.parse(operationKey)),
+      () => this.#readCurrentStatement.get(HashSchema.parse(operationKey)),
       CurrentSchema,
     );
   }
@@ -213,9 +217,11 @@ export class SolOperationStore
     return queryOptional(
       { operation: "solOperation.attempt" },
       () =>
-        this.#database
-          .prepare(READ_FENCED_ATTEMPT)
-          .get(fence.operationKey, fence.attemptId, fence.claimEpoch),
+        this.#readFencedAttemptStatement.get(
+          fence.operationKey,
+          fence.attemptId,
+          fence.claimEpoch,
+        ),
       CurrentSchema,
     );
   }

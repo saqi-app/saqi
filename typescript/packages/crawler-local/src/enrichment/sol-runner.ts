@@ -154,9 +154,11 @@ export function solGenerationWireJsonSchema(
           .length - 1,
     ),
   );
-  const sourceNotableLines = input.linesArabic.filter(
-    (line) => line.trim().length > 0,
-  );
+  // Refrains can repeat across a poem. JSON Schema enum values must be
+  // unique, and each repeated line otherwise inflates the provider schema.
+  const sourceNotableLines = [
+    ...new Set(input.linesArabic.filter((line) => line.trim().length > 0)),
+  ];
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     additionalProperties: false,

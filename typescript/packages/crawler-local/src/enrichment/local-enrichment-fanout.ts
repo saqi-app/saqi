@@ -33,6 +33,7 @@ const LOCAL_ENRICHMENT_FANOUT_SCHEMA = "local-enrichment-fanout@2";
 const MAXIMUM_ATTEMPTS = 100;
 const LEASE_DURATION_MS = 5 * 60_000;
 const POLL_MS = 30_000;
+const IDLE_CURSOR_CHECKPOINT_EVENT_INTERVAL = 1_000;
 const RESOLUTION_RETRY_MS = 5 * 60_000;
 const RESOLUTION_PENDING_ERROR_CODES = [
   "LOCAL_ENRICHMENT_BINDING_PENDING",
@@ -488,8 +489,9 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
     summary: { scanned: number },
     now: () => number,
   ): Promise<void> {
+    const previousCursor = await this.#cursor();
     const page = this.#ledger.listSucceededAfter(
-      await this.#cursor(),
+      previousCursor,
       [collectionWorkKinds().poemDetail],
       this.#batchSize,
       {
@@ -585,17 +587,25 @@ export class LocalEnrichmentFanout implements LocalEnrichmentFanoutPort {
       );
     }
     this.#afterBoundary?.("source_jobs_seeded");
-    const cursor = CursorSchema.parse({ eventSequence: page.cursor });
-    const artifact = await this.#artifacts.put(`${canonicalJson(cursor)}\n`);
-    this.#ledger.checkpoint(
-      claim,
-      {
-        artifactHash: artifact.hash,
-        kind: "local-enrichment-cursor",
-        payload: cursor,
-      },
-      now(),
-    );
+    // Each poll creates its own retry event. Checkpointing every empty page
+    // would therefore write an artifact and ledger row every 30 seconds even
+    // when no poem was collected. Bound the idle rescan to 1,000 events.
+    if (
+      page.items.length > 0 ||
+      page.cursor - previousCursor >= IDLE_CURSOR_CHECKPOINT_EVENT_INTERVAL
+    ) {
+      const cursor = CursorSchema.parse({ eventSequence: page.cursor });
+      const artifact = await this.#artifacts.put(`${canonicalJson(cursor)}\n`);
+      this.#ledger.checkpoint(
+        claim,
+        {
+          artifactHash: artifact.hash,
+          kind: "local-enrichment-cursor",
+          payload: cursor,
+        },
+        now(),
+      );
+    }
     this.#ledger.retry(claim, "LOCAL_ENRICHMENT_POLL", now() + POLL_MS, now());
     summary.scanned += page.items.length;
   }
