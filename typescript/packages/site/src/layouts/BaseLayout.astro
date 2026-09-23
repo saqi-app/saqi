@@ -11,6 +11,7 @@ interface Props {
   nextPath?: string | undefined;
   noindex?: boolean;
   openGraphType?: "article" | "website";
+  preloadArabicFont?: boolean;
   previousPath?: string | undefined;
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
 }
@@ -22,6 +23,7 @@ const {
   nextPath,
   noindex = false,
   openGraphType = "website",
+  preloadArabicFont = true,
   previousPath,
   structuredData,
 } = Astro.props;
@@ -35,13 +37,13 @@ const jsonLd = structuredData
 const serializedJsonLd = jsonLd ? serializeJsonForHtml(jsonLd) : undefined;
 const hasHeaderTools = Astro.slots.has("header-tools");
 const hasHeaderActions = Astro.slots.has("header-actions");
-Astro.response.headers.append(
-  "Link",
-  [
-    `<${globalCssUrl}>; rel=preload; as=style`,
+Astro.response.headers.append("Link", `<${globalCssUrl}>; rel=preload; as=style`);
+if (preloadArabicFont) {
+  Astro.response.headers.append(
+    "Link",
     `<${amiriFontUrl}>; rel=preload; as=font; type="font/woff2"; crossorigin`,
-  ].join(", "),
-);
+  );
+}
 ---
 
 <!doctype html>
