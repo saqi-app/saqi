@@ -74,8 +74,14 @@ void test("monthly insight rollups track writes and replay without double counti
       collectionMonths: [{ month: "2026-05-01", poemCount: 2 }],
     });
 
-    sqlite.exec(readFileSync(new URL("0041_monthly_collection_insights.sql", MIGRATIONS), "utf8"));
+    sqlite.exec(readFileSync(new URL("0042_retire_daily_insight_rollups.sql", MIGRATIONS), "utf8"));
     assert.deepEqual(await loadCollectionInsights(asD1(sqlite)), expected);
+    assert.deepEqual(
+      sqlite.prepare(`SELECT name FROM sqlite_master WHERE name IN (
+        'insights_collection_day', 'insights_author_progress'
+      )`).all(),
+      [],
+    );
 
     sqlite.exec(`
       INSERT INTO source_poem_identity (
