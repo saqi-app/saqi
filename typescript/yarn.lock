@@ -11096,7 +11096,7 @@ __metadata:
     tailwindcss: "npm:^4.3.3"
     typescript: "npm:6.0.3"
     typescript-eslint: "npm:8.70.1"
-    web-tree-sitter: "npm:0.26.11"
+    web-tree-sitter: "npm:0.27.0"
   languageName: unknown
   linkType: soft
 
@@ -12874,10 +12874,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"web-tree-sitter@npm:0.26.11":
-  version: 0.26.11
-  resolution: "web-tree-sitter@npm:0.26.11"
-  checksum: 10/5d740f87ab873c88a7725d2578f1d059361503a5be5e3d0b3f3d212d7bcc6f62de25552202b2f4ba4788771fb133cda1cf23ba3705150269e8be5232bd9c1527
+"web-tree-sitter@npm:0.27.0":
+  version: 0.27.0
+  resolution: "web-tree-sitter@npm:0.27.0"
+  checksum: 10/059491036d2dba863ea8fe0ea3e75cc51f826f8f0caf12619a1eaac8268902cdbcf1d0ca7f44f3c85721786a79f4d07230a3db5894c58f9a1e14c943fd48add7
   languageName: node
   linkType: hard
 

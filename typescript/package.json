@@ -61,7 +61,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
-    "web-tree-sitter": "0.26.11"
+    "web-tree-sitter": "0.27.0"
   },
   "resolutions": {
     "devalue": "5.9.2",
