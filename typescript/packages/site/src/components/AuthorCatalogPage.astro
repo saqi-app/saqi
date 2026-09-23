@@ -41,16 +41,21 @@ const nextPath = pageNumber < pageCount
   : undefined;
 const structuredData = [
   {
-    "@type": "ProfilePage",
-    "@id": `${canonical}#profile`,
+    "@type": "CollectionPage",
+    "@id": `${canonical}#collection`,
     url: canonical,
     name: title,
     description,
-    mainEntity: {
+    isPartOf: { "@id": `${new URL("/", Astro.site).href}#website` },
+    about: {
       "@type": "Person",
       "@id": `${authorCanonical}#poet`,
       name: author.nameArabic,
       ...(author.nameEnglish ? { alternateName: author.nameEnglish } : {}),
+    },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: poems.length,
     },
   },
   {
