@@ -181,7 +181,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
           SAQI_SOURCE_BASE_URL: ${{ secrets.SAQI_SOURCE_BASE_URL }}
-          SAQI_SOURCE_ADAPTER_CONFIG: ${{ secrets.SAQI_SOURCE_ADAPTER_CONFIG }}
           SAQI_SOURCE_NAME: ${{ secrets.SAQI_SOURCE_NAME }}
 
       - name: Deploy authenticated operations
