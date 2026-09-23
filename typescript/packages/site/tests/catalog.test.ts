@@ -362,6 +362,10 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       INSERT INTO poem_model_publication_pointer VALUES
         ('p-valid', 'sol-5.6', 'revision-1', 'artifact-1', 1, 1, 1);
     `);
+    assert.deepEqual(
+      sqlite.prepare("SELECT model_key, poem_count FROM insights_model_count").all(),
+      [{ "model_key": "sol-5.6", "poem_count": 1 }],
+    );
     const publishedSolPage = await database.getPoemPage("good-poet", "p-valid");
     const availableModels = async () => {
       const page = await database.getAuthorPage("good-poet");
