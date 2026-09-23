@@ -1,5 +1,5 @@
 import type * as ChildProcess from "node:child_process";
-import { writeFileSync, utimesSync } from "node:fs";
+import { utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -99,8 +99,10 @@ describe("stop during unacknowledged managed startup", () => {
           )
           .all(),
       ).toEqual([
-        { control_key: "global_paused", enabled: 1 },
-        { control_key: "paid_work_paused", enabled: 1 },
+        // prettier-ignore
+        { "control_key": "global_paused", enabled: 1 },
+        // prettier-ignore
+        { "control_key": "paid_work_paused", enabled: 1 },
       ]);
       expect(kill).not.toHaveBeenCalled();
     } finally {

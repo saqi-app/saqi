@@ -763,8 +763,8 @@ describe("Chrome profile ownership", () => {
       close: vi.fn(),
       on: vi.fn(),
       route: vi.fn(() => routeSetup.promise),
-      setDefaultNavigationTimeout: vi.fn(),
-    } as unknown as BrowserContext;
+      setDefaultNavigationTimeout: vi.fn((_timeout: number): void => undefined),
+    } as BrowserContext;
     const collector = await SourceChromeCollector.create({
       launchPersistentContext: vi.fn(async () => context),
       poemOperationTimeoutMs: 10,
@@ -809,7 +809,7 @@ describe("Chrome profile ownership", () => {
       }),
       isClosed: () => false,
       on: vi.fn(),
-    } as unknown as Page;
+    } as Page;
     const closeContext = vi.fn(() => {
       if (closeContext.mock.calls.length === 1) return firstClose.promise;
       connected = false;
@@ -821,8 +821,8 @@ describe("Chrome profile ownership", () => {
       on: vi.fn(),
       pages: () => [page],
       route: vi.fn(async () => undefined),
-      setDefaultNavigationTimeout: vi.fn(),
-    } as unknown as BrowserContext;
+      setDefaultNavigationTimeout: vi.fn((_timeout: number): void => undefined),
+    } as BrowserContext;
     const collector = await SourceChromeCollector.create({
       launchPersistentContext: vi.fn(async () => context),
       profileDirectory,

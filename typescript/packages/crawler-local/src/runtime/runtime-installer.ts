@@ -184,7 +184,7 @@ function requireReleaseRootOutsideRepository(
   }
 }
 
-/**
+/*
  * Plans or applies bounded runtime retention while holding the same lock used
  * by installation. Anything that cannot be positively identified as a sealed,
  * Git-ref-anchored release is preserved.
@@ -320,24 +320,7 @@ async function retainRuntimeReleasesLocked(options: {
   const verified: VerifiedRetentionRelease[] = [];
   const releaseNames = await readdir(releases);
   const names = releaseNames.toSorted(codeUnitCompare);
-  for (const name of names) {
-    const path = join(releases, name);
-    if (!CommitSchema.safeParse(name).success) {
-      entries.push({
-        commit: name,
-        disposition: "preserve",
-        path,
-        reason: "malformed_or_unknown",
-      });
-    } else if (activeTargets.has(join("releases", name))) {
-      entries.push({
-        commit: name,
-        disposition: "preserve",
-        path,
-        reason: "active_ref",
-      });
-    }
-  }
+  entries.push(...preservedRetentionEntries(names, releases, activeTargets));
 
   const inspectableNames = names.filter(
     (name) =>
@@ -395,40 +378,14 @@ async function retainRuntimeReleasesLocked(options: {
     options.maximumDeletions === null
       ? []
       : candidates.slice(0, options.maximumDeletions);
-  const deleted: string[] = [];
-  if (options.apply) {
-    for (const entry of selected) {
-      // Git refs can move independently of the install lock. A candidate that
-      // lost its durable anchor after planning is preserved, never deleted.
-      if (durableRefCommitMetadata(options.repository, entry.commit) === null)
-        continue;
-      // eslint-disable-next-line no-await-in-loop -- Active refs are re-read immediately before each destructive rename.
-      if (await releaseIsActive(options.releaseRoot, entry.commit)) continue;
-      // eslint-disable-next-line no-await-in-loop -- The exact candidate boundary must still be intact immediately before removal.
-      await requireDirectRealChild(
+  const deleted = options.apply
+    ? await pruneRetentionCandidates(
         releases,
-        entry.path,
-        "RUNTIME_RELEASE_PATH_INVALID",
-      );
-      // eslint-disable-next-line no-await-in-loop -- A final closure check prevents deleting a candidate changed after planning.
-      await verifyRelease(entry.path, entry.commit);
-      const tombstone = join(
-        releases,
-        `.pruning-${entry.commit}-${randomUUID()}`,
-      );
-      // eslint-disable-next-line no-await-in-loop -- Rename atomically removes the release from the usable namespace before recursive deletion.
-      await rename(entry.path, tombstone);
-      // eslint-disable-next-line no-await-in-loop -- Each namespace mutation is made durable before data removal.
-      await fsyncDirectory(releases);
-      // eslint-disable-next-line no-await-in-loop -- Only the exact, already-renamed tombstone is made writable.
-      await makeTreeOwnerWritable(tombstone);
-      // eslint-disable-next-line no-await-in-loop -- Bounded candidates are removed serially for deterministic failure recovery.
-      await rm(tombstone, { force: true, recursive: true });
-      // eslint-disable-next-line no-await-in-loop -- Each completed deletion is durable before the next candidate begins.
-      await fsyncDirectory(releases);
-      deleted.push(entry.commit);
-    }
-  }
+        options.releaseRoot,
+        options.repository,
+        selected,
+      )
+    : [];
 
   return {
     applied: options.apply,
@@ -437,6 +394,73 @@ async function retainRuntimeReleasesLocked(options: {
     maximumDeletions: options.maximumDeletions,
     retainRollbackCount: options.retainRollbackCount,
   };
+}
+
+function preservedRetentionEntries(
+  names: readonly string[],
+  releases: string,
+  activeTargets: ReadonlySet<string>,
+): RuntimeReleaseRetentionEntry[] {
+  const entries: RuntimeReleaseRetentionEntry[] = [];
+  for (const name of names) {
+    const path = join(releases, name);
+    if (!CommitSchema.safeParse(name).success) {
+      entries.push({
+        commit: name,
+        disposition: "preserve",
+        path,
+        reason: "malformed_or_unknown",
+      });
+    } else if (activeTargets.has(join("releases", name))) {
+      entries.push({
+        commit: name,
+        disposition: "preserve",
+        path,
+        reason: "active_ref",
+      });
+    }
+  }
+  return entries;
+}
+
+async function pruneRetentionCandidates(
+  releases: string,
+  releaseRoot: string,
+  repository: string,
+  selected: readonly RuntimeReleaseRetentionEntry[],
+): Promise<string[]> {
+  const deleted: string[] = [];
+  for (const entry of selected) {
+    // Git refs can move independently of the install lock. A candidate that
+    // lost its durable anchor after planning is preserved, never deleted.
+    if (durableRefCommitMetadata(repository, entry.commit) === null) continue;
+    // eslint-disable-next-line no-await-in-loop -- Active refs are re-read immediately before each destructive rename.
+    if (await releaseIsActive(releaseRoot, entry.commit)) continue;
+    // eslint-disable-next-line no-await-in-loop -- The exact candidate boundary must still be intact immediately before removal.
+    await requireDirectRealChild(
+      releases,
+      entry.path,
+      "RUNTIME_RELEASE_PATH_INVALID",
+    );
+    // eslint-disable-next-line no-await-in-loop -- A final closure check prevents deleting a candidate changed after planning.
+    await verifyRelease(entry.path, entry.commit);
+    const tombstone = join(
+      releases,
+      `.pruning-${entry.commit}-${randomUUID()}`,
+    );
+    // eslint-disable-next-line no-await-in-loop -- Rename atomically removes the release from the usable namespace before recursive deletion.
+    await rename(entry.path, tombstone);
+    // eslint-disable-next-line no-await-in-loop -- Each namespace mutation is made durable before data removal.
+    await fsyncDirectory(releases);
+    // eslint-disable-next-line no-await-in-loop -- Only the exact, already-renamed tombstone is made writable.
+    await makeTreeOwnerWritable(tombstone);
+    // eslint-disable-next-line no-await-in-loop -- Bounded candidates are removed serially for deterministic failure recovery.
+    await rm(tombstone, { force: true, recursive: true });
+    // eslint-disable-next-line no-await-in-loop -- Each completed deletion is durable before the next candidate begins.
+    await fsyncDirectory(releases);
+    deleted.push(entry.commit);
+  }
+  return deleted;
 }
 
 async function inspectRetentionRelease(
@@ -938,7 +962,7 @@ async function recoverStaleLock(
   if (information.isSymbolicLink()) {
     throw new Error("RUNTIME_INSTALL_LOCK_INVALID");
   }
-  let stale = false;
+  let stale: boolean;
   try {
     const lock = InstallLockSchema.parse(
       JSON.parse(await readFile(lockPath, "utf8")),
@@ -1027,9 +1051,7 @@ function codeUnitCompare(left: string, right: string): number {
 }
 
 function errorCode(error: unknown): null | string {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : null;
+  return error instanceof Error && "code" in error ? String(error.code) : null;
 }
 
 async function removeStaging(releases: string, staging: string): Promise<void> {
