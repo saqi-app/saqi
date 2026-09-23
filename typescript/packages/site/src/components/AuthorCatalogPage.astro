@@ -21,7 +21,7 @@ const displayName = author.nameEnglish
 const baseTitle = pageTitle(displayName);
 const title = pageNumber === 1 ? baseTitle : `Page ${pageNumber} | ${baseTitle}`;
 const description = metaDescription(
-  `Read ${poemCount} ${poemCount === 1 ? "poem" : "poems"} by ${author.nameEnglish ?? author.nameArabic} in Arabic${poems.some((poem) => poem.hasEnglish) ? " with English translations" : ""}.`,
+  `${pageNumber > 1 ? `Page ${pageNumber} of ${pageCount}: ` : ""}Read ${poemCount} ${poemCount === 1 ? "poem" : "poems"} by ${author.nameEnglish ?? author.nameArabic} in Arabic${poems.some((poem) => poem.hasEnglish) ? " with English translations" : ""}.`,
 );
 const canonicalPath = authorPagePath(author, pageNumber);
 function availableModelNames(poem: AuthorPage["poems"][number]): string {
