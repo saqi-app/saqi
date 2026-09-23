@@ -234,6 +234,90 @@ extension ModelsTests {
         XCTAssertEqual(result.severity, .neutral)
         XCTAssertEqual(result.wait?.kind, .paidPause)
     }
+
+    func testStaleRuntimeCannotReportOldBudgetBlockWhenPipelineIsFresh() {
+        let snapshotTime = Date(timeIntervalSince1970: 1000)
+        let result = MonitorOperationalStatus.evaluate(
+            service: service(actualState: "running", actions: []),
+            health: validHealth(observedAt: 1_901_000, runId: "process:1"),
+            runtime: providerRuntime(
+                reason: "budget_exhausted",
+                operatorAction: "rearm_budget",
+                recovery: "operator",
+                remainingWork: 4,
+                now: snapshotTime,
+            ),
+            paused: false,
+            now: Date(timeIntervalSince1970: 1901),
+        )
+
+        XCTAssertEqual(result.label, "Running · healthy")
+        XCTAssertEqual(result.severity, .healthy)
+    }
+
+    func testRetainedPauseCannotHideFreshBlockedHealth() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let health = PipelineHealth(
+            checks: [],
+            schemaId: "saqi.pipeline-health",
+            schemaVersion: 1,
+            configDigest: String(repeating: "a", count: 64),
+            growth: nil,
+            heartbeatIntervalMs: nil,
+            lastProgressAt: nil,
+            observedAt: 1_000_000,
+            origins: [],
+            providers: [],
+            queues: [],
+            runId: "process:1",
+            sol: nil,
+            state: "blocked",
+        )
+        let result = MonitorOperationalStatus.evaluate(
+            service: service(actualState: "running", actions: []),
+            health: health,
+            runtime: nil,
+            paused: true,
+            now: now,
+        )
+
+        XCTAssertEqual(result.label, "Pipeline blocked · attention needed")
+        XCTAssertTrue(result.requiresAttention)
+    }
+
+    func testRetainedPauseDoesNotDescribeNewRunAsPaused() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let result = MonitorOperationalStatus.evaluate(
+            service: service(actualState: "running", actions: []),
+            health: validHealth(observedAt: 1_000_000, runId: "process:1"),
+            runtime: nil,
+            paused: true,
+            now: now,
+        )
+
+        XCTAssertEqual(result.label, "Running · healthy")
+        XCTAssertEqual(result.severity, .healthy)
+    }
+
+    func testRetainedPauseDoesNotOverrideCurrentUnpausedProvider() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let result = MonitorOperationalStatus.evaluate(
+            service: service(actualState: "running", actions: []),
+            health: validHealth(observedAt: 1_000_000, runId: "process:1"),
+            runtime: providerRuntime(
+                reason: "ready",
+                operatorAction: "none",
+                recovery: "automatic",
+                remainingWork: 1,
+                now: now,
+            ),
+            paused: true,
+            now: now,
+        )
+
+        XCTAssertEqual(result.label, "Running · healthy")
+        XCTAssertEqual(result.severity, .healthy)
+    }
 }
 
 extension ModelsTests {
@@ -304,7 +388,7 @@ extension ModelsTests {
         )
         return RuntimeStatus(
             configDigest: String(repeating: "a", count: 64),
-            observedAt: "2026-08-26T00:00:00.000Z",
+            observedAt: "1970-01-01T00:16:40.000Z",
             ownerPid: 1,
             resourcePressure: ResourcePressureStatus(nextProbeAt: 0, reasons: [], state: "ready"),
             runId: "run",

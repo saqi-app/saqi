@@ -24,6 +24,18 @@ import {
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 describe("immutable runtime installer", () => {
+  it("refuses a release root inside the source checkout before creating it", async () => {
+    const fixture = repositoryFixture("nested-release-root");
+    const nestedRoot = join(fixture.repository, ".runtime-releases");
+    await expect(
+      installRuntime(
+        { ...options(fixture, fixture.first), releaseRoot: nestedRoot },
+        { prepareRelease: () => undefined },
+      ),
+    ).rejects.toThrow("RUNTIME_RELEASE_ROOT_IN_REPOSITORY");
+    expect(existsSync(nestedRoot)).toBe(false);
+  });
+
   it("builds every runtime workspace dependency before smoke testing", async () => {
     const fixture = repositoryFixture("build-plan");
     const commands: string[] = [];

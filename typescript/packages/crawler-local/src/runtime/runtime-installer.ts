@@ -157,6 +157,9 @@ export async function installRuntime(
   const requestedReleaseRoot = resolve(raw.releaseRoot);
   const commit = CommitSchema.parse(raw.commit);
   requireCleanRepository(repository);
+  // A release inside its source checkout makes the next install see its own
+  // artifacts as dirty source and risks exporting mutable runtime state.
+  requireReleaseRootOutsideRepository(repository, requestedReleaseRoot);
   const resolvedCommit = git(repository, [
     "rev-parse",
     "--verify",
@@ -165,9 +168,20 @@ export async function installRuntime(
   if (resolvedCommit !== commit) throw new Error("RUNTIME_COMMIT_NOT_EXACT");
 
   const releaseRoot = await prepareReleaseRoot(requestedReleaseRoot);
+  requireReleaseRootOutsideRepository(await realpath(repository), releaseRoot);
   return withInstallLock(releaseRoot, () =>
     installLocked(repository, releaseRoot, commit, dependencies),
   );
+}
+
+function requireReleaseRootOutsideRepository(
+  repository: string,
+  releaseRoot: string,
+): void {
+  const suffix = relative(repository, releaseRoot);
+  if (suffix === "" || (suffix !== ".." && !suffix.startsWith(`..${sep}`))) {
+    throw new Error("RUNTIME_RELEASE_ROOT_IN_REPOSITORY");
+  }
 }
 
 /**

@@ -38,6 +38,17 @@ internal struct RuntimeStatus: Codable, Hashable {
         configDigest == service.configDigest && ownerPid == service.ownerPid && runId == service.runId
     }
 
+    func isFresh(now: Date) -> Bool {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let observed = formatter.date(from: observedAt) else { return false }
+        let age = now.timeIntervalSince(observed)
+        guard age >= -30, age <= 15 * 60 else { return false }
+        guard let providerExecution else { return true }
+        let providerAge = now.timeIntervalSince1970 - Double(providerExecution.observedAt) / 1000
+        return providerAge >= -60 && providerAge <= 15 * 60
+    }
+
     func validate(now: Date = Date()) throws {
         let knownReasons = Set([
             "DISK_PRESSURE",

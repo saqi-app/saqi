@@ -231,6 +231,8 @@ export class PublicationClient {
     }
     this.#consecutiveAuthFailures = 0;
     if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
+      if (response.status >= 200 && response.status < 300)
+        return this.#unknownCommittedResponse("PUBLICATION_RESPONSE_TOO_LARGE");
       this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
     }
@@ -259,13 +261,16 @@ export class PublicationClient {
         state: "retry_wait",
       };
     }
-    this.#consecutiveServiceFailures = 0;
     let parsed: z.infer<typeof ResponseSchema>;
     try {
       parsed = ResponseSchema.parse(JSON.parse(response.body));
     } catch {
+      if (response.status >= 200 && response.status < 300)
+        return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
+      this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
     }
+    this.#consecutiveServiceFailures = 0;
     if (response.status < 200 || response.status >= 300 || !parsed.ok) {
       if (!parsed.ok && parsed.conflict) {
         return {
@@ -355,6 +360,8 @@ export class PublicationClient {
     }
     this.#consecutiveAuthFailures = 0;
     if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
+      if (response.status >= 200 && response.status < 300)
+        return this.#unknownCommittedResponse("PUBLICATION_RESPONSE_TOO_LARGE");
       this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
     }
@@ -383,8 +390,8 @@ export class PublicationClient {
         state: "retry_wait",
       };
     }
-    this.#consecutiveServiceFailures = 0;
     if (response.status < 200 || response.status >= 300) {
+      this.#consecutiveServiceFailures = 0;
       try {
         const superseded = SupersededPublicationResponseSchema.safeParse(
           JSON.parse(response.body),
@@ -400,6 +407,7 @@ export class PublicationClient {
       const result = EnrichmentPublicationV2ResponseSchema.parse(
         JSON.parse(response.body),
       );
+      this.#consecutiveServiceFailures = 0;
       return {
         actionHash,
         responseHash: sha256(canonicalJson(result)),
@@ -407,7 +415,7 @@ export class PublicationClient {
         state: "confirmed",
       };
     } catch {
-      return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
+      return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
     }
   }
 
@@ -478,6 +486,8 @@ export class PublicationClient {
     }
     this.#consecutiveAuthFailures = 0;
     if (Buffer.byteLength(response.body) > MAX_CORPUS_IMPORT_BYTES) {
+      if (response.status >= 200 && response.status < 300)
+        return this.#unknownCommittedResponse("PUBLICATION_RESPONSE_TOO_LARGE");
       this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_RESPONSE_TOO_LARGE", state: "rejected" };
     }
@@ -506,14 +516,15 @@ export class PublicationClient {
         state: "retry_wait",
       };
     }
-    this.#consecutiveServiceFailures = 0;
     if (response.status < 200 || response.status >= 300) {
+      this.#consecutiveServiceFailures = 0;
       return { errorCode: "PUBLICATION_HTTP_REJECTED", state: "rejected" };
     }
     try {
       const result = SourceAdmissionV2ResponseSchema.parse(
         JSON.parse(response.body),
       );
+      this.#consecutiveServiceFailures = 0;
       return {
         actionHash,
         responseHash: sha256(canonicalJson(result)),
@@ -521,8 +532,26 @@ export class PublicationClient {
         state: "confirmed",
       };
     } catch {
-      return { errorCode: "PUBLICATION_INVALID_RESPONSE", state: "rejected" };
+      return this.#unknownCommittedResponse("PUBLICATION_INVALID_RESPONSE");
     }
+  }
+
+  #unknownCommittedResponse(errorCode: string): PublicationClientResult {
+    // A 2xx means the server may already have committed. Keep the immutable
+    // action pending and replay it after a bounded probe instead of losing it.
+    this.#consecutiveServiceFailures += 1;
+    return {
+      errorCode,
+      retryAt:
+        this.#now() +
+        networkProbeDelayMs(
+          this.#consecutiveServiceFailures,
+          this.#random,
+          30_000,
+          30 * 60_000,
+        ),
+      state: "service_wait",
+    };
   }
 }
 

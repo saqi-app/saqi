@@ -1078,7 +1078,9 @@ async function readControlOwner(path: string): Promise<null | number> {
     const value: unknown = JSON.parse(await readFile(path, "utf8"));
     if (typeof value !== "object" || value === null || !("pid" in value))
       return null;
-    return typeof value.pid === "number" && Number.isSafeInteger(value.pid)
+    return typeof value.pid === "number" &&
+      Number.isSafeInteger(value.pid) &&
+      value.pid > 0
       ? value.pid
       : null;
   } catch {

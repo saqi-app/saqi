@@ -952,10 +952,12 @@ export class SourceChromeCollector
         // with Browser.setDownloadBehavior / context-management errors. Keep
         // one inert target across disconnects. The next attachment creates its
         // routed page first, then reclaims this previous target.
-        await ensureCdpAnchorPage(context);
-        await browser.close({ reason: "SOURCE_COLLECTOR_CLOSED" });
+        await this.#awaitBrowserShutdown(async () => {
+          await ensureCdpAnchorPage(context);
+          await browser.close({ reason: "SOURCE_COLLECTOR_CLOSED" });
+        });
       } else {
-        await context.close();
+        await this.#awaitBrowserShutdown(() => context.close());
       }
       if (browser?.isConnected())
         throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
@@ -1054,12 +1056,12 @@ export class SourceChromeCollector
     const isInitializing = context === this.#initializingContext;
     try {
       const browser = context.browser();
+      await this.#awaitBrowserShutdown(() =>
+        browser ? browser.close({ reason }) : context.close(),
+      );
       if (browser) {
-        await browser.close({ reason });
         if (browser.isConnected())
           throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
-      } else {
-        await context.close();
       }
       // Initialization still owns the profile fence and will release it only
       // after every setup promise observes the closed browser and settles.
@@ -1072,6 +1074,25 @@ export class SourceChromeCollector
         `Browser force-close could not prove process isolation: ${cause.message.slice(0, 1_000)}`,
       );
       throw this.#poisoned;
+    }
+  }
+
+  async #awaitBrowserShutdown(close: () => Promise<void>): Promise<void> {
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // A stuck Playwright transport must not hold the serial queue forever.
+      // The caller retains the profile fence unless disconnection is proven.
+      await Promise.race([
+        Promise.resolve().then(close),
+        new Promise<never>((_resolve, reject) => {
+          closeTimer = setTimeout(
+            () => reject(new Error("SOURCE_BROWSER_CLOSE_TIMEOUT")),
+            this.#options.shutdownGraceMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (closeTimer !== undefined) clearTimeout(closeTimer);
     }
   }
 
@@ -1255,14 +1276,18 @@ export class SourceChromeCollector
         this.#operations = 0;
       } catch (error) {
         if (candidate) {
+          const failedContext = candidate;
           try {
-            const browser = candidate.browser();
+            const browser = failedContext.browser();
             if (browser) {
               if (browser.isConnected())
-                await browser.close({ reason: "BROWSER_INIT_FAILED" });
+                await this.#awaitBrowserShutdown(() =>
+                  browser.close({ reason: "BROWSER_INIT_FAILED" }),
+                );
               if (browser.isConnected())
                 throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
-            } else await candidate.close();
+            } else
+              await this.#awaitBrowserShutdown(() => failedContext.close());
           } catch (closeError) {
             this.#context = candidate;
             this.#poisoned = toError(

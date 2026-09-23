@@ -1351,10 +1351,22 @@ export class LedgerMigrator implements LedgerMigrationPort {
           `Ledger schema ${String(existingVersion)} is newer than supported schema ${String(CURRENT_SCHEMA_VERSION)}`,
         );
     }
-    if (objects.length === 0)
-      return this.#database
-        .transaction(() => this.#migrateInitialized(true))
+    if (objects.length === 0) {
+      // A second process can initialize this file while we wait for the
+      // writer lock. Inspect again inside the transaction before choosing the
+      // fresh bootstrap path, then use the ordinary upgrade path if we lost
+      // that race. The initial inspection alone is not an ownership fence.
+      const bootstrapped = this.#database
+        .transaction(() => {
+          if (this.#database.prepare(READ_USER_SCHEMA_OBJECTS).get())
+            return false;
+          this.#migrateInitialized(true);
+          return true;
+        })
         .immediate();
+      if (bootstrapped) return CURRENT_SCHEMA_VERSION;
+      return this.migrate();
+    }
     return this.#migrateInitialized(false);
   }
 

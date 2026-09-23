@@ -1,6 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { MAX_CORPUS_IMPORT_BYTES } from "@saqi/precedent-iso";
 import { describe, expect, it } from "vitest";
 
 import { ArtifactStore } from "../persistence/artifact-store";
@@ -188,6 +189,102 @@ describe("publication resilience", () => {
       errorCode: "PUBLICATION_NETWORK_UNAVAILABLE",
       retryAt: 3_500,
       state: "network_wait",
+    });
+  });
+
+  it("keeps a committed publication pending when its success response is malformed", async () => {
+    const root = mkdtempSync(join(tmpdir(), "publication-invalid-success-"));
+    const artifacts = new ArtifactStore(join(root, "artifacts"), {
+      minimumFreeBytes: 0,
+    });
+    const ledger = Ledger.initialize(join(root, "ledger.sqlite"));
+    const artifact = enrichmentArtifact();
+    const storedArtifact = await artifacts.put(`${canonicalJson(artifact)}\n`);
+    const source = {
+      artifactHash: storedArtifact.hash,
+      workKey: succeededSource(ledger, storedArtifact.hash),
+    };
+    const action = prepareEnrichmentPublication(artifact, {
+      expectedPointerVersion: null,
+      source,
+      taskKey: source.workKey,
+      writerEpoch: 1,
+    });
+    let now = Date.now() + 1_000;
+    let responseValid = false;
+    const lane = new PublicationLane({
+      artifacts,
+      client: new PublicationClient({
+        endpoint: "https://ops.saqi.app/api/corpus-import",
+        now: () => now,
+        random: () => 0,
+        transport: async () => ({
+          body: responseValid
+            ? JSON.stringify({
+                ok: true,
+                result: {
+                  authorSlug: "author-1",
+                  poemId: "poem-1",
+                  pointerVersion: 1,
+                  state: "published",
+                },
+              })
+            : "truncated-success-body",
+          status: 200,
+        }),
+      }),
+      ledger,
+      owner: "test",
+    });
+    const work = await lane.seedEnrichment(action, source);
+
+    for (let index = 0; index < 15; index += 1) {
+      const summary = await lane.run(undefined, {
+        maximum: 1,
+        now: () => now,
+      });
+      expect(summary).toMatchObject({
+        deadLettered: 0,
+        serviceWait: 1,
+        stopped: "service_wait",
+      });
+      expect(ledger.get(work.workKey)).toMatchObject({
+        attemptCount: 0,
+        lastErrorCode: "PUBLICATION_INVALID_RESPONSE",
+        state: "pending",
+      });
+      now = (summary.retryAt ?? now) + 1;
+    }
+
+    responseValid = true;
+    await expect(
+      lane.run(undefined, { maximum: 1, now: () => now }),
+    ).resolves.toMatchObject({ confirmed: 1 });
+    expect(ledger.get(source.workKey)?.state).toBe("imported");
+    ledger.close();
+  });
+
+  it("does not discard a possible commit when a 2xx body exceeds the response limit", async () => {
+    const client = new PublicationClient({
+      endpoint: "https://ops.saqi.app/api/corpus-import",
+      now: () => 1_000,
+      random: () => 0,
+      transport: async () => ({
+        body: "x".repeat(MAX_CORPUS_IMPORT_BYTES + 1),
+        status: 200,
+      }),
+    });
+    await expect(
+      client.send({
+        action: "promote",
+        bundleId: "bundle",
+        expectedPlanHash: HASH,
+        writerEpoch: 1,
+      }),
+    ).resolves.toEqual({
+      errorCode: "PUBLICATION_RESPONSE_TOO_LARGE",
+      retryAt: 16_000,
+      state: "service_wait",
     });
   });
 

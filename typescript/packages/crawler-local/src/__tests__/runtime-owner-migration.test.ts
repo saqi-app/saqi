@@ -18,6 +18,47 @@ import { configureSource, currentSource } from "../source-adapter/index.js";
 import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
+test("a fresh ledger opener accepts a schema initialized after its first inspection", () => {
+  const root = trackedMkdtempSync(
+    join(tmpdir(), "runtime-owner-bootstrap-race-"),
+  );
+  const path = join(root, "ledger.sqlite3");
+  const winner = new Database(path);
+  const follower = new Database(path);
+  const schemaQuery =
+    "SELECT name FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*'";
+  const prepare = follower.prepare.bind(follower);
+  let injected = false;
+  const prepareSpy = vi.spyOn(follower, "prepare").mockImplementation((sql) => {
+    const statement = prepare(sql);
+    if (sql !== schemaQuery || injected) return statement;
+    return new Proxy(statement, {
+      get(target, property) {
+        if (property === "all")
+          return () => {
+            const observed = target.all();
+            injected = true;
+            new LedgerMigrator(winner).migrate();
+            return observed;
+          };
+        const value: unknown = Reflect.get(target, property);
+        return value;
+      },
+    });
+  });
+  try {
+    expect(new LedgerMigrator(follower).migrate()).toBe(35);
+    expect(injected).toBe(true);
+    expect(follower.prepare("SELECT version FROM local_schema").get()).toEqual({
+      version: 35,
+    });
+  } finally {
+    prepareSpy.mockRestore();
+    follower.close();
+    winner.close();
+  }
+});
+
 function fixture(
   run: (database: Database.Database, root: string) => void,
   receipt = "valid",

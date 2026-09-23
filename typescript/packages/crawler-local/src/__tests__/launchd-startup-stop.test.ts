@@ -1,5 +1,5 @@
 import type * as ChildProcess from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -26,6 +26,35 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 describe("stop during unacknowledged managed startup", () => {
+  it("recovers an aged control lock with an invalid negative PID", async () => {
+    const root = trackedMkdtempSync(join(tmpdir(), "saqi-control-lock-pid-"));
+    Ledger.initialize(join(root, "ledger.sqlite3")).close();
+    writeServiceEnabled(root, true);
+    const configPath = join(root, "config.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ schemaVersion: 1, stateDirectory: root }),
+    );
+    const controlLockPath = join(root, "CONTROL.lock");
+    writeFileSync(controlLockPath, JSON.stringify({ pid: -1 }));
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(controlLockPath, old, old);
+    execute.mockRejectedValue(
+      Object.assign(new Error("service not loaded"), { code: 113 }),
+    );
+    try {
+      const result = await controlLaunchdService({
+        action: "stop",
+        configPath,
+        label: "net.saqi.test",
+      });
+      expect(result.actualState).toBe("stopped");
+      expect(readServiceEnabled(root)).toBe(false);
+    } finally {
+      execute.mockReset();
+    }
+  });
+
   it("historical owner authority disables service without migrating or signaling unverified PID", async () => {
     const root = trackedMkdtempSync(join(tmpdir(), "saqi-historical-stop-"));
     const database = new Database(join(root, "ledger.sqlite3"));

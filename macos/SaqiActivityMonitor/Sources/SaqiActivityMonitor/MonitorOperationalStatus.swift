@@ -43,6 +43,7 @@ internal struct MonitorOperationalStatus: Equatable {
         paused: Bool,
         now: Date = Date(),
     ) -> Self {
+        let runtime = runtime?.isFresh(now: now) == true ? runtime : nil
         if let immediate = immediateStatus(service: service) {
             return immediate
         }
@@ -92,11 +93,13 @@ internal struct MonitorOperationalStatus: Equatable {
             }
             return Self(label: "Starting · waiting for diagnostics", severity: .waiting, wait: nil)
         }
-        if paused {
-            return pausedStatus(health: health)
-        }
         if health.state == "blocked" {
             return Self(label: "Pipeline blocked · attention needed", severity: .attention, wait: nil)
+        }
+        if paused, runtime?.matches(service: service) == true,
+           runtime?.providerExecution?.providers.first(where: { $0.provider == "sol" })?.gates.operator.globalPaused == true
+        {
+            return pausedStatus(health: health)
         }
         return runningStatus(service: service, health: health, runtime: runtime)
     }
