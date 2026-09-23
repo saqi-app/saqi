@@ -33,8 +33,6 @@ export default [
       "!packages/*/src/lib/**",
       ".yarn/**",
       "packages/app/.open-next/**",
-      "packages/app/cloudflare-env.d.ts",
-      "packages/site/cloudflare-env.d.ts",
     ],
   },
   // {

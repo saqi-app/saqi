@@ -532,8 +532,11 @@ export interface ReadyWorkScan {
 }
 
 export class LostLeaseError extends Error {
-  constructor(message = "The fenced lease is no longer current") {
-    super(message);
+  constructor(
+    message = "The fenced lease is no longer current",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = "LostLeaseError";
   }
 }

@@ -1,0 +1,1774 @@
+{
+  "schemaVersion": 2,
+  "provenance": {
+    "bundleVersion": "7.29.0",
+    "consumerBaseSha": "bce9528f0124161d361c6326e0d5abcbe01c83e2",
+    "catalogDigest": "0af35f4c68e41f52cdd4b6faf23f1de761c635b1eeeae825c726b75741350521"
+  },
+  "diagnostics": [
+    {
+      "fingerprint": "3489c6b30cbe05c94269128d672cc28d272308da00b4d12e8aad96e9cd91573d",
+      "source": "eslint",
+      "ruleId": "@sarj/no-broad-return-type",
+      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "bc7ead7dbf0e90cede7b798205566b0063c295ff89994a76454eac640e82e9cf",
+      "source": "eslint",
+      "ruleId": "@sarj/no-broad-return-type",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-baseline-planner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "134125ff54cd4db4492ffa89020119baa4e70d7f45478f93b65d77e654a366dd",
+      "source": "eslint",
+      "ruleId": "@sarj/no-broad-return-type",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f8d2ba40af318ecebea834d7388facefda96be01b007dff29286b4b316963d47",
+      "source": "eslint",
+      "ruleId": "@sarj/no-broad-return-type",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "34b9581eee9198605dae7cf557058515f0f9096c60326a3c531b11102ebcbaf4",
+      "source": "eslint",
+      "ruleId": "@sarj/no-broad-return-type",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "9aa3191480530f554029aa684e829f94bc588044a160942b737a3879e1bf9b36",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/app/src/app/api/corpus-fingerprint-backfill/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b490d326960f13d43273eb6bde89af7c3acfc2e4eaa881948e23e81e41c9ca0f",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8221f229a3417fc3ccd83208218d25eeea6acf0e269f77c4b5b47978927e32ef",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/author-inventory-collector.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f6d5ea2e06b82870600dc3f7ae6782b9b14acf0ec9f1fb529db43f4c78627f59",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/fanout-reconciler.test.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "46b137d5128811903265c64b001533f98453b9c3f5eafa1e4616b2359268d939",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c6065cf3b26d05f2d5447239410f1159d7942e9437d5d4dc98e4947ef849e644",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/local-enrichment-fanout.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "d7d2c0a3b314c1cde2e4a748aa923c6e92f9c795750a97bf0a123b2df237bdea",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f13794a179f4db90e4dfe89ece5e3015ecb0cd7bc3a2f33dacadc187942ec170",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "71ea219508be607e90fc429025eff1880a4f717f6e44d783c2435cba20e40d08",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/provider-execution-health.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "291020252f0a98588b21fd3cf0f7cc0c7bcc3776be39cc71532c16f89cb67b18",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-lane-scheduler.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "73fe4380e7abfab7a369c5e9a9e259bba362638579adfd7bae7dd190297ed6da",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8142018d3ce33a55b27785f904f254bcc5d534d0a8af08324d6e00717c6c20b2",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/supervisor.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f18bfb5f3ecffb1d967dbe014c99d8312991e806bc73edb157b47c11096f966c",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/cli.ts",
+      "count": 10
+    },
+    {
+      "fingerprint": "3ae3429c3ea8d894a74eff566c303519e6992d4ba675bd6c68e9f21aa3fcf18a",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/collection/author-inventory-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d9d80aa40c4dad1327291b55c8973f6a818ecf3705acd9578a815129bb759b35",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 11
+    },
+    {
+      "fingerprint": "11009f61ccd3bf0f8d4bb286c3fe10422061fdffe5b42bf7689fcd3f2b28a467",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fc17911d4794a64dfbb52e523a4ee036822ad1073ddb855270e11cb0f56f0b07",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "807aed866f67f54f9c03ba45e3efae87c76c6fe650738a36aa3275c4639805d7",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "182b2bc2e3f787a0fb9869bc4d0ec30deee9dddfbaedc4278767c9ac81447ba8",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/persistence/baseline-export.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "f6617ecaf61ad3b20a51a8ae63da186d61f199250a66455d2a4e4a9acff54bee",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "426181ee98309d34a0eeba8e6c410c83484de7c86f77d4d3b57223d539dd4574",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "184f7bf488658507f840d9a3cbf52b21216cc1d3969b5961f188e3c755842edb",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "14f0f28e1729c7b21dbcb23c08aa458721f3684446bdb06f2b3ffe9b8dba2a1a",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/publication/demand-driven-production-resolution-refresher.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cd43c12f70997eb14d045aa88c4c4ad088c2b859ec0fa04f9676076dc5675a64",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "964e39766ffaba22eaf54d769006ab97ae44a0c992e79b47f1d52d183407eaca",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/publication/publication-auth-client.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "83130813c629f237d1a9a984ee975a51dcfb08c840776c1daf8f4d4eb34fea66",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/publication/publication-client.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b0b460c1fdd99341832bce66098e6513a31a14cf23952c366eb636ab66a806a1",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "700bcf18116a870a526ddaaeafc169498fdff5ef8a723286a2ce256a3f22f399",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/runtime/service-status-inspection.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c19245a6bf00c3f4c8c1c2bb16974cac0c5b60bd42b6056c3726c49940c156cc",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "cdfd29bf79eb20a77bf5871ae1b09283b0ad215fdb464ddbeb88e69d6478d10f",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "8c1e3da536edf6ceeef6f5e75d8f1aedc1c8e180ab3be19d1052948e02e628fa",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/precedent-iso/src/enrichment.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4efe9bdec8be56d84292a4d3c7788742b9f04ceaa8f702ecd7fe14ce81f530c5",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "d8b6b5a7a542a14b4f70d6fb5aafbbd71f720b1ccabe156a805a7c90440b16fb",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/site/src/lib/catalog.ts",
+      "count": 24
+    },
+    {
+      "fingerprint": "3cf49d10a522e9417f5ce8ee188657da124615f7f24e52396ae21b85a9f0fa45",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/site/src/lib/poem-translations.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "e1ab331bdec7b03521234d1de0575f9d32c05c96ac6b0f57ff482e1ccca42497",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/source-adapter/src/constants.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5ea94d9c23fd0b4f7279bc145f1934b0c7edb66eb6e7eeb66265202b97715ba6",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9abc32226b7ee958d6dff9bf9608e22d1c1dd22a9dcb4046f4a4fa69fd1d0d51",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/cli.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "74be20bbf0eadd113dee862e9eca36284c2e09b0bb954932c24d477893aad55d",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/author-inventory-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "00f99180698da818eb57a5a24eff4bfe15b792fba728f0ce9e9930f0f3fe09eb",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "98a282394517a7c1a707f93b095b264d91fb940b77cebc2b4d7d807c1ee5443a",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9d19c1124041807850601692b9ac557025670f9370045851fd9ebb9ebf6e57d4",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b112aa66106557a799d8664f7e9fa7e21f6c072834868f8a366baa1e4eacfb2c",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b42a1a00ce6bca4191a2076c7aaee0a128d652a77feb2f361717876261129c9b",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d61ee0d37d17db0aedd4fa45c0c1448674d23540f131912b6189d968829bec96",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "290d29b8265f9969be85202a15ffc8dc4b99f9ec91807bc6fcf7f633846338ad",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/legacy-source-binding-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fcc6bb11dc3a4bfb53baf0e6d996bca71e3f4339d32672f17239c5b7fb330a40",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/local-enrichment-fanout.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "496c1acf27d0d03f007d091847c523dadf1e5c293790ccbc4a4e723195af3ec1",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/provider-credential-epoch.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "69898d7402f77b9076676e29f450fe1fadcd063a359c5192bb3453921d29cc42",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7275c3da0398187447aedb5c4ecf5012ca4f10030a20222fea8b53e31b58bb0d",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d1ff54b8930e0ced875d96741af1d4d8d439870293376eebea5e29f975d5bd50",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "93ce1302c95a5b2c589b8c67c69534bdb476030af5cc692ee4e17f3a7c065973",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cc294c9cb0d0d8e17b412b75ccdb0334e0f8f278a016bfe69442b06ca3ba5c07",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d8afc87a706de61a3774c71923307f31073ab740d515cef1a09a12941a65a040",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "09127df60aa0f22617f9aebe02354216dd56d08e2a2fa960ebcaed1a4d90915d",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "33dec5ebfec65c6d34b95b891655464867e188483b3626b3f055a9c593e66fa5",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5d7d606e82d73b1c27c5e80ef1af5c5c3c7c01880322041b52537c75e3e7155f",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "081c125bd5d54b160627fa30a14ac6d3ffd35441d24b444e3ecab28516206db9",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5e1d5f54d2951cd004135cafa087084acb06905fdf5e28ba747124d8ff3a7e42",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9b14713ce544bb5ba3f10c3b041b77acde4eb58d3847f9a870f2e675bdda1da9",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "553ee4b837f652a5800c5cecd488d1f02b78212aa741ab56fcc29743133152a2",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "57981d60a084da60c58be128b2407ace2b217942024bed785b6f4f2e8315eb24",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0a6e90127773b8ebcb070c1ff482a200162c99fc9a622d5d20dbad6658b6782b",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "534e3935f4525e12ba5630cd2f24308ce21f83a3f659faa644bd3837cb39e997",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8f878399d6f569e09030007da18229fa8980b3d1c0fafc8d70233277a9f2f832",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6fd8f247a07d0369a7de8c75f8519c8a1e7e915f01bfc751375811b027242790",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "80bce7dd030d1b67c5804f0ba5960ab9d4a94982b4cb055147ee887482c6aeec",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-operation-legacy-reader.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c54a82d8db85861055fae8d6013234cbbc54bfd2c3451eb9e40276a04672c8f9",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/demand-driven-production-resolution-refresher.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "90ab245c4c96b754965fa09906c42fcb657e29047c76c269831850c9b34951bd",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a3430df10dde0c3c716d0872c19f87c4cfffd7df51e08f156e7d62bbaaadcff0",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c079ea8f9f3c1bd74a6a3c25503d8ed717e73c2f6809c6acfe600139b94b2a79",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e5508380aa94d40c68863a7eed048cecbde3886394912f30c4876976fc0f6aa5",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ecfcb1d09eadd36ebeccc2b37977fb14c1b3e83bf7b965d6a42d4e6b0a48238d",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4f302262eae09432779205a9b20a6c330f0c76f62a1d1088d02503f3f2669c20",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bbd27e8fa1b0826da088ee6c7391e41042b711cb9618c8947e4e36c877dee613",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c5c47dc2d8228dced8b4b330bd8ec2357b0c46a8180602c55a48a93029d74987",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3c9c5e39602e03e01af8eada92d8b419c87d769e0a6c74c6317ba90d0f9b4da2",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5145425ebef7ca4ad11c596df406a3b649730765008414f216f5efe12c2f1dfd",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8921a882a0ded5bd80b8b23bd42d1f0fe00bfc376eaf54b5da0ea7b8420e1e30",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "42f3ca4093b88a5ad030727f6670a58bd798faa030c76054339915d4c7287ba9",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c1004f3a02d8347e439b0a39aa3cbc96efdcdb9e8019751d8ae55233dc744260",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/operations-contract.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e1ca294865c1a0c9198f373011349e56db44f2765c17666c4f14414279f0bd1",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/pipeline-diagnostics.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5bc08d226dc39f26c3481d67bfd8104180be17511cf0f9300c09a2607d0d0c02",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/provider-execution-health.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9e0ccc8334462c46f2ad6c7f1c7305391f62a896753a4222ad0317dbcf2655f9",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/provider-execution-health.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9ecd30362770139ae0956118922b034357163c139283d87070222bae1cb1daa2",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/runtime-installer.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d75b715ab9a81df580c8cf95efde719038ee6af019490c883f8487f59c1f6a17",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ed70f2d7d6557d7c0ddb00b84a65a6b25f2fec46ff96f4e39cadce6f6758ad54",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "275c17b9c20191941fa55a54b10f5b35ab162890e146516d7927e1bfa4ce8027",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "38adcaec4dbce3bac4713d916a3dbc50860d98d4eb52a4eeeeb35afe44465584",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "96364339c3087bc3caea9d9f9bbee76386f921320ee93454662b4170a855d2b5",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ccc160ff6fbce9e1e1032694b538fafa7bdb79461490794eebfee9b048984e3a",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fe42460dc06d9f0219762fb3e4cffb14c4f7ffe8ac2bc9763dbc265519d92942",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "63215af1741b670db484f1c336646c77601e23be9ad50e52fca9c4b1d0c9ac74",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "88b05fdcaa7bce13dd104a5f7c7025021800edfc025559ff68bdb6e77ebc3027",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2bd98223f154dc71fd4acf52ab56dfec47ca149feddd74b0fa7a417b3a04f074",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a75f7513aa6ffd556a991bd33baeb7c1603db66a78457b805e01cc7de179145c",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/site/src/lib/catalog.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d7fa73f50a54118a4f747294f4b89eac6bf924ae2e74427d3c815ec0df0b509b",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/site/src/lib/poem-translations.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e70a092ac5cecc96cdb087574f65e24b58e16cdea045ce7c269d815e2fbfb788",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/source-adapter/src/author-inventory.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bdbcd12e7043e191728180f7965871f936ed40ad1d21ff33a812411e024a72d7",
+      "source": "eslint",
+      "ruleId": "@sarj/no-json-stringify-object-equality",
+      "path": "typescript/packages/crawler-local/src/runtime/pipeline-diagnostics.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "87a3372a4b097c08680b6d520a213f8cb269d974ac146aee4dcfb13c03cdff72",
+      "source": "eslint",
+      "ruleId": "@sarj/no-unsafe-test-double-cast",
+      "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
+      "count": 15
+    },
+    {
+      "fingerprint": "1c7c0ce96d62e9f265ab08ebd1078a57b5c294b5970a7af58d375245b5e9e8ec",
+      "source": "eslint",
+      "ruleId": "@sarj/prefer-typed-reflection",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-attempt-retention.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1235e061b813e7be793bedc73f81620d779760f990cf7a146ca27071db6db627",
+      "source": "eslint",
+      "ruleId": "@sarj/prefer-typed-reflection",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e73360fc5b2400bac0a4e5bc75f7cc9559f8d962c29d998f5f8822ba1fba5e73",
+      "source": "eslint",
+      "ruleId": "@sarj/prefer-zod-parse-output-type",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "564dbba298695ec3f245de2eef3b1bf6444af4ff8922c97fe9a46adde86da8db",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/consistent-type-imports",
+      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f977bced6e758ba2a2021668285b5ffd250e5f6c8dcd0e064acb07bd385917e8",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0c55a8693d883cbaa69688bf6333c80a3f85582d3c5f6218a373801c7a1cfd68",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5395c4edc2b07b63113c060bcd27ec08f545f47801af51241f9585c837277d1c",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5c482ea3b96a397b9fd3115dd9439577a7a0b76c93121e3a90523a476e75b732",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7e4482b9878c1e93879fbc7b74e6671f2d7d518d80b28b3e365d8673aa720f5e",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2267782c60348b2a3e41172dc3fe832cd1cb210a48917060b650d39766ee5f57",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "67e3cfedb878b78a083401b5ddaa166e80e2742325578bc46ebaa97ab1d4b307",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8bad44321cf47c683d76e6018384c13460f53421702c86aed8512252d798dbfc",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bd3261c76bc2639fbb712a6bb571fae637729d1ec35099c2ce0de446bc13cc54",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/__tests__/sqlite-query.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "87ab7dccf0e25408a8fc67e32506c52f82270d5737af7eab8da3926dfe81eecd",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8e1eb623f88057b577c765b755b138e881a9031c09d2c3b76909e02bc8933136",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "0ec433afc8f9cf1c96ad4b23f5c9f5d7cd926a43e7ba6d4b01172667308b01bc",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "2c9b599a66091ec32ca4c4dc2b1e4216df669de0a2aa8d28a8fe6e09ba6a91be",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cb743e19e543f06e846694053dadfa47401540a35c6a5f201e10eb868e694127",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "03ffba2013c39f3d04e4f315e9d334e0b174a65a3440d43be09f9af9d5051994",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "081092bac8114bc66a260ec0166bb95b3a5b33244c151a83c96ba77f485cd84a",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "41e26f78c964541fe58c6247ebbe30abe8bb258cb2897441cd712afe075ba05e",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "43b59cd5584d1c2f124654b98e4ee0bdecc2d90eb2cbb3f4a7d0a68e1ba33bd8",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "45a387c0aaa246866bc89ca633dd4281e774eb41e1b09a7884314da3e330a11b",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "4e129006bff0f8f05b3edb7d574b16cd6552403c21122ab39212480dbbfba59b",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "56fb46fc648fca386a02a67762c0a6919dda497ca8a20df8beeab1366f66ead7",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6abc639c3eb963755c9a864352f635727e35a3bcb5212569341afb8aa756f0ac",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8a4042a12347890a2c340fce2059e27bc91858cc9edebd1f250313c6469177d6",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9373e5dc0e842c2b02fb8bce4d3972bfc3b9c0761df8b31e115a44e516ec1f3a",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a4bddf1abe76be0124ed504942aebe6d7160c7a7fe4140fddf9b56d06b1dc189",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b41201f56ffbcfa0bd1e7ad982f3d0d6d4db57c507ef45782da3e9a4211609aa",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b4cb514e1b8c90fd96aad1dcf7f82b7242d3e2a66792d83c63c67a2799fcd726",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c491b5f8c7ac3d6465283dbb4a9863acdfa5f5b286a3110787b6f1a979bafad6",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c696d66615e2a17be8ed861a07d0084d63f1853cffbc3b8b2923ec450940bef9",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "c740ccdc50715ffa163f1fa0663998942c772a7431755738389291801c0ede5a",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "dd8bb7c9350b8bc3660a2ce7a8c3f0ede79c291bc4155a69d9f316e0e2a8fe35",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f172f3eaab178487075f258e6969276df5fc3d5ead01f80aac8d839feb5a5b86",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "17d2c9965114e125b04dd84f582ab00d052a03f9daabf432d216ff6d58a1dfb0",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "265c3a5e27d3c0462f7cba9f354c6f8409faab23fbe5eda6537fad194fd38b6b",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "30ed027dda6d8eed2a9c0c87952ee5304ea6e1c2ec832e2ffc091b3cd16b1d2b",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "31bfe378e62278b6bbc86a2be8d7042c132b057b80df23d0759230cef2158034",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4af8eb0d2b2ac12ecb4a768c573382da4061e664da691f898698c63a5732e445",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "519e438b8048dba5866f6804309f7295d53d06ded79a475923fe9582e204c6f2",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5b386eaf2bc69a55b53b8c43e5e9e73525b208fd16b7036a6ff4f8a75d343489",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6cdfdb37a96f03057eb6277d97f5e57e14dda63d795af767063397ce94cebf72",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6dfe3e8d7e47a4308415d67c5b0788e074fead8c97f430585380a857887134c5",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6e43733a269460098622ec503d87ca37c389cf6c2e41b743f7fbde743a3664cf",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a123ffa7dac3758bd68ac54daf72c3d5b86467e6cdaaf0e73dd44b1c6ecd80ac",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b1b5c4272d55fd240fd8366b6ffe91a56bc66df7dadd8cab0d7ce3bb10014b72",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b313a50c40b95f94523d3057c02f30ff2ee04ff5ed95c1050f5f2200bd1a0987",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b344291d6cb1f75e0163d29d1cb1ebebe3c6734fb6d4ae5b747fbf1d875d1675",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c911373bd0236bae5cbfd8329c715fe709c0fa7bdaf7958a10dedda318f34e10",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "cfb37c767fddeb56bfba69ec1af6f80284c8708d059afb8ab422cb1a6d0c6733",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "dc7d48fbda198f8aa4013ccb849ea5873053dec041b1af5e0d3fd4bd64780258",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e09b323545ce6f76f2a3d9849d0dfe856f741e53c8c669028a67a7abdc3d9651",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/scoped-production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d6e403881bcc9d0e3fbffd65c9fbab75c347343d8844b4ba285779e2a7a5d175",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/site/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "73784a8344e09264aac04f9a7d9767623dd5e20594d8e77480e3c8654c228d6d",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/no-empty-object-type",
+      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "aff4dc51444deefb78cc26791ac408d716d4e910bd01cac2880464e9b7821c13",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/no-empty-object-type",
+      "path": "typescript/packages/site/cloudflare-env.d.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "5ceda1cea3aad80f94472ce38e04fab6038f7f9a4c03412d369b950efcf10e29",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-iso/src/corpus-import.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5b58da9219fcaa103c76f3350063ae1e31dc5350ff0d9a9e128af6cc4f68c7ac",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-iso/src/enrichment.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "067560160f4ea03b5ecabb05dcbfadc2d6d7193ffa746b2a00132154fd2ea3f2",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-iso/src/models/text.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0c752a6f9a3ae11fa53c23ed0f726428f087bc68b881664de5c1ee8696c1433b",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-iso/src/production-resolution.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b0084cc2ce8a904a3a01758b315de1a036e6f6490856b9f49a0e23a323aae0a2",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-iso/src/source-bound-publication.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "10a44ba97832041074582288c40a997797d05577615428d881183a528ef2bb81",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3171d2a3c89d1bd5ffa11264cf9a8925d7c78952a43e2ce0d099f5b6264601ee",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/site/src/lib/catalog.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fcf8caedb0653852a0784785aaa0368c2b5fb4e60a7b79c6ea379f3b5c05d6b4",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/site/src/lib/snapshot-contract.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fa151d25f2da76142a73d0946a1aedfc8db91cee1c33c93149d2544b20b6a981",
+      "source": "eslint",
+      "ruleId": "no-control-regex",
+      "path": "typescript/packages/source-adapter/src/profile.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1f12eff0a55c480f1b605884e1e9546990411bd12ffe8f336473c1211b929027",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "97e8217c330fdd1ba17a18fc2638b6f7b7c790f186d3bd0a1ee8cb2022f45c4e",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/app/src/lib/cloudflare.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1c02ae7b7e54eb76a6dea48acce54592bcb84c1bc64e1d93f1f6aec5d718c56f",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "89e7071c66c7d7d7389d7006cf373d801702bd39cb159d2708c5f953628facf4",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5321b6c676d0e267a676c38907f754b9bcb91a86d612f5401d3d4fcb724053fd",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "273e836a1d4bbb5187b870c41b48709f73f7bd32b562f2d99f4e98c199366444",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "e2684410594153d527e530ac1355888046a03d40685bb775d43f55c00036685b",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-chaos.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8e25c8b382849737aeb17e0b11465814ead60d969f29c4c86e416b5958812183",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/unified-rig-integration.test.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "488c3174a0ae94cdf5c9b859ebdd7e32dd4cca9af350660291d4700f9f5b1a1a",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 8
+    },
+    {
+      "fingerprint": "0245f085e81859f90ad497f51c4948853743dbd35b3cdbf430d12122e23b361e",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "a83bbc746a8eb08c6ef0a6a73e9d6eca19b221dc83282b785d83578da4ea2ce9",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-credential-observation.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b93a208dfae76c6d3a3ea7f887a6f5cf17489f234667d28d6cffedc1e7ab31a8",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 9
+    },
+    {
+      "fingerprint": "5de2de8228b61296e9b41e1b9d1beb575eef38be39d2eb9e39f5387ebe6bb154",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "39c9afc1ff96c4be36c751c3fbf6b6a31635bde1b90bc05750338e56db82e715",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "1280d5008aa4dada7adef3bd08747e408443512d55f4f8c964f190a3122bb110",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "825b2154da15d422fb75dd00e64f73002ed0bf2e76ccad8b4d5639110237f8c1",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/sqlite-query.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "b598241d73b90bd0588fe86d60545c0effcc81531751658c81284356f8182e73",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/persistence/work-key.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "53812977efca79b1310b7fcece487a0a8e898fca1b651300fd6a4904b3022f76",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/publication/publication-auth-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4ab38a47d70a8075a720fc6dc33d9c1c25936a60c19276ee863fce5888f359dc",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/publication/publication-client.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "562fcdd2c5968d0234f931aca6750ec7dcbeb8e4ffbfe90e346bf507ff7c7cc2",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "bea1c58defda6628f930692662914fcb279d6dc2417bb29b987cde09dd0f9d35",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/jsonl-logger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "c456ef00174480a563c902bccb8d2b1c09563cf46af380ef6efd08a3c1c8be77",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
+      "count": 7
+    },
+    {
+      "fingerprint": "16d3fc5729f5cf13070795ba2b6b41cb65e03757a9f195066c4e6fccb74e6680",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "aebd4a375ad2a69b54ca110ee6a78cca344ddb535b02e155db875034d6809542",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/resource-pressure.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "fba6946640506e44332430668fdaa250d4beaddf3b1c013bac613325cf054265",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/runtime-installer.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f1860bdb5f98e94aa75e7bd2dd04e1747391ef6d89ccc524256642e8d240bc06",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "6f0be0ca5d1db2eda94182b20ca858a52a0bcf976337f5d1621be2d8523a2f51",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 3
+    },
+    {
+      "fingerprint": "16d96fde52d5111b99e33d0b8065bcec4ab1f05a0f1b74b0da99a0af0d433e2e",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-iso/src/source-bound-publication.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "cbb3408ed3eeb48e72a48d6e3fe5679e908657a4e84927dd819dc8254f88c301",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "113a8ceaf510d92ebc12810f74cc17854f9a0b826367dadd940f5317a097007c",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 5
+    },
+    {
+      "fingerprint": "66a47ab970eeddc45a0cef13c9b8b79cd80615878e779be1b4ead0e141c003f5",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9a790242e41610b9ee30281238808f72e11e9d36899e88196e4e22e7ac1d144d",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "807ed723277257daff9118f50f2732cc2101010b40e9ef62d6ec3e6d13ffd462",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/site/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e9390af788c17fc3835e64b36ad785f5a8ebe32b481b3bc70fd645c63ff3a9e1",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/site/src/lib/catalog.ts",
+      "count": 6
+    },
+    {
+      "fingerprint": "baf72816cc114ebc1ef6ce0e4028558d502466aec1e1b120e1032735b3a6ac43",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/source-adapter/src/hash.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "e7941b48fb0ed5088d750617d2fbedf136e9a9d6321246af365b1ca873cdd493",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/crawler-local/scripts/finalize-build.mjs",
+      "count": 1
+    },
+    {
+      "fingerprint": "5834f3b38a9615f217b35173c82446c0763fb831ad7043bb1a1086f5a453d82b",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/site/astro.config.mjs",
+      "count": 1
+    },
+    {
+      "fingerprint": "3c0ca070d07bb867f3783a7b6b6ffa902e24d6133ca739b1f4757a90cd5091fa",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/site/src/scripts/index-filter.js",
+      "count": 1
+    },
+    {
+      "fingerprint": "b215fe75527a9a5b427c5a823cfe63c52524183b4a989a61ff442f58a253dcde",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/site/src/scripts/index-filter.js",
+      "count": 5
+    },
+    {
+      "fingerprint": "d72ccfea2d1bda816e9f440ee21314ebc6141d0b455c6d4163e80ad4edc8476b",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/site/src/scripts/index-filter.js",
+      "count": 1
+    },
+    {
+      "fingerprint": "ea64ad61edbec6ec72c0981f868be919f46634e447d0679b53ca15bac2c4710c",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/packages/site/src/scripts/index-filter.js",
+      "count": 3
+    },
+    {
+      "fingerprint": "34f80dcd7ab5176dc8c0cb3cba13e5d5cba1b2eeb9f2e77707fd6e991f248b53",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/scripts/select-production-resolution-fingerprint.mjs",
+      "count": 3
+    },
+    {
+      "fingerprint": "d3cbb7e16b3a29d3b986b6bc4e4934d262f114019e0e0d2c7541261be822c59a",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/scripts/verify-production-d1-identity.mjs",
+      "count": 2
+    },
+    {
+      "fingerprint": "f4bc947e78f35f4e6182ff122d0b4755de58d968fbb2add5c65d9515c1278524",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/scripts/verify-production-resolution.mjs",
+      "count": 2
+    },
+    {
+      "fingerprint": "285466aa1627ae1610399d401457a74cb1de2be6b3e30e6661eae9257fb9551a",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/scripts/verify-publication-identity.mjs",
+      "count": 2
+    },
+    {
+      "fingerprint": "b1e93a7602c5b5c6e92a6f63ed9ae0be6499a19181a9e3a203094bbed93c8b0a",
+      "source": "eslint",
+      "ruleId": "no-unsafe-finally",
+      "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "ae0adcbcdb8e944ed48f84bca6fe5a4b132a869f38508288c7f61ec641a049fc",
+      "source": "eslint",
+      "ruleId": "no-unsafe-finally",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "06dea168da86058d6d30c569b146d93b3e8c39821294047bf866f922d054e45c",
+      "source": "eslint",
+      "ruleId": "no-unsafe-finally",
+      "path": "typescript/packages/crawler-local/src/runtime/supervisor.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b3b309bcf51f34d223fb49543246d0c31cb648f82ea8303d685593a1b8256adc",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0fdfbae25bfa1599ca862b4b2ec7b3d46dc11c520c0b0bbbec40c2dfa222a403",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0ed11f59b0c89a2be054db33371953a73ca68d20f59498dace94dd2c3699e7d8",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8d6e7ed7fe7fd8ca8a643a64bc854ea8076d971dd4dad2c20baa7cea2192e574",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8680ccd7f47f2eb8b329005c76e2e6f9803ccd410bdae3f98f2ebe9d96c6cb04",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "a842d3dbcdc4afae0cfe2ee0f24d8be12fe26149854d3a022a63291fd1727b12",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/runtime/runtime-installer.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ca090096c9729655df835e3bd498d07ba1bd18833302aef0d414a3e3dc3c672b",
+      "source": "eslint",
+      "ruleId": "no-useless-escape",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2e3ae5b0cdf304c2755c2ec7187d43e3515a97587564905f3d49259f0de0051f",
+      "source": "eslint",
+      "ruleId": "perfectionist/sort-interfaces",
+      "path": "typescript/packages/app/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9449ff803e5bd1d94d0b23df83ae049a351d858945866bca999cbeda6a4aa5c3",
+      "source": "eslint",
+      "ruleId": "perfectionist/sort-interfaces",
+      "path": "typescript/packages/site/cloudflare-env.d.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ccb5edf36bb7f7d13f955d889b2483a280b83f1405c0c75795083ef046b3f7f1",
+      "source": "eslint",
+      "ruleId": "preserve-caught-error",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "b7eff77a6a6322d644b9c4fde1ad3bdac6b2d0c8f5549594ffa863fe8ee9f8fe",
+      "source": "eslint",
+      "ruleId": "preserve-caught-error",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "91422381d3f9e371ac8cab1ec80ac1c41f1ac70afa1472f1dfb30f0d14ba3613",
+      "source": "eslint",
+      "ruleId": "preserve-caught-error",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "130c2284196e32968f5bc232e5f5b871a5d1bdd3d90917c5084c751036c09225",
+      "source": "eslint",
+      "ruleId": "preserve-caught-error",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7ae4f86260eb28606a6b701707498c977ca32bada1f5b6746378406f6571fb14",
+      "source": "eslint",
+      "ruleId": "preserve-caught-error",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7d2ec8cb6becbe3e08c8446e36b8ac597f80bb3593cf808db7d47bb74a83ea4b",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "615d0c8846d9ca81dea882e89683537b6bf2aa6ffba8a59987b6032618936ddd",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9961afbff24b412e05ca58515fa299ca807a4dc98f9450abda809f93398e4a32",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ba034d3e0b50c784a2fe072969bb63638429436a308d2eb1c90dce7913627741",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "b70b58c747f8652bf1109ac6e13f0057f04cd9dadfc3ed7d7227f6ad669911f9",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9f3ecb0edfe8421aa59fe75e9b5c8a8ff4684e9ee291aeb1872e3663a49c5b49",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e3fa2f74f0ff40d526504a2162cdea3eb1bb9744648920d28506ab1582fe7ea",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "4c04fedb4115d38ac35d60c2362156ef4f5ae52da19592343a66b7d20775bb75",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "ffa8cc3b4cb188f93164b97951174e6c17e4fc7c0e07e33ad5f718f38e881dd2",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "c8a2c7a35814aebe68d11416d95734c5611d1cbea84798c5d90e1a2e35b052ae",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/source-adapter/src/parse.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2671c0a576897b28b0b1e134bdaae55a4803a6fa224ab434dd21c62e637c1a3f",
+      "source": "eslint",
+      "ruleId": "unicorn/no-computed-property-existence-check",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "3e9542bd7d9883bf519aa2c7b204b986cbbce4bd7bc1ec673f21d38d1e2b4951",
+      "source": "eslint",
+      "ruleId": "unicorn/no-computed-property-existence-check",
+      "path": "typescript/packages/crawler-local/src/persistence/sqlite-query.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "acb6a9e5f1fa27ca4d51e9bdb8c4efac4e9be6eb107a67c92ef88e609d497551",
+      "source": "eslint",
+      "ruleId": "unicorn/no-computed-property-existence-check",
+      "path": "typescript/packages/crawler-local/src/persistence/work-key.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "6a77667b826ff9026927ff6fe213664279924a706f6d71855a6326a9e29506a2",
+      "source": "eslint",
+      "ruleId": "unicorn/no-computed-property-existence-check",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "fa277a2780b481411065bfddf76b77cf7d1f04097f636bf285dfa173501ab2f7",
+      "source": "eslint",
+      "ruleId": "unicorn/no-computed-property-existence-check",
+      "path": "typescript/packages/site/src/scripts/index-filter.js",
+      "count": 2
+    },
+    {
+      "fingerprint": "8afe2c23f6ca3d0dc5bb0f939e15cc76404486f4b1e1d3999b93560d24222b5c",
+      "source": "eslint",
+      "ruleId": "unicorn/no-object-as-default-parameter",
+      "path": "typescript/packages/app/src/app/api/corpus-import/route.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "7ac418e3bf12e3beaf42d2ad55965ae8b7f5984b1113bae6825ad03a5bd131ec",
+      "source": "eslint",
+      "ruleId": "unicorn/no-object-as-default-parameter",
+      "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "486b879dac5c19895fcfe0f98037d59c2b2f2614dd2c1f7507288f17db1440d2",
+      "source": "eslint",
+      "ruleId": "unicorn/no-object-as-default-parameter",
+      "path": "typescript/packages/crawler-local/src/__tests__/production-resolution-demand-cache.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "0b762ae2f9fd5fc6218e716f69a4cb698be63278b933d275dd00661c8076dd41",
+      "source": "eslint",
+      "ruleId": "unicorn/no-object-as-default-parameter",
+      "path": "typescript/packages/precedent-node/src/services/__tests__/production-resolution-reader.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "cb7794dbb9fa82bc4af222b6c9b3a8022ea3bdc3c306ab721482abb111788c34",
+      "source": "sarj-sql-lint",
+      "ruleId": "no-duplicate-index",
+      "path": "typescript/packages/app/migrations/0037_retire_legacy_translation_tasks.sql",
+      "count": 1
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import process from "node:process";
+import { URL } from "node:url";
 
 const repositoryRoot = new URL("../../", import.meta.url);
 const [configuration, configurator, workflow] = await Promise.all([
@@ -9,7 +11,7 @@ const [configuration, configurator, workflow] = await Promise.all([
     "utf8",
   ),
   readFile(
-    new URL(".github/scripts/configure-ops-secrets.mjs", repositoryRoot),
+    new URL("typescript/scripts/configure-ops-secrets.mjs", repositoryRoot),
     "utf8",
   ),
   readFile(new URL(".github/workflows/deploy.yml", repositoryRoot), "utf8"),
@@ -31,7 +33,7 @@ for (const [binding, environmentName] of requiredSecrets) {
   assert.match(
     workflow,
     new RegExp(
-      `${environmentName}: \\$\\{\\{ secrets\\.${environmentName} \\}\\}`,
+      String.raw`${environmentName}: \$\{\{ secrets\.${environmentName} \}\}`,
     ),
   );
 }
@@ -115,5 +117,5 @@ for (const [name, value] of [
 ]) {
   const result = validate({ [name]: value });
   assert.notEqual(result.status, 0, `${name} must fail closed`);
-  assert.doesNotMatch(result.stderr, new RegExp(value.replaceAll("/", "\\/")));
+  assert.doesNotMatch(result.stderr, new RegExp(value.replaceAll("/", String.raw`\/`)));
 }

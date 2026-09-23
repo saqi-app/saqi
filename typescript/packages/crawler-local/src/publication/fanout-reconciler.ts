@@ -2092,8 +2092,8 @@ class RetryableFanoutError extends Error {
 }
 
 class TerminalFanoutError extends Error {
-  constructor(code: string) {
-    super(code);
+  constructor(code: string, options?: ErrorOptions) {
+    super(code, options);
     this.name = "TerminalFanoutError";
   }
 }

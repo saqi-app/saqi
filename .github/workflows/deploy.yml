@@ -50,7 +50,7 @@ jobs:
 
       - name: Test secret configuration contract
         working-directory: .
-        run: node .github/scripts/configure-ops-secrets.test.mjs
+        run: node typescript/scripts/configure-ops-secrets.test.mjs
 
       - name: Resolve previous successful production deployment
         id: deployment-base
@@ -158,7 +158,7 @@ jobs:
         run: >-
           yarn workspace @saqi/app db:execute --remote --json
           --command "SELECT COUNT(*) AS applied FROM d1_migrations WHERE name = '0037_retire_legacy_translation_tasks.sql'"
-          | node ../.github/scripts/verify-retirement-migration.mjs
+          | node scripts/verify-retirement-migration.mjs
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
@@ -172,7 +172,7 @@ jobs:
 
       - name: Configure authenticated operations secrets
         if: steps.changes.outputs.app == 'true'
-        run: node ../.github/scripts/configure-ops-secrets.mjs
+        run: node scripts/configure-ops-secrets.mjs
         env:
           CF_CACHE_PURGE_TOKEN: ${{ secrets.CF_CACHE_PURGE_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}

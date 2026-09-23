@@ -1,6 +1,6 @@
 # Managed by `code-standards setup`; commit this file.
 schema = 4
-bundle = "7.14.8"
+bundle = "7.29.0"
 profile = "application"
 rule_profile = "all"
 
@@ -18,3 +18,6 @@ kotlin = "."
 
 [hooks]
 manager = "pre-commit"
+
+[baseline]
+diagnostics = "diagnostic-baseline.json"

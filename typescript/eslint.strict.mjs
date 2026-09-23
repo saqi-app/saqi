@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import react from "eslint-plugin-react";
 import { fixupPluginRules } from "@eslint/compat";
@@ -32,7 +33,6 @@ const TYPE_PROJECT_SKIPPED_DIRECTORIES = new Set([
   "build",
   "coverage",
   "dist",
-  "lib",
   "node_modules",
   "vendor",
 ]);
@@ -81,10 +81,66 @@ const UNTYPED_RULE_OVERRIDES = Object.fromEntries(
     .filter(([, rule]) => rule.meta?.docs?.requiresTypeChecking === true)
     .map(([name]) => [`@typescript-eslint/${name}`, "off"]),
 );
+const UNTYPED_DYNAMIC_EXECUTION_RULES = {
+  "no-implied-eval": "error",
+  "no-new-func": "error",
+};
 const DEFAULT_SYNTAX_ONLY_CONFIG_FILES = [
   "**/vite.config.ts",
   "**/.dependency-cruiser.{js,cjs,mjs,ts,cts,mts}",
   "**/eslint.config*.{js,cjs,mjs,ts,cts,mts}",
+];
+const SYNTAX_ONLY_NAMING_CONVENTION = [
+  "error",
+  {
+    selector: "variable",
+    modifiers: ["const", "global"],
+    filter: {
+      regex:
+        "^(Route|action|clientAction|clientLoader|config|csr|dynamic|dynamicParams|entries|fetchCache|handle|headers|instant|links|loader|maxDuration|meta|metadata|partial|prefetch|preferredRegion|prerender|revalidate|runtime|shouldRevalidate|ssr|trailingSlash|viewport)$",
+      match: true,
+    },
+    format: null,
+  },
+  {
+    // Type-free analysis cannot distinguish function-valued constants.
+    selector: "variable",
+    modifiers: ["const", "global"],
+    format: ["camelCase", "PascalCase", "UPPER_CASE"],
+    leadingUnderscore: "allow",
+  },
+  {
+    selector: [
+      "classProperty",
+      "objectLiteralProperty",
+      "typeProperty",
+      "classMethod",
+      "objectLiteralMethod",
+      "typeMethod",
+      "classicAccessor",
+      "autoAccessor",
+      "enumMember",
+    ],
+    modifiers: ["requiresQuotes"],
+    format: null,
+  },
+  {
+    selector: "default",
+    format: ["camelCase"],
+    leadingUnderscore: "allow",
+    trailingUnderscore: "allow",
+    filter: { regex: "^(UNSAFE_|__)", match: false },
+  },
+  {
+    selector: "variable",
+    format: ["camelCase", "UPPER_CASE", "PascalCase"],
+    leadingUnderscore: "allow",
+  },
+  { selector: "typeLike", format: ["PascalCase"] },
+  { selector: "import", format: ["camelCase", "PascalCase", "UPPER_CASE"] },
+  { selector: "objectLiteralProperty", format: null },
+  { selector: "typeProperty", format: null },
+  { selector: "parameter", format: ["camelCase"], leadingUnderscore: "allow" },
 ];
 const TEST_FILES = [
   "**/*.{test,spec,e2e}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
@@ -101,6 +157,26 @@ const DEFAULT_BUN_TEST_FILES = [
   "**/bun/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
 ];
 const SUPPORTED_TEST_FRAMEWORKS = new Set(["vitest", "bun", "node", "testing-library", "playwright"]);
+
+// typescript-eslint's strict presets assume ESLint's recommended preset is
+// composed before them: the later TypeScript configs disable compiler-owned
+// duplicates while leaving syntax/runtime correctness rules active. Introduce
+// the newly inherited rules at warning so fleet findings can be calibrated
+// before a separate promotion release.
+const ESLINT_RECOMMENDED_WARNING_CONFIG = {
+  ...js.configs.recommended,
+  name: "sarj/eslint-recommended-warning",
+  rules: Object.fromEntries(
+    Object.keys(js.configs.recommended.rules).map((rule) => [rule, "warn"]),
+  ),
+};
+
+// Prefer expression bodies whenever an arrow contains only a return. Unlike
+// unicorn/consistent-arrow-return-style, this does not expand a multiline
+// expression or object literal into an explicit `return` block.
+const ESLINT_CONCISION_ADVISORY_RULES = {
+  "arrow-body-style": ["warn", "as-needed"],
+};
 
 // Unicorn ships a broad rule set. The enabled subset below was selected by
 // evaluating each non-deprecated rule for correctness, runtime compatibility,
@@ -188,6 +264,7 @@ const UNICORN_CORRECTNESS_RULES = {
   "unicorn/no-new-array": "error",
   "unicorn/no-new-buffer": "error",
   "unicorn/no-nonstandard-builtin-properties": "error",
+  "unicorn/no-object-as-default-parameter": "error",
   "unicorn/no-object-methods-with-collections": "error",
   "unicorn/no-optional-chaining-on-undeclared-variable": "error",
   "unicorn/no-redundant-comparison": "error",
@@ -220,9 +297,11 @@ const UNICORN_CORRECTNESS_RULES = {
   "unicorn/no-unsafe-dom-html": "error",
   "unicorn/no-unsafe-promise-all-settled-values": "error",
   "unicorn/no-unsafe-property-key": "error",
+  "unicorn/no-unsafe-sqlite-interpolation": "error",
   "unicorn/no-unsafe-string-replacement": "error",
   "unicorn/no-unused-array-method-return": "error",
   "unicorn/no-useless-boolean-cast": "error",
+  "unicorn/no-useless-coercion": "error",
   "unicorn/no-useless-collection-argument": "error",
   "unicorn/no-useless-compound-assignment": "error",
   "unicorn/no-useless-concat": "error",
@@ -350,6 +429,31 @@ const UNICORN_MODERNISATION_RULES = {
   "unicorn/prefer-while-loop-condition": "error",
 };
 
+// Explicitly approved consistency/concision trial. These remain warnings until
+// fixes are proven idempotent and semantics-preserving on pinned consumer
+// corpora. Logical assignment excludes judgment-heavy if-statement rewrites;
+// iteration uses guards so its fixer agrees with the type-aware nullish rule.
+const UNICORN_CONCISION_ADVISORY_RULES = {
+  "unicorn/single-line-block-comment-style": ["warn", "single-line"],
+  "unicorn/logical-assignment-operators": [
+    "warn",
+    "always",
+    { enforceForIfStatements: false },
+  ],
+  "unicorn/prefer-single-object-destructuring": "warn",
+  "unicorn/iteration-fallback-style": ["warn", "guard"],
+};
+
+// Semantic advisories require local intent to resolve. Dynamic property reads
+// can mean either value access or ownership, while custom Error hierarchies may
+// deliberately expose a non-native constructor contract. Keep both visible but
+// non-blocking until consumer fixes establish that the upstream guidance is
+// uniformly correct.
+const UNICORN_SEMANTIC_ADVISORY_RULES = {
+  "unicorn/custom-error-definition": "warn",
+  "unicorn/no-computed-property-existence-check": "warn",
+};
+
 // One actionable line instead of N x M "Definition for rule ... was not found".
 // Self-maintaining: it re-derives the required names from the objects above, so
 // adding a rule that a pinned consumer's plugin lacks fails loudly at config
@@ -357,6 +461,8 @@ const UNICORN_MODERNISATION_RULES = {
 const missingUnicornRules = [
   ...Object.keys(UNICORN_CORRECTNESS_RULES),
   ...Object.keys(UNICORN_MODERNISATION_RULES),
+  ...Object.keys(UNICORN_CONCISION_ADVISORY_RULES),
+  ...Object.keys(UNICORN_SEMANTIC_ADVISORY_RULES),
 ]
   .map((key) => key.slice("unicorn/".length))
   .filter((name) => !(name in unicorn.rules));
@@ -415,16 +521,11 @@ const compatibleReact = fixupPluginRules(react);
 // (`SKIP_DIR_NAMES` in `sarj_python_lint/__main__.py`), so the two halves of the
 // same standard disagreed; this closes that gap rather than inventing a policy.
 //
-// `lib/` is included deliberately and is the only entry that can shadow authored
-// code. It is the conventional Babel/tsc output directory for a published
-// package, which is where the 21,284 came from. A repo that keeps SOURCE in
-// `lib/` re-enables it in its own `eslint.config.mjs` override block, which is
-// what that block is for:
-//     { ignores: ["!lib/**"] }
+// `lib/` commonly contains authored code. Packages emitting into it must
+// explicitly ignore their output directory in the repository configuration.
 const BUILD_OUTPUT_IGNORES = [
   "**/dist/**",
   "**/build/**",
-  "**/lib/**",
   "**/out/**",
   "**/esm/**",
   "**/cjs/**",
@@ -493,6 +594,7 @@ export function createConfig(options = {}) {
   // per-file entry that ignores nothing.
   { ignores: BUILD_OUTPUT_IGNORES },
 
+  ESLINT_RECOMMENDED_WARNING_CONFIG,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
 
@@ -585,6 +687,10 @@ export function createConfig(options = {}) {
           fixStyle: "inline-type-imports",
         },
       ],
+      "@typescript-eslint/consistent-type-exports": [
+        "error",
+        { fixMixedExportsWithInlineTypeSpecifier: true },
+      ],
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/consistent-type-assertions": [
         "error",
@@ -618,6 +724,21 @@ export function createConfig(options = {}) {
           leadingUnderscore: "allow",
         },
         {
+          selector: [
+            "classProperty",
+            "objectLiteralProperty",
+            "typeProperty",
+            "classMethod",
+            "objectLiteralMethod",
+            "typeMethod",
+            "classicAccessor",
+            "autoAccessor",
+            "enumMember",
+          ],
+          modifiers: ["requiresQuotes"],
+          format: null,
+        },
+        {
           selector: "default",
           format: ["camelCase"],
           leadingUnderscore: "allow",
@@ -641,7 +762,7 @@ export function createConfig(options = {}) {
         { selector: "typeProperty", format: null },
         {
           selector: "parameter",
-          format: ["camelCase", "snake_case"],
+          format: ["camelCase"],
           leadingUnderscore: "allow",
         },
       ],
@@ -706,7 +827,10 @@ export function createConfig(options = {}) {
       "@typescript-eslint/no-invalid-void-type": "error",
       "@typescript-eslint/no-unnecessary-template-expression": "error",
       "@typescript-eslint/no-import-type-side-effects": "error",
+      "@typescript-eslint/no-unnecessary-qualifier": "error",
+      "@typescript-eslint/no-useless-empty-export": "error",
       "@typescript-eslint/array-type": "error",
+      "@typescript-eslint/default-param-last": "error",
       "prefer-object-has-own": "error",
       // `no-else-return` used to sit here. It is gone because
       // `unicorn/no-useless-else` (enabled below) is a strict superset: it flags
@@ -718,16 +842,26 @@ export function createConfig(options = {}) {
         "error",
         { validStrategies: ["ternary", "coerce"] },
       ],
-      "react/no-unstable-nested-components": "error",
+      // react-hooks/static-components is the compiler-aware authority.
+      "react/no-unstable-nested-components": "off",
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/rules-of-hooks": "error",
-      // Runtime correctness rules that do not require enabling React Compiler.
+      // Enforce the complete pinned react-hooks recommended-latest surface.
       "react-hooks/error-boundaries": "error",
+      "react-hooks/config": "error",
+      "react-hooks/gating": "error",
       "react-hooks/globals": "error",
       "react-hooks/immutability": "error",
+      "react-hooks/incompatible-library": "error",
+      "react-hooks/preserve-manual-memoization": "error",
       "react-hooks/purity": "error",
       "react-hooks/refs": "error",
+      "react-hooks/set-state-in-effect": "error",
       "react-hooks/set-state-in-render": "error",
+      "react-hooks/static-components": "error",
+      "react-hooks/unsupported-syntax": "error",
+      "react-hooks/use-memo": "error",
+      "react-hooks/void-use-memo": "error",
       // These rules cannot distinguish a raw inline style from the CSS custom
       // properties their own message recommends for dynamic utility values.
       // Semantic-color and design-system rules remain the style authorities.
@@ -753,6 +887,10 @@ export function createConfig(options = {}) {
       "react/style-prop-object": "error",
       "react/button-has-type": "error",
       "react/jsx-boolean-value": ["error", "never"],
+      "react/jsx-curly-brace-presence": [
+        "error",
+        { props: "never", children: "never", propElementValues: "always" },
+      ],
 
       "unicorn/consistent-function-scoping": "error",
       // Kebab-case filenames. unicorn handles most framework shapes for free:
@@ -808,12 +946,22 @@ export function createConfig(options = {}) {
       // The unicorn 72 expansion, declared and explained above the config.
       ...UNICORN_CORRECTNESS_RULES,
       ...UNICORN_MODERNISATION_RULES,
+      ...ESLINT_CONCISION_ADVISORY_RULES,
+      ...UNICORN_CONCISION_ADVISORY_RULES,
+      ...UNICORN_SEMANTIC_ADVISORY_RULES,
 
       "zod/prefer-enum-over-literal-union": "error",
       // A type hand-written beside the Zod schema it restates drifts when the
       // schema changes. Requiring an identical shape keeps the diagnostic tied
       // to structural evidence instead of name correlation.
       "@sarj/prefer-zod-infer": "error",
+      // Parse-return contracts require exact type evidence before the local
+      // schema can own the blocking return contract.
+      "@sarj/prefer-zod-parse-output-type": "error",
+      // Only the semantics-preserving array order is checked: an outer
+      // default already handles undefined, while `.default().optional()` is
+      // intentionally left alone because it can still return undefined.
+      "@sarj/no-redundant-optional-array-default": "error",
       "@sarj/interface-contract-members-private": "error",
       "@sarj/prefer-ecmascript-private-members": "error",
 
@@ -861,7 +1009,7 @@ export function createConfig(options = {}) {
       // Range and whole-file disables turn every line between two comments
       // into an unaudited suppression scope. Keep suppression ownership at the
       // exact statement: non-suppression directives remain valid, but only
-      // eslint-disable-line and eslint-disable-next-line may disable rules.
+      // Only the two line-local disable forms may disable rules.
       "@eslint-community/eslint-comments/no-use": [
         "error",
         {
@@ -904,6 +1052,10 @@ export function createConfig(options = {}) {
       "no-restricted-syntax": [
         "error",
         {
+          selector: "UnaryExpression[operator='typeof']:not([parent.type='BinaryExpression'][parent.operator=/^(===|!==|==|!=)$/][parent.right.type='Literal'][parent.right.value='undefined']):not([parent.type='BinaryExpression'][parent.operator=/^(===|!==|==|!=)$/][parent.left.type='Literal'][parent.left.value='undefined'])",
+          message: "Avoid runtime typeof representation checks. Preserve a known domain type or validate external input with the existing schema. Existence checks against \"undefined\" and TypeScript type queries remain allowed.",
+        },
+        {
           selector: "CallExpression[callee.property.name='forEach']",
           message: "Prefer a for-of loop over forEach.",
         },
@@ -917,11 +1069,11 @@ export function createConfig(options = {}) {
         {
           paths: [
             // BEGIN GENERATED LIBRARY POLICY
-            {"message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky.", "name": "request"},
-            {"message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky.", "name": "node-fetch"},
-            {"message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky.", "name": "cross-fetch"},
-            {"message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky.", "name": "isomorphic-fetch"},
-            {"message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky.", "name": "axios"},
+            {"message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch.", "name": "request"},
+            {"message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch.", "name": "node-fetch"},
+            {"message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch.", "name": "cross-fetch"},
+            {"message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch.", "name": "isomorphic-fetch"},
+            {"message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch.", "name": "axios"},
             {"message": "LIB102: Standards standardizes date utilities on date-fns; migration is not API-compatible. Replace with date-fns.", "name": "moment"},
             {"message": "LIB102: Standards standardizes date utilities on date-fns; migration is not API-compatible. Replace with date-fns.", "name": "dayjs"},
             {"message": "LIB103: Standards standardizes collection utilities on Remeda and native APIs. Replace with remeda.", "name": "lodash"},
@@ -964,11 +1116,11 @@ export function createConfig(options = {}) {
           ],
           patterns: [{"group": ["*/index", "*/index.ts"]},
             // BEGIN GENERATED LIBRARY POLICY
-            {"group": ["request/*"], "message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky."},
-            {"group": ["node-fetch/*"], "message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky."},
-            {"group": ["cross-fetch/*"], "message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky."},
-            {"group": ["isomorphic-fetch/*"], "message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky."},
-            {"group": ["axios/*"], "message": "LIB101: Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing. Replace with ky."},
+            {"group": ["request/*"], "message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch."},
+            {"group": ["node-fetch/*"], "message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch."},
+            {"group": ["cross-fetch/*"], "message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch."},
+            {"group": ["isomorphic-fetch/*"], "message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch."},
+            {"group": ["axios/*"], "message": "LIB101: Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration. Replace with native fetch."},
             {"group": ["moment/*"], "message": "LIB102: Standards standardizes date utilities on date-fns; migration is not API-compatible. Replace with date-fns."},
             {"group": ["dayjs/*"], "message": "LIB102: Standards standardizes date utilities on date-fns; migration is not API-compatible. Replace with date-fns."},
             {"group": ["lodash/*"], "message": "LIB103: Standards standardizes collection utilities on Remeda and native APIs. Replace with remeda."},
@@ -1004,14 +1156,29 @@ export function createConfig(options = {}) {
       ],
 
       "object-shorthand": ["error", "always"],
+      "no-extra-bind": "error",
+      "no-undef-init": "error",
+      "no-useless-computed-key": "error",
+      "no-useless-rename": "error",
+      "no-useless-return": "error",
+      "no-eval": ["error", { allowIndirect: false }],
+      "no-prototype-builtins": "error",
       "no-return-await": "error",
-      eqeqeq: ["error", "always"],
+      // Unicorn's guard-style iteration fix intentionally uses `value != null`
+      // to reject both null and undefined without changing truthiness semantics.
+      // ESLint documents this narrow null exception; every other loose
+      // comparison remains an error.
+      eqeqeq: ["error", "always", { null: "ignore" }],
       "no-await-in-loop": "error",
       "no-param-reassign": "error",
       "array-callback-return": "error",
       "no-fallthrough": "error",
       "no-console": ["error", { allow: ["warn", "error"] }],
       "prefer-const": "error",
+      "prefer-arrow-callback": [
+        "error",
+        { allowNamedFunctions: true, allowUnboundThis: true },
+      ],
       "prefer-template": "error",
       "no-var": "error",
       "no-shadow": "off",
@@ -1032,7 +1199,7 @@ export function createConfig(options = {}) {
       "@sarj/prefer-named-complex-return-type": "warn",
       "@sarj/prefer-module-level-refined-schema": "warn",
       "@sarj/prefer-multi-value-zod-literal": ["warn", { zodMajorVersion: 4 }],
-      "@sarj/prefer-named-callback-domain": "warn",
+      "@sarj/prefer-named-callback-domain": "error",
       "@sarj/prefer-node-crypto-hash": "warn",
       "@sarj/prefer-node-fs-promises": "warn",
       "@sarj/prefer-shared-zod-enum": "warn",
@@ -1052,12 +1219,15 @@ export function createConfig(options = {}) {
       "@sarj/no-log-only-catch": "error",
       "@sarj/no-bare-return-from-test-catch": "error",
       "@sarj/no-bespoke-api-case-conversion": "warn",
+      "@sarj/no-detached-global-fetch": "error",
+      "@sarj/no-json-stringify-object-equality": "warn",
       "@sarj/no-dangerously-allow-svg": "error",
       "@sarj/no-duplicate-lifecycle-refresh-listeners": "error",
       "@sarj/no-production-browser-source-maps": "error",
       "@sarj/no-router-refresh-polling": "error",
       "@sarj/no-server-env-in-client-component": "error",
       "@sarj/excessive-commentary": "warn",
+      "@sarj/no-excessive-cognitive-complexity": "error",
       "@sarj/no-long-comment": "error",
       "@sarj/no-vague-suppression-description": "error",
       "@sarj/no-generic-single-export-module": "error",
@@ -1071,6 +1241,17 @@ export function createConfig(options = {}) {
       "@sarj/no-secret-in-log": "error",
       "@sarj/no-hand-rolled-sleep": "error",
       "@sarj/no-hand-rolled-spinner": "error",
+      "@sarj/no-known-value-widening": "error",
+      "@sarj/no-broad-return-type": "error",
+      "@sarj/prefer-typed-reflection": "error",
+      "@sarj/no-conditional-empty-object-spread": "error",
+      "@sarj/no-reduce-accumulator-copy": "error",
+      "@sarj/require-button-accessible-name": "error",
+      "@sarj/require-svg-accessible-name": "error",
+      "@sarj/prefer-logical-tailwind-utilities": ["error", { enabled: false }],
+      "@sarj/no-unlocalized-jsx-text": ["error", { enabled: false }],
+      "@sarj/no-unlocalized-jsx-attributes": ["error", { enabled: false }],
+      "@sarj/no-unlocalized-toast": ["error", { enabled: false }],
       "@sarj/prefer-input-group-search": "error",
       "@sarj/prefer-millisecond-control-duration-schema": "warn",
       "@sarj/prefer-immutable-module-constant": "error",
@@ -1089,10 +1270,11 @@ export function createConfig(options = {}) {
       "@sarj/no-select-star": "error",
       "@sarj/no-zod-native-enum": "error",
       "@sarj/no-impossible-zod-literal-bounds": "error",
+      "@sarj/no-in-operator-on-built-in-collections": "error",
       "@sarj/prefer-module-level-constant": "error",
       "@sarj/prefer-module-level-schema": "error",
       "@sarj/prefer-non-nullable-collection": "error",
-      "@sarj/prefer-nullish-filter-predicate": "warn",
+      "@sarj/prefer-nullish-filter-predicate": "error",
       "@sarj/prefer-await-in-async-return": "error",
       "@sarj/no-sleep-in-test-body": "error",
       "@sarj/iac-source-coupled-test": "error",
@@ -1112,6 +1294,8 @@ export function createConfig(options = {}) {
       "@sarj/no-typed-doc-sections": "error",
       "@sarj/require-port-for-service": "error",
       "@sarj/no-unsafe-mock-casting": "error",
+      "@sarj/no-unsafe-test-double-cast": "error",
+      "@sarj/no-first-party-module-mock": "error",
       "@sarj/prefer-whole-object-assertion": "warn",
       "@sarj/duplicate-test-body": "error",
       "@sarj/test-loops-over-literal-cases": "error",
@@ -1120,6 +1304,10 @@ export function createConfig(options = {}) {
       // Storage policy requires explicit stateless-module boundaries.
       //   "@sarj/no-storage-in-stateless-modules": ["error", { modules: [...] }],
       ...(HAS_TYPE_PROJECT ? {} : UNTYPED_RULE_OVERRIDES),
+      ...(HAS_TYPE_PROJECT ? {} : UNTYPED_DYNAMIC_EXECUTION_RULES),
+      ...(HAS_TYPE_PROJECT
+        ? {}
+        : { "@typescript-eslint/naming-convention": SYNTAX_ONLY_NAMING_CONVENTION }),
     },
   },
 
@@ -1252,6 +1440,21 @@ export function createConfig(options = {}) {
           leadingUnderscore: "allow",
         },
         {
+          selector: [
+            "classProperty",
+            "objectLiteralProperty",
+            "typeProperty",
+            "classMethod",
+            "objectLiteralMethod",
+            "typeMethod",
+            "classicAccessor",
+            "autoAccessor",
+            "enumMember",
+          ],
+          modifiers: ["requiresQuotes"],
+          format: null,
+        },
+        {
           selector: "default",
           format: ["camelCase", "PascalCase"],
           leadingUnderscore: "allow",
@@ -1272,7 +1475,7 @@ export function createConfig(options = {}) {
         { selector: "typeProperty", format: null },
         {
           selector: "parameter",
-          format: ["camelCase", "snake_case"],
+          format: ["camelCase"],
           leadingUnderscore: "allow",
         },
       ],
@@ -1292,7 +1495,11 @@ export function createConfig(options = {}) {
           projectService: false,
         },
       },
-      rules: UNTYPED_RULE_OVERRIDES,
+      rules: {
+        ...UNTYPED_RULE_OVERRIDES,
+        ...UNTYPED_DYNAMIC_EXECUTION_RULES,
+        "@typescript-eslint/naming-convention": SYNTAX_ONLY_NAMING_CONVENTION,
+      },
     }]),
 
   // BEGIN GENERATED LIBRARY POLICY
@@ -1306,32 +1513,32 @@ export function createConfig(options = {}) {
             {
               "id": "LIB101",
               "module": "request",
-              "note": "Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing.",
-              "replacement": "ky"
+              "note": "Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration.",
+              "replacement": "native fetch"
             },
             {
               "id": "LIB101",
               "module": "node-fetch",
-              "note": "Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing.",
-              "replacement": "ky"
+              "note": "Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration.",
+              "replacement": "native fetch"
             },
             {
               "id": "LIB101",
               "module": "cross-fetch",
-              "note": "Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing.",
-              "replacement": "ky"
+              "note": "Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration.",
+              "replacement": "native fetch"
             },
             {
               "id": "LIB101",
               "module": "isomorphic-fetch",
-              "note": "Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing.",
-              "replacement": "ky"
+              "note": "Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration.",
+              "replacement": "native fetch"
             },
             {
               "id": "LIB101",
               "module": "axios",
-              "note": "Standards standardizes HTTP clients on Ky; review errors, retries, hooks, and response parsing.",
-              "replacement": "ky"
+              "note": "Use the platform-native fetch API; review errors, timeouts, retries, and response parsing during migration.",
+              "replacement": "native fetch"
             },
             {
               "id": "LIB102",

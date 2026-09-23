@@ -5,7 +5,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "astro build",
+    "build": "yarn docs:generate && astro build",
     "check": "astro check",
     "deploy:preview": "yarn build && wrangler deploy --config dist/server/wrangler.json",
     "deploy:production": "SAQI_WRANGLER_CONFIG=wrangler.production.jsonc yarn build && wrangler deploy --config dist/server/wrangler.json",

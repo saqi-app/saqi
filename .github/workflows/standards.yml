@@ -41,8 +41,5 @@ jobs:
         working-directory: "typescript"
       - name: Run standards
         env:
-          # A push can follow an intentional history cutover whose previous SHA
-          # no longer exists. Pull requests still use their merge base; pushes
-          # run the complete repository audit.
-          SARJ_STANDARDS_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          SARJ_STANDARDS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --trust-repository-code --format github
