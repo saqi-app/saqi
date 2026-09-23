@@ -23,6 +23,7 @@ export * from "./publication/fanout-reconciler.js";
 export * from "./publication/publication-auth-client.js";
 export * from "./publication/publication-client.js";
 export * from "./publication/publication-lane.js";
+export * from "./runtime/chrome-cdp-launchd-service.js";
 export * from "./runtime/jsonl-logger.js";
 export * from "./runtime/launchd-service.js";
 export * from "./runtime/operations-contract.js";

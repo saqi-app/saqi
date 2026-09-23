@@ -1,8 +1,5 @@
 import { SourceConfigurationSchema } from "@saqi/precedent-iso";
-import {
-  SourceAdapterProfileV1Schema,
-  type SourceConfiguration,
-} from "@saqi/source-adapter";
+import type { SourceConfiguration } from "@saqi/source-adapter";
 
 export type CliSourceInitialization = "environment" | "keychain" | "none";
 
@@ -19,11 +16,11 @@ const KEYCHAIN_MANAGED_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 const CONFIG_BOUND_LEDGER_COMMANDS: ReadonlySet<string> = new Set([
-  "doctor",
   "init",
   "resume-paid",
   "status",
   "verify",
+  "verify-source",
 ]);
 
 const SOURCE_INDEPENDENT_COMMANDS: ReadonlySet<string> = new Set([
@@ -31,6 +28,11 @@ const SOURCE_INDEPENDENT_COMMANDS: ReadonlySet<string> = new Set([
   "-h",
   "help",
   "health",
+  "install-cdp-browser-service",
+  "doctor",
+  "completion-plan",
+  "clear-source-failures",
+  "clear-source-stop",
   "fetch-resolution",
   "install-service",
   "install-runtime",
@@ -83,20 +85,11 @@ export async function loadCliSourceConfiguration(
   if (mode === "keychain") return options.loadManagedSource();
   const name = options.environment["SAQI_SOURCE_NAME"];
   const origin = options.environment["SAQI_SOURCE_BASE_URL"];
-  const rawProfile = options.environment["SAQI_SOURCE_ADAPTER_CONFIG"];
-  if (name === undefined && origin === undefined && rawProfile === undefined)
-    return null;
-  if (name === undefined || origin === undefined || rawProfile === undefined) {
+  if (name === undefined && origin === undefined) return null;
+  if (name === undefined || origin === undefined) {
     throw new Error(
-      "SAQI_SOURCE_NAME, SAQI_SOURCE_BASE_URL, and SAQI_SOURCE_ADAPTER_CONFIG must be configured together",
+      "SAQI_SOURCE_NAME and SAQI_SOURCE_BASE_URL must be configured together",
     );
   }
-  try {
-    return {
-      ...SourceConfigurationSchema.parse({ name, origin }),
-      profile: SourceAdapterProfileV1Schema.parse(JSON.parse(rawProfile)),
-    };
-  } catch {
-    throw new Error("SOURCE_ENVIRONMENT_CONFIGURATION_INVALID");
-  }
+  return SourceConfigurationSchema.parse({ name, origin });
 }

@@ -7,10 +7,8 @@ flowchart LR
   source_adapter["source-adapter: Pure, runtime-neutral source policies and projection parsers"]
   app --> precedent_iso
   app --> precedent_node
-  app --> source_adapter
   crawler_local --> precedent_iso
   crawler_local --> source_adapter
   precedent_node --> precedent_iso
-  precedent_node --> source_adapter
   site --> precedent_iso
   source_adapter --> precedent_iso

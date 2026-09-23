@@ -1,6 +1,15 @@
 import { hash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
-import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  stat,
+  unlink,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -9,15 +18,13 @@ import {
   AuthorInventoryPageSchema,
   type AuthorPoemManifestProjection,
   canonicalAuthorUrl,
-  canonicalInventoryUrl,
+  canonicalInventoryPaginationUrl,
   canonicalPoemUrl,
   currentSource,
-  currentSourceAdapterProfile,
   LIMITS,
   type PoemDetailProjection,
   PROJECTION_SCHEMA_VERSION,
-  renderSourcePath,
-  sourcePathValue,
+  SourceProjectionError,
 } from "@saqi/source-adapter";
 import {
   type BrowserContext,
@@ -32,15 +39,18 @@ import { z } from "zod";
 import type { AuthorInventoryPageBrowser } from "./author-inventory-lane.js";
 import type { CollectorBrowser } from "./collector.js";
 
-const FeedRecordSchema = z.record(z.string(), z.unknown());
-const FeedHtmlSchema = z.string();
-
 const NAVIGATION_TIMEOUT_MS = 60_000;
 const POEM_OPERATION_TIMEOUT_MS = 3 * NAVIGATION_TIMEOUT_MS;
-const AUTHOR_OPERATION_TIMEOUT_MS = 30 * NAVIGATION_TIMEOUT_MS;
+// A maximum-size author feed can require 2,000 requests at the mandatory
+// 13-second source gap (~7.2 hours). Keep the outer operation bounded without
+// making legitimate large authors mathematically impossible to complete.
+// Each navigation, challenge, profile lease, and shutdown remains separately
+// bounded by the much shorter limits below.
+const AUTHOR_OPERATION_TIMEOUT_MS = 8 * 60 * NAVIGATION_TIMEOUT_MS;
 const INVENTORY_OPERATION_TIMEOUT_MS = 3 * NAVIGATION_TIMEOUT_MS;
 const OPERATION_SHUTDOWN_GRACE_MS = 10_000;
 const CHALLENGE_RESOLUTION_TIMEOUT_MS = 60_000;
+const MAXIMUM_CHALLENGE_RESOLUTION_TIMEOUT_MS = 15 * 60_000;
 const CHALLENGE_POLL_INTERVAL_MS = 1_000;
 const AUTHOR_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024;
 const POEM_DOCUMENT_MAX_BYTES = 4 * 1024 * 1024;
@@ -51,10 +61,19 @@ const INLINE_SCRIPT_MAX_CANDIDATES = 16;
 const MAX_FEED_PAGES = 2_000;
 const COLLECTOR_MARKER_HEADER = "x-saqi-collector";
 const MINIMUM_SOURCE_GAP_MS = 13_000;
+const SOURCE_REQUEST_TELEMETRY_TIMEOUT_MS = 1_000;
 const PROFILE_LOCK_FILENAME = ".saqi-collector.lock";
 const CLOUDFLARE_CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
 const CLOUDFLARE_CHALLENGE_PATH_PREFIX = "/cdn-cgi/challenge-platform/";
 const CLOUDFLARE_TURNSTILE_PATH_PREFIX = "/turnstile/";
+const FREE_VERSE_LABELS: readonly string[] = Object.freeze([
+  "التفعيله",
+  "التفعيلة",
+  "شعر حر",
+  "قصيدة النثر",
+]);
+const CdpTargetSchema = z.looseObject({ type: z.string() });
+const CdpTargetListSchema = z.array(CdpTargetSchema);
 
 export interface FeedConfiguration {
   readonly cursor: string;
@@ -146,32 +165,49 @@ export class AbortableSerialQueue implements AbortableSerialQueuePort {
 
 export interface SourceBrowserOptions {
   readonly authorOperationTimeoutMs?: number;
+  readonly cdpEndpoint?: string;
+  readonly challengeResolutionTimeoutMs?: number;
   readonly executablePath?: string;
   readonly headless?: boolean;
   readonly inventoryOperationTimeoutMs?: number;
   readonly launchPersistentContext?: typeof chromium.launchPersistentContext;
   readonly minimumSourceGapMs?: number;
   readonly onManifestPass?: (certificate: ManifestPassCertificate) => void;
+  readonly onSourceRequest?: (
+    event: SourceRequestTelemetryEvent,
+  ) => Promise<void> | void;
   readonly poemOperationTimeoutMs?: number;
   readonly profileDirectory: string;
   readonly recycleAfter?: number;
   readonly shutdownGraceMs?: number;
 }
 
+export interface SourceRequestTelemetryEvent {
+  readonly outcome: "failed" | "succeeded";
+  readonly surface: "feed" | "navigation";
+}
+
 export interface ManifestPassCertificate {
   readonly count: number;
   readonly digest: string;
   readonly pass: 1 | 2;
-  readonly terminalCondition: "declared_count" | "feed_exhausted";
+  readonly terminalCondition:
+    "declared_count" | "feed_exhausted" | "pagination_exhausted";
 }
 
+export type AuthorPaginationState =
+  | { readonly kind: "absent" }
+  | { readonly kind: "next"; readonly href: string }
+  | { readonly kind: "terminal" };
+
 export class SourceChromeCollector
-  implements CollectorBrowser, AuthorInventoryPageBrowser
+  implements AuthorInventoryPageBrowser, CollectorBrowser
 {
   readonly #options: Required<
     Pick<
       SourceBrowserOptions,
       | "authorOperationTimeoutMs"
+      | "challengeResolutionTimeoutMs"
       | "headless"
       | "inventoryOperationTimeoutMs"
       | "minimumSourceGapMs"
@@ -189,6 +225,7 @@ export class SourceChromeCollector
     null;
   #operations = 0;
   #page: null | Page = null;
+  #permittedAuthorPageUrl: null | string = null;
   #poisoned: Error | null = null;
   #permittedFeedToken: null | string = null;
   #permittedFeedUrl: null | string = null;
@@ -199,6 +236,12 @@ export class SourceChromeCollector
     const minimumSourceGapMs = effectiveMinimumSourceGapMs(
       options.minimumSourceGapMs,
     );
+    if (
+      options.cdpEndpoint !== undefined &&
+      !isLoopbackCdpEndpoint(options.cdpEndpoint)
+    ) {
+      throw new Error("cdpEndpoint must be a root loopback HTTP URL");
+    }
     if (
       options.recycleAfter !== undefined &&
       (!Number.isSafeInteger(options.recycleAfter) || options.recycleAfter <= 0)
@@ -218,11 +261,32 @@ export class SourceChromeCollector
         throw new Error(`${name} must be a positive integer`);
       }
     }
+    if (
+      options.challengeResolutionTimeoutMs !== undefined &&
+      (!Number.isSafeInteger(options.challengeResolutionTimeoutMs) ||
+        options.challengeResolutionTimeoutMs < 1_000 ||
+        options.challengeResolutionTimeoutMs >
+          MAXIMUM_CHALLENGE_RESOLUTION_TIMEOUT_MS)
+    ) {
+      throw new Error(
+        "challengeResolutionTimeoutMs must be an integer between 1000 and 900000",
+      );
+    }
+    const challengeResolutionTimeoutMs =
+      options.challengeResolutionTimeoutMs ?? CHALLENGE_RESOLUTION_TIMEOUT_MS;
+    const additionalChallengeWaitMs = Math.max(
+      0,
+      challengeResolutionTimeoutMs - CHALLENGE_RESOLUTION_TIMEOUT_MS,
+    );
     this.#options = {
-      authorOperationTimeoutMs: AUTHOR_OPERATION_TIMEOUT_MS,
+      authorOperationTimeoutMs:
+        AUTHOR_OPERATION_TIMEOUT_MS + 2 * additionalChallengeWaitMs,
+      challengeResolutionTimeoutMs,
       headless: false,
-      inventoryOperationTimeoutMs: INVENTORY_OPERATION_TIMEOUT_MS,
-      poemOperationTimeoutMs: POEM_OPERATION_TIMEOUT_MS,
+      inventoryOperationTimeoutMs:
+        INVENTORY_OPERATION_TIMEOUT_MS + additionalChallengeWaitMs,
+      poemOperationTimeoutMs:
+        POEM_OPERATION_TIMEOUT_MS + additionalChallengeWaitMs,
       recycleAfter: 100,
       shutdownGraceMs: OPERATION_SHUTDOWN_GRACE_MS,
       ...options,
@@ -236,6 +300,15 @@ export class SourceChromeCollector
   ): Promise<SourceChromeCollector> {
     const collector = new SourceChromeCollector(options);
     await mkdir(options.profileDirectory, { mode: 0o700, recursive: true });
+    const profile = await lstat(options.profileDirectory);
+    if (!profile.isDirectory() || profile.isSymbolicLink()) {
+      throw new SourceBrowserError(
+        "SOURCE_PROFILE_INVALID",
+        "Chrome profile path must be a real directory",
+        false,
+      );
+    }
+    await chmod(options.profileDirectory, 0o700);
     await collector.#acquireProfileLock();
     return collector;
   }
@@ -264,6 +337,8 @@ export class SourceChromeCollector
             const author = canonicalAuthorUrl(authorValue);
             const page = await this.#readyPage(operationSignal);
             const passes: AuthorPoemManifestProjection[] = [];
+            const terminalConditions: ManifestPassCertificate["terminalCondition"][] =
+              [];
             for (let pass = 0; pass < 2; pass += 1) {
               // eslint-disable-next-line no-await-in-loop -- Each verification pass must navigate and checkpoint serially.
               const documentHtml = await this.#navigate(
@@ -280,6 +355,7 @@ export class SourceChromeCollector
                 operationSignal,
               );
               passes.push(result.projection);
+              terminalConditions.push(result.terminalCondition);
               this.#options.onManifestPass?.({
                 count: result.projection.poems.length,
                 digest: manifestDigest(result.projection),
@@ -291,7 +367,8 @@ export class SourceChromeCollector
             if (
               !first ||
               !second ||
-              manifestDigest(first) !== manifestDigest(second)
+              manifestDigest(first) !== manifestDigest(second) ||
+              terminalConditions[0] !== terminalConditions[1]
             ) {
               throw new SourceBrowserError(
                 "SOURCE_MANIFEST_UNSTABLE",
@@ -302,12 +379,16 @@ export class SourceChromeCollector
           },
         ),
       signal,
+      this.#options.authorOperationTimeoutMs,
+      "SOURCE_AUTHOR_OPERATION_TIMEOUT",
+      "Author manifest collection exceeded its browser queue wait deadline",
     );
   }
 
   // eslint-disable-next-line @typescript-eslint/member-ordering -- Public collection entrypoints remain adjacent for a readable adapter surface.
   async collectAuthorInventoryPage(
     inventoryValue: string,
+    expectedPage: number,
     signal: AbortSignal,
   ): Promise<AuthorInventoryPageProjection> {
     return this.#exclusive(
@@ -318,7 +399,7 @@ export class SourceChromeCollector
           "SOURCE_INVENTORY_OPERATION_TIMEOUT",
           "Author inventory collection exceeded its work deadline; browser shutdown was verified",
           async (operationSignal) => {
-            const inventory = canonicalInventoryUrl(inventoryValue);
+            const inventory = canonicalInventoryPaginationUrl(inventoryValue);
             const page = await this.#readyPage(operationSignal);
             await this.#navigate(
               page,
@@ -327,11 +408,14 @@ export class SourceChromeCollector
               operationSignal,
             );
             return AuthorInventoryPageSchema.parse(
-              await projectAuthorInventoryPage(page, inventory.page),
+              await projectAuthorInventoryPage(page, expectedPage),
             );
           },
         ),
       signal,
+      this.#options.inventoryOperationTimeoutMs,
+      "SOURCE_INVENTORY_OPERATION_TIMEOUT",
+      "Author inventory collection exceeded its browser queue wait deadline",
     );
   }
 
@@ -342,7 +426,7 @@ export class SourceChromeCollector
     signal: AbortSignal,
   ): Promise<{
     readonly projection: AuthorPoemManifestProjection;
-    readonly terminalCondition: "declared_count" | "feed_exhausted";
+    readonly terminalCondition: ManifestPassCertificate["terminalCondition"];
   }> {
     const initial = await projectManifest(page, authorHref, false);
     const poems = new Map(initial.poems.map((poem) => [poem.href, poem]));
@@ -353,10 +437,29 @@ export class SourceChromeCollector
         terminalCondition: "declared_count",
       };
     }
-    const configuration = extractFeedConfigurationFromDocument(
-      documentHtml,
-      authorHref,
-    );
+    const initialPaginationState = await projectAuthorPaginationState(page);
+    let configuration: FeedConfiguration;
+    try {
+      configuration = extractFeedConfigurationFromDocument(
+        documentHtml,
+        authorHref,
+      );
+    } catch (error) {
+      if (
+        error instanceof SourceBrowserError &&
+        error.code === "SOURCE_FEED_CONFIG_MISSING"
+      ) {
+        return this.#collectPaginatedAuthorPass(
+          page,
+          authorHref,
+          initial,
+          declaredCount,
+          signal,
+          initialPaginationState,
+        );
+      }
+      throw error;
+    }
     const seenCursors = new Set<string>();
     let cursor = configuration.cursor;
     let exhausted = false;
@@ -437,10 +540,60 @@ export class SourceChromeCollector
         throw new Error("Unreachable terminal feed");
       cursor = feed.nextCursor;
     }
-    if (declaredCount === null ? !exhausted : poems.size !== declaredCount) {
-      throw new SourceBrowserError(
-        "SOURCE_MANIFEST_NONTERMINAL",
-        "Author feed did not prove manifest completion",
+    if (
+      feedManifestNeedsPaginationFallback(declaredCount, poems.size, exhausted)
+    ) {
+      await this.#navigateAuthorPage(page, authorHref, signal);
+      const refreshedInitial = await projectManifest(page, authorHref, false);
+      const refreshedDeclaredCount = parseLooseCount(
+        refreshedInitial.declaredPoemCountText,
+      );
+      if (
+        declaredCount !== null &&
+        refreshedDeclaredCount !== null &&
+        refreshedDeclaredCount !== declaredCount
+      ) {
+        throw new SourceBrowserError(
+          "SOURCE_MANIFEST_COUNT_CHANGED",
+          "Refreshed author page changed the declared poem count",
+          false,
+        );
+      }
+      for (const poem of refreshedInitial.poems) {
+        const existing = poems.get(poem.href);
+        if (!existing) {
+          poems.set(poem.href, poem);
+        } else if (
+          existing.title !== poem.title ||
+          (existing.verseCountText !== null &&
+            poem.verseCountText !== null &&
+            parseLooseCount(existing.verseCountText) !==
+              parseLooseCount(poem.verseCountText))
+        ) {
+          throw new SourceBrowserError(
+            "SOURCE_FEED_PAGINATION_CONFLICT",
+            "Feed and refreshed pagination returned conflicting poem data",
+            false,
+          );
+        } else if (
+          existing.verseCountText === null &&
+          poem.verseCountText !== null
+        ) {
+          poems.set(poem.href, poem);
+        }
+      }
+      return this.#collectPaginatedAuthorPass(
+        page,
+        authorHref,
+        {
+          ...initial,
+          // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Runtime targets do not yet expose Iterator Helpers in TypeScript's configured library.
+          poems: [...poems.values()],
+        },
+        declaredCount,
+        signal,
+        initialPaginationState,
+        true,
       );
     }
     if (poems.size === 0 && declaredCount !== 0) {
@@ -461,6 +614,159 @@ export class SourceChromeCollector
     };
   }
 
+  async #collectPaginatedAuthorPass(
+    page: Page,
+    authorHref: string,
+    initial: AuthorPoemManifestProjection,
+    declaredCount: null | number,
+    signal: AbortSignal,
+    initialPaginationState: AuthorPaginationState,
+    allowCoveredPages = false,
+  ): Promise<{
+    readonly projection: AuthorPoemManifestProjection;
+    readonly terminalCondition: ManifestPassCertificate["terminalCondition"];
+  }> {
+    const poems = new Map(initial.poems.map((poem) => [poem.href, poem]));
+    const seenCursors = new Set<string>();
+    let expectedCount = declaredCount;
+    let paginationState = initialPaginationState;
+    const initialPaginationKind = paginationState.kind;
+    let next = paginationState.kind === "next" ? paginationState.href : null;
+    if (paginationState.kind === "absent" && expectedCount === null) {
+      throw new SourceBrowserError(
+        "SOURCE_MANIFEST_NONTERMINAL",
+        "Author page exposed neither a declared poem count nor an explicit next page",
+      );
+    }
+    let exhausted = paginationState.kind === "terminal";
+    for (
+      let request = 0;
+      next !== null && request < MAX_FEED_PAGES;
+      request += 1
+    ) {
+      throwIfAborted(signal);
+      const pagination = canonicalAuthorPaginationUrl(next, authorHref);
+      if (seenCursors.has(pagination.cursor)) {
+        throw new SourceBrowserError(
+          "SOURCE_PAGINATION_CURSOR_LOOP",
+          "Author pagination repeated a cursor",
+          false,
+        );
+      }
+      seenCursors.add(pagination.cursor);
+      // eslint-disable-next-line no-await-in-loop -- Cursor pages are source-paced and strictly ordered.
+      await this.#navigateAuthorPage(page, pagination.href, signal);
+      // eslint-disable-next-line no-await-in-loop -- Each page is projected before following its next cursor.
+      const projection = await projectManifest(page, authorHref, false);
+      const pageDeclaredCount = parseLooseCount(
+        projection.declaredPoemCountText,
+      );
+      if (pageDeclaredCount !== null) {
+        if (expectedCount !== null && pageDeclaredCount !== expectedCount) {
+          throw new SourceBrowserError(
+            "SOURCE_MANIFEST_COUNT_CHANGED",
+            "Author pagination changed the declared poem count",
+            false,
+          );
+        }
+        expectedCount = pageDeclaredCount;
+      }
+      const poemsBeforePage = poems.size;
+      for (const poem of projection.poems) {
+        const existing = poems.get(poem.href);
+        if (!existing) {
+          poems.set(poem.href, poem);
+        } else if (
+          existing.title !== poem.title ||
+          (existing.verseCountText !== null &&
+            poem.verseCountText !== null &&
+            parseLooseCount(existing.verseCountText) !==
+              parseLooseCount(poem.verseCountText))
+        ) {
+          throw new SourceBrowserError(
+            "SOURCE_PAGINATION_CONFLICT",
+            "Author pagination returned conflicting data for one poem",
+            false,
+          );
+        } else if (
+          existing.verseCountText === null &&
+          poem.verseCountText !== null
+        ) {
+          poems.set(poem.href, poem);
+        }
+      }
+      if (poems.size > LIMITS.poemsPerAuthor) {
+        throw new SourceBrowserError(
+          "SOURCE_MANIFEST_LIMIT",
+          "Author manifest reached its safety limit",
+          false,
+        );
+      }
+      if (
+        paginationPageNeedsProgress(
+          poemsBeforePage,
+          poems.size,
+          allowCoveredPages,
+        )
+      ) {
+        throw new SourceBrowserError(
+          "SOURCE_PAGINATION_NO_PROGRESS",
+          "Author pagination returned no new poems",
+          false,
+        );
+      }
+      if (expectedCount !== null && poems.size > expectedCount) {
+        throw new SourceBrowserError(
+          "SOURCE_MANIFEST_COUNT_EXCEEDED",
+          "Author pagination exceeded the declared poem count",
+          false,
+        );
+      }
+      if (expectedCount !== null && poems.size === expectedCount) {
+        next = null;
+        exhausted = true;
+        break;
+      }
+      // eslint-disable-next-line no-await-in-loop -- The next cursor belongs to the newly settled page.
+      paginationState = await projectAuthorPaginationState(page);
+      next = paginationState.kind === "next" ? paginationState.href : null;
+      exhausted = paginationState.kind === "terminal";
+    }
+    if (
+      !exhausted ||
+      (expectedCount !== null && poems.size !== expectedCount)
+    ) {
+      throw new SourceBrowserError(
+        "SOURCE_MANIFEST_NONTERMINAL",
+        `Author pagination did not prove manifest completion (initial=${initialPaginationKind}, last=${paginationState.kind}, pages=${String(seenCursors.size)}, collected=${String(poems.size)}, declared=${expectedCount === null ? "unknown" : String(expectedCount)})`,
+      );
+    }
+    if (poems.size === 0 && expectedCount !== 0) {
+      throw new SourceBrowserError(
+        "SOURCE_MANIFEST_UNVERIFIED_EMPTY",
+        "Empty manifest has no explicit zero count",
+      );
+    }
+    return {
+      projection: {
+        ...initial,
+        // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Serialized manifest output requires an ordinary array.
+        poems: [...poems.values()],
+        terminal: true,
+      },
+      terminalCondition:
+        expectedCount === null ? "pagination_exhausted" : "declared_count",
+    };
+  }
+
+  async #navigateAuthorPage(
+    page: Page,
+    href: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await this.#navigate(page, href, AUTHOR_DOCUMENT_MAX_BYTES, signal, href);
+  }
+
   async #fetchFeed(
     page: Page,
     configuration: FeedConfiguration,
@@ -468,6 +774,7 @@ export class SourceChromeCollector
     signal: AbortSignal,
   ): Promise<SourceFeedPage> {
     await this.#sourceGap(signal);
+    let outcome: SourceRequestTelemetryEvent["outcome"] = "failed";
     const expectedFeedUrl = feedRequestUrl(configuration, cursor);
     this.#permittedFeedToken = configuration.token;
     this.#permittedFeedUrl = expectedFeedUrl;
@@ -558,12 +865,15 @@ export class SourceChromeCollector
           `Author feed request failed before a valid response: ${message.slice(0, 1_000)}`,
         );
       }
-      return parseFeedHttpResult(result, configuration, cursor);
+      const parsed = parseFeedHttpResult(result, configuration, cursor);
+      outcome = "succeeded";
+      return parsed;
     } finally {
       this.#permittedFeedToken = null;
       this.#permittedFeedUrl = null;
       this.#lastSourceCompletedAt = Date.now();
       this.#operations += 1;
+      await this.#recordSourceRequest({ outcome, surface: "feed" });
     }
   }
 
@@ -619,6 +929,9 @@ export class SourceChromeCollector
           },
         ),
       signal,
+      this.#options.poemOperationTimeoutMs,
+      "SOURCE_POEM_OPERATION_TIMEOUT",
+      "Poem collection exceeded its browser queue wait deadline",
     );
   }
 
@@ -631,7 +944,19 @@ export class SourceChromeCollector
     }
     try {
       const browser = context.browser();
-      await context.close();
+      if (this.#options.cdpEndpoint) {
+        if (!browser) throw new Error("SOURCE_CDP_BROWSER_MISSING");
+        // Playwright's CDP handshake configures downloads on the default
+        // browser context. Some Chrome builds stop exposing that context once
+        // its final page target is closed, making every later reconnect fail
+        // with Browser.setDownloadBehavior / context-management errors. Keep
+        // one inert target across disconnects. The next attachment creates its
+        // routed page first, then reclaims this previous target.
+        await ensureCdpAnchorPage(context);
+        await browser.close({ reason: "SOURCE_COLLECTOR_CLOSED" });
+      } else {
+        await context.close();
+      }
       if (browser?.isConnected())
         throw new Error("SOURCE_BROWSER_DISCONNECT_UNPROVEN");
       await this.#resetBrowserState();
@@ -648,6 +973,7 @@ export class SourceChromeCollector
   async #resetBrowserState(): Promise<void> {
     this.#context = null;
     this.#page = null;
+    this.#permittedAuthorPageUrl = null;
     this.#permittedFeedToken = null;
     this.#permittedFeedUrl = null;
     this.#poisoned = null;
@@ -752,8 +1078,26 @@ export class SourceChromeCollector
   async #exclusive<T>(
     operation: () => Promise<T>,
     signal: AbortSignal,
+    maximumQueueWaitMs: number,
+    timeoutCode: string,
+    timeoutMessage: string,
   ): Promise<T> {
-    return this.#serial.run(operation, signal);
+    const deadline = AbortSignal.timeout(maximumQueueWaitMs);
+    const queueState = { acquired: false };
+    try {
+      return await this.#serial.run(
+        async () => {
+          queueState.acquired = true;
+          return operation();
+        },
+        AbortSignal.any([signal, deadline]),
+      );
+    } catch (error) {
+      if (deadline.aborted && !signal.aborted && !queueState.acquired) {
+        throw new SourceBrowserError(timeoutCode, timeoutMessage);
+      }
+      throw error;
+    }
   }
 
   async #navigate(
@@ -761,8 +1105,11 @@ export class SourceChromeCollector
     href: string,
     maximumBytes: number,
     signal: AbortSignal,
+    permittedAuthorPageUrl: null | string = null,
   ): Promise<string> {
     await this.#sourceGap(signal);
+    let outcome: SourceRequestTelemetryEvent["outcome"] = "failed";
+    this.#permittedAuthorPageUrl = permittedAuthorPageUrl;
     try {
       let response: null | Response;
       try {
@@ -783,16 +1130,36 @@ export class SourceChromeCollector
           `Browser navigation failed: ${cause.message.slice(0, 1_000)}`,
         );
       }
-      return await resolveNavigationDocument(
+      const document = await resolveNavigationDocument(
         page,
         response,
         href,
         maximumBytes,
         signal,
+        { timeoutMs: this.#options.challengeResolutionTimeoutMs },
       );
+      outcome = "succeeded";
+      return document;
     } finally {
+      this.#permittedAuthorPageUrl = null;
       this.#lastSourceCompletedAt = Date.now();
       this.#operations += 1;
+      await this.#recordSourceRequest({ outcome, surface: "navigation" });
+    }
+  }
+
+  async #recordSourceRequest(
+    event: SourceRequestTelemetryEvent,
+  ): Promise<void> {
+    try {
+      const callback = this.#options.onSourceRequest;
+      if (!callback) return;
+      await Promise.race([
+        callback(event),
+        delay(SOURCE_REQUEST_TELEMETRY_TIMEOUT_MS, undefined, { ref: false }),
+      ]);
+    } catch {
+      // Observability must never make a source request fail or stall collection.
     }
   }
 
@@ -800,6 +1167,11 @@ export class SourceChromeCollector
     if (this.#page === page) this.#page = null;
     if (page.isClosed()) return;
     try {
+      // Chrome can keep its CDP socket alive while dropping the default
+      // context after its final page closes. Preserve a replacement target so
+      // the next retry can reconnect instead of entering launch backoff.
+      if (this.#options.cdpEndpoint && this.#context)
+        await ensureCdpReplacementPage(this.#context, page);
       await page.close({ reason: "SOURCE_NAVIGATION_FAILED" });
     } catch (error) {
       const browser = this.#context?.browser();
@@ -836,29 +1208,47 @@ export class SourceChromeCollector
       let candidate: BrowserContext | null = null;
       this.#launchInProgress = true;
       try {
-        candidate = await launchPersistentContext(
-          this.#options.profileDirectory,
-          {
-            acceptDownloads: false,
-            ...(executable
-              ? { executablePath: executable }
-              : { channel: "chrome" }),
-            headless: this.#options.headless,
-            serviceWorkers: "block",
-            timeout: NAVIGATION_TIMEOUT_MS,
-          },
-        );
+        if (this.#options.cdpEndpoint) {
+          await ensureCdpBootstrapTarget(this.#options.cdpEndpoint);
+          const browser = await chromium.connectOverCDP(
+            this.#options.cdpEndpoint,
+            { timeout: NAVIGATION_TIMEOUT_MS },
+          );
+          candidate = browser.contexts()[0] ?? null;
+          if (candidate === null) {
+            await browser.close();
+            throw new Error("SOURCE_CDP_CONTEXT_MISSING");
+          }
+        } else {
+          candidate = await launchPersistentContext(
+            this.#options.profileDirectory,
+            {
+              acceptDownloads: false,
+              ...(executable
+                ? { executablePath: executable }
+                : { channel: "chrome" }),
+              headless: this.#options.headless,
+              serviceWorkers: "block",
+              timeout: NAVIGATION_TIMEOUT_MS,
+            },
+          );
+        }
         this.#initializingContext = candidate;
         candidate.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
-        await candidate.route("**/*", (route, request) =>
-          this.#restrictRequest(route, request),
-        );
+        if (!this.#options.cdpEndpoint) {
+          await candidate.route("**/*", (route, request) =>
+            this.#restrictRequest(route, request),
+          );
+        }
         throwIfAborted(signal);
         const activeContext = candidate;
         activeContext.on("close", () => {
           if (this.#context === activeContext) {
             this.#context = null;
             this.#page = null;
+            this.#permittedAuthorPageUrl = null;
+            this.#permittedFeedToken = null;
+            this.#permittedFeedUrl = null;
           }
         });
         this.#context = candidate;
@@ -896,9 +1286,25 @@ export class SourceChromeCollector
       }
     }
     if (!this.#page || this.#page.isClosed()) {
-      const [retained, ...extras] = this.#context.pages();
-      await Promise.all(extras.map((extra) => extra.close()));
-      const page = retained ?? (await this.#context.newPage());
+      let page: Page;
+      if (this.#options.cdpEndpoint) {
+        // The CDP browser intentionally outlives the crawler so challenge
+        // clearance survives. A hard process exit cannot close the page it
+        // owned, though, and repeated watchdog recovery would otherwise leak
+        // renderer tabs indefinitely. This profile is exclusively fenced by
+        // the collector lock, so reclaim every pre-attach page before taking
+        // ownership of the new routed page.
+        const orphanedPages = this.#context.pages();
+        page = await this.#context.newPage();
+        await page.route("**/*", (route, request) =>
+          this.#restrictRequest(route, request),
+        );
+        await reclaimCdpOrphanPages(orphanedPages);
+      } else {
+        const [retained, ...extras] = this.#context.pages();
+        await Promise.all(extras.map((extra) => extra.close()));
+        page = retained ?? (await this.#context.newPage());
+      }
       this.#page = page;
       page.on("crash", () => {
         if (this.#page === page) this.#page = null;
@@ -1020,6 +1426,16 @@ export class SourceChromeCollector
   }
 
   async #restrictRequest(route: Route, request: Request): Promise<void> {
+    if (
+      request.url() === this.#permittedAuthorPageUrl &&
+      request.method() === "GET" &&
+      request.resourceType() === "document" &&
+      request.isNavigationRequest() &&
+      request.frame().parentFrame() === null
+    ) {
+      await route.continue();
+      return;
+    }
     if (["xhr", "fetch"].includes(request.resourceType())) {
       let isFeed = false;
       try {
@@ -1045,15 +1461,94 @@ export class SourceChromeCollector
         this.#permittedFeedToken = null;
         this.#permittedFeedUrl = null;
         const {
-          [COLLECTOR_MARKER_HEADER]: _collectorMarker,
+          [COLLECTOR_MARKER_HEADER]: ignoredCollectorMarker,
           ...forwardedHeaders
         } = headers;
+        void ignoredCollectorMarker;
         await route.continue({ headers: forwardedHeaders });
         return;
       }
     }
     await restrictRequest(route, request);
   }
+}
+
+export interface CdpOrphanPage {
+  close(options: { readonly reason: string }): Promise<void>;
+  isClosed(): boolean;
+}
+
+export interface CdpAnchorContext {
+  newPage(): Promise<CdpOrphanPage>;
+  pages(): readonly CdpOrphanPage[];
+}
+
+export type CdpBootstrapResult = "created" | "existing";
+
+/**
+ * Chrome exposes no browser context over CDP until at least one page target
+ * exists. A dedicated Chrome process can therefore be healthy at
+ * /json/version while Playwright attachment still fails after its final tab
+ * was closed. Bootstrap a harmless blank page through Chrome's loopback-only
+ * discovery endpoint before attaching so retries can recover autonomously.
+ */
+export async function ensureCdpBootstrapTarget(
+  endpoint: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CdpBootstrapResult> {
+  if (!isLoopbackCdpEndpoint(endpoint))
+    throw new Error("SOURCE_CDP_ENDPOINT_FORBIDDEN");
+
+  const listResponse = await fetchImpl(new URL("json/list", endpoint), {
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!listResponse.ok) throw new Error("SOURCE_CDP_TARGET_LIST_FAILED");
+  const targets = CdpTargetListSchema.safeParse(await listResponse.json());
+  if (!targets.success) throw new Error("SOURCE_CDP_TARGET_LIST_INVALID");
+  if (targets.data.some((target) => target.type === "page")) {
+    return "existing";
+  }
+
+  const createUrl = new URL("json/new", endpoint);
+  createUrl.search = encodeURIComponent("about:blank");
+  const createResponse = await fetchImpl(createUrl, {
+    method: "PUT",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!createResponse.ok) throw new Error("SOURCE_CDP_TARGET_CREATE_FAILED");
+  const created = CdpTargetSchema.safeParse(await createResponse.json());
+  if (!created.success || created.data.type !== "page") {
+    throw new Error("SOURCE_CDP_TARGET_CREATE_INVALID");
+  }
+  return "created";
+}
+
+export async function ensureCdpAnchorPage(
+  context: CdpAnchorContext,
+): Promise<void> {
+  if (context.pages().some((page) => !page.isClosed())) return;
+  await context.newPage();
+}
+
+export async function ensureCdpReplacementPage(
+  context: CdpAnchorContext,
+  retiringPage: CdpOrphanPage,
+): Promise<void> {
+  if (context.pages().some((page) => page !== retiringPage && !page.isClosed()))
+    return;
+  await context.newPage();
+}
+
+export async function reclaimCdpOrphanPages(
+  orphanedPages: readonly CdpOrphanPage[],
+): Promise<void> {
+  await Promise.all(
+    orphanedPages
+      .filter((orphan) => !orphan.isClosed())
+      .map((orphan) =>
+        orphan.close({ reason: "SOURCE_COLLECTOR_ORPHAN_RECLAIMED" }),
+      ),
+  );
 }
 
 export function effectiveMinimumSourceGapMs(requested?: number): number {
@@ -1064,6 +1559,25 @@ export function effectiveMinimumSourceGapMs(requested?: number): number {
     throw new Error("minimumSourceGapMs must be a non-negative integer");
   }
   return Math.max(MINIMUM_SOURCE_GAP_MS, requested ?? MINIMUM_SOURCE_GAP_MS);
+}
+
+export function isLoopbackCdpEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "http:" &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === "" &&
+      Number(url.port) >= 1_024 &&
+      Number(url.port) <= 65_535
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function isAllowedBrowserRequest(request: {
@@ -1085,7 +1599,6 @@ export function isAllowedBrowserRequest(request: {
   if (isAllowedCloudflareChallengeRequest(request, url)) return true;
   if (url.origin !== currentSource().origin) return false;
   if (request.isNavigationRequest) {
-    if (url.search !== "") return false;
     try {
       canonicalAuthorUrl(url.href);
       return true;
@@ -1095,7 +1608,7 @@ export function isAllowedBrowserRequest(request: {
         return true;
       } catch {
         try {
-          canonicalInventoryUrl(url.href);
+          canonicalInventoryPaginationUrl(url.href);
           return true;
         } catch {
           return false;
@@ -1146,82 +1659,35 @@ function isAllowedCloudflareChallengeRequest(
   );
 }
 
-function isCloudflareChallengeUrl(value: string): boolean {
-  if (!URL.canParse(value)) return false;
-  const url = new URL(value);
-  return (
-    url.origin === CLOUDFLARE_CHALLENGE_ORIGIN &&
-    (url.pathname.startsWith(CLOUDFLARE_CHALLENGE_PATH_PREFIX) ||
-      url.pathname.startsWith(CLOUDFLARE_TURNSTILE_PATH_PREFIX))
-  );
-}
-
-function isChallengeResourceUrl(value: string): boolean {
-  if (!URL.canParse(value)) return false;
-  const url = new URL(value);
-  return (
-    (url.origin === currentSource().origin ||
-      url.origin === CLOUDFLARE_CHALLENGE_ORIGIN) &&
-    (url.pathname.startsWith(CLOUDFLARE_CHALLENGE_PATH_PREFIX) ||
-      url.pathname.startsWith(CLOUDFLARE_TURNSTILE_PATH_PREFIX))
-  );
-}
-
 async function projectAuthorInventoryPage(
   page: Page,
   expectedPage: number,
 ): Promise<AuthorInventoryPageProjection> {
-  const profile = currentSourceAdapterProfile();
-  const expectedNextPath = renderSourcePath(
-    profile.routes.inventoryPath,
-    "page",
-    String(expectedPage + 1),
-  );
   return page.evaluate(
-    ({
-      authorContainerSelector,
-      authorLinkSelector,
-      expectedNextPath: serializedExpectedNextPath,
-      expectedPage: serializedExpectedPage,
-      maximum,
-      nextPageLinkSelector,
-      poemCountLabels,
-      schemaVersion,
-    }) => {
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const countText = (text: string, labels: readonly string[]) => {
-        const normalized = text.normalize("NFC");
-        for (const label of labels) {
-          const at = normalized.indexOf(label);
-          if (at < 0) continue;
-          const before = normalized.slice(Math.max(0, at - 64), at);
-          const digits = /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*$/u.exec(before)?.[0];
-          if (digits) return `${digits}${label}`;
-        }
-        return null;
-      };
+    ({ expectedPage: serializedExpectedPage, maximum, schemaVersion }) => {
       const authors = new Map<
         string,
         { href: string; name: string; poemCountText: null | string }
       >();
       const links = [
-        ...document.querySelectorAll<HTMLAnchorElement>(authorLinkSelector),
+        ...document.querySelectorAll<HTMLAnchorElement>('a[href*="/cat-"]'),
       ];
       for (const link of links) {
         const rawHref = link.getAttribute("href") ?? "";
         const url = new URL(rawHref, location.origin);
         if (
           url.origin !== location.origin ||
-          url.search !== "" ||
-          url.hash !== ""
+          !/^\/cat-(?:[1-9]\d*|[^/?#]+)$/u.test(url.pathname)
         )
           continue;
         const name = link.textContent.trim();
         if (!name) continue;
         const container =
-          link.closest(authorContainerSelector) ?? link.parentElement;
+          link.closest("article, li, .card, [class*='author'], .row > div") ??
+          link.parentElement;
         const text = (container?.textContent ?? "").slice(0, 2_000);
-        const poemCountText = countText(text, poemCountLabels);
+        const poemCountText =
+          /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:قصيدة|قصائد)/u.exec(text)?.[0] ?? null;
         const existing = authors.get(url.pathname);
         if (
           existing &&
@@ -1236,59 +1702,158 @@ async function projectAuthorInventoryPage(
         if (authors.size > maximum)
           throw new Error("SOURCE_AUTHOR_INVENTORY_AUTHOR_LIMIT");
       }
-      const hasNext = [
-        ...document.querySelectorAll<HTMLAnchorElement>(nextPageLinkSelector),
-      ].some((link) => {
+      const expectedNextPath = `/authers-${String(serializedExpectedPage + 1)}`;
+      const legacyNext = [
+        ...document.querySelectorAll<HTMLAnchorElement>(
+          "a[rel='next'], .pagination a[href]",
+        ),
+      ].find((link) => {
         try {
           return (
-            new URL(link.href, location.origin).pathname ===
-            serializedExpectedNextPath
+            new URL(link.href, location.origin).pathname === expectedNextPath
           );
         } catch {
           return false;
         }
       });
+      const loaders = [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-infinite-scroll][data-infinite-key="authors-directory"]',
+        ),
+      ];
+      if (loaders.length > 1)
+        throw new Error("SOURCE_AUTHOR_INVENTORY_PAGINATOR_MULTIPLE");
+      const cursorNext =
+        loaders[0]?.getAttribute("data-next-url")?.trim() ?? "";
+      const nextPageHref = cursorNext || legacyNext?.href || null;
       return {
         // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Serialized browser callbacks target runtimes without Iterator Helpers.
         authors: [...authors.values()],
         challengeDetected: false,
         kind: "author_inventory_page" as const,
-        nextPageHref: hasNext ? serializedExpectedNextPath : null,
+        nextPageHref,
         page: serializedExpectedPage,
         schemaVersion,
         sourceUrl: location.href,
-        terminal: !hasNext,
+        terminal: nextPageHref === null,
       };
     },
     {
       expectedPage,
-      expectedNextPath,
       maximum: LIMITS.authorsPerInventory,
-      authorContainerSelector: profile.dom.authorContainerSelector,
-      authorLinkSelector: profile.dom.authorLinkSelector,
-      nextPageLinkSelector: profile.dom.nextPageLinkSelector,
-      poemCountLabels: profile.labels.poemCount,
       schemaVersion: PROJECTION_SCHEMA_VERSION,
     },
   );
 }
 
 function isFeedUrlStructure(url: URL): boolean {
-  const profile = currentSourceAdapterProfile();
-  const authorId = sourcePathValue(
-    profile.routes.feedPath,
-    "authorId",
-    url.pathname,
-  );
   return (
-    authorId !== undefined &&
-    (profile.feed.authorIdFormat === "slug" || /^[1-9]\d*$/u.test(authorId)) &&
+    /^\/cat-[1-9]\d*\/poems-feed$/.test(url.pathname) &&
     url.searchParams.size === 2 &&
-    url.searchParams.getAll(profile.feed.cursorParameter).length === 1 &&
-    url.searchParams.get(profile.feed.cursorParameter) !== "" &&
-    url.searchParams.getAll(profile.feed.tokenParameter).length === 1 &&
-    url.searchParams.get(profile.feed.tokenParameter) !== ""
+    url.searchParams.getAll("cursor").length === 1 &&
+    url.searchParams.get("cursor") !== "" &&
+    url.searchParams.getAll("token").length === 1 &&
+    url.searchParams.get("token") !== ""
   );
+}
+
+export function canonicalAuthorPaginationUrl(
+  value: string,
+  authorValue: string,
+): { readonly cursor: string; readonly href: string } {
+  if (value.length > LIMITS.url)
+    throw new SourceBrowserError(
+      "SOURCE_PAGINATION_URL_INVALID",
+      "Author pagination URL is oversized",
+      false,
+    );
+  const author = canonicalAuthorUrl(authorValue);
+  let candidate: URL;
+  try {
+    candidate = new URL(value, author.href);
+  } catch {
+    throw new SourceBrowserError(
+      "SOURCE_PAGINATION_URL_INVALID",
+      "Author pagination URL is invalid",
+      false,
+    );
+  }
+  const authorUrl = new URL(author.href);
+  const cursor = candidate.searchParams.get("cursor");
+  if (
+    candidate.origin !== authorUrl.origin ||
+    candidate.pathname !== authorUrl.pathname ||
+    candidate.username !== "" ||
+    candidate.password !== "" ||
+    candidate.hash !== "" ||
+    candidate.searchParams.size !== 1 ||
+    candidate.searchParams.getAll("cursor").length !== 1 ||
+    cursor === null ||
+    !/^[A-Za-z0-9_-]{1,2048}$/.test(cursor)
+  ) {
+    throw new SourceBrowserError(
+      "SOURCE_PAGINATION_URL_INVALID",
+      "Author pagination URL is outside the expected cursor boundary",
+      false,
+    );
+  }
+  return { cursor, href: candidate.href };
+}
+
+async function projectAuthorPaginationState(
+  page: Page,
+): Promise<AuthorPaginationState> {
+  const projection = await page.evaluate(() => {
+    const paginators = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-infinite-scroll][data-infinite-key="poet-poems"]',
+      ),
+    ];
+    return {
+      count: paginators.length,
+      nextUrl: paginators[0]?.getAttribute("data-next-url")?.trim() ?? "",
+    };
+  });
+  return authorPaginationStateFromProjection(projection);
+}
+
+export function authorPaginationStateFromProjection(projection: {
+  readonly count: number;
+  readonly nextUrl: string;
+}): AuthorPaginationState {
+  if (!Number.isSafeInteger(projection.count) || projection.count < 0) {
+    throw new SourceBrowserError(
+      "SOURCE_PAGINATION_PROJECTION_INVALID",
+      "Author paginator projection is invalid",
+      false,
+    );
+  }
+  if (projection.count > 1) {
+    throw new SourceBrowserError(
+      "SOURCE_PAGINATION_URL_AMBIGUOUS",
+      "Author page exposes multiple poem paginators",
+      false,
+    );
+  }
+  if (projection.count === 0) return { kind: "absent" };
+  if (projection.nextUrl === "") return { kind: "terminal" };
+  return { href: projection.nextUrl, kind: "next" };
+}
+
+export function feedManifestNeedsPaginationFallback(
+  declaredCount: null | number,
+  collectedCount: number,
+  exhausted: boolean,
+): boolean {
+  return declaredCount === null ? !exhausted : collectedCount !== declaredCount;
+}
+
+export function paginationPageNeedsProgress(
+  poemsBeforePage: number,
+  poemsAfterPage: number,
+  allowCoveredPage: boolean,
+): boolean {
+  return !allowCoveredPage && poemsAfterPage === poemsBeforePage;
 }
 
 export function extractFeedConfigurationFromInlineScripts(
@@ -1297,7 +1862,6 @@ export function extractFeedConfigurationFromInlineScripts(
 ): FeedConfiguration {
   const author = canonicalAuthorUrl(authorValue);
   const sourceUrl = new URL(author.href);
-  const profile = currentSourceAdapterProfile();
   let bytes = 0;
   const bounded: string[] = [];
   for (const script of scripts) {
@@ -1311,7 +1875,7 @@ export function extractFeedConfigurationFromInlineScripts(
     }
     bounded.push(script);
   }
-  if (!bounded.some((script) => script.includes(profile.feed.endpointMarker))) {
+  if (!bounded.some((script) => script.includes("poems-feed"))) {
     throw new SourceBrowserError(
       "SOURCE_FEED_CONFIG_MISSING",
       "Author page has no trusted inline feed configuration",
@@ -1319,22 +1883,17 @@ export function extractFeedConfigurationFromInlineScripts(
   }
   const joined = bounded.join("\n");
   // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Runtime compatibility requires an ordinary array before array transforms.
-  const endpoints = [...joined.matchAll(/["']([^"'\n]{1,2048})["']/gu)]
+  const endpoints = [
+    ...joined.matchAll(/["']([^"'\n]{1,2048}poems-feed)["']/gu),
+  ]
     .map((match) => match[1]?.replaceAll(String.raw`\/`, "/") ?? "")
-    .filter((value) => value.includes(profile.feed.endpointMarker));
+    .filter(Boolean);
   const matchingEndpoints = endpoints.filter((value) => {
     try {
       const candidate = new URL(value, currentSource().origin);
-      const authorId = sourcePathValue(
-        profile.routes.feedPath,
-        "authorId",
-        candidate.pathname,
-      );
       return (
         candidate.origin === currentSource().origin &&
-        authorId !== undefined &&
-        (profile.feed.authorIdFormat === "slug" ||
-          /^[1-9]\d*$/u.test(authorId)) &&
+        /^\/cat-[1-9]\d*\/poems-feed$/.test(candidate.pathname) &&
         candidate.search === "" &&
         candidate.hash === ""
       );
@@ -1352,12 +1911,12 @@ export function extractFeedConfigurationFromInlineScripts(
   }
   const token = extractInlineValue(
     joined,
-    new RegExp(profile.feed.tokenKeys.map(escapeRegex).join("|"), "iu"),
+    /(?:x-feed-token|feed[_-]?token)/iu,
     "SOURCE_FEED_TOKEN_MISSING",
   );
   const cursor = extractInlineValue(
     joined,
-    new RegExp(profile.feed.cursorKeys.map(escapeRegex).join("|"), "iu"),
+    /(?:initial[_-]?cursor|next[_-]?(?:poems?[_-]?)?cursor|feed[_-]?cursor|cursor)/iu,
     "SOURCE_FEED_CURSOR_MISSING",
   );
   const uniqueEndpoints = new Set(
@@ -1470,22 +2029,14 @@ export function parseFeedHttpResult(
       "Author feed returned malformed JSON",
     );
   }
-  const record = FeedRecordSchema.safeParse(parsed);
   if (
-    !record.success ||
-    Object.keys(record.data).some(
-      (key) =>
-        ![
-          currentSourceAdapterProfile().feed.responseHtmlKey,
-          currentSourceAdapterProfile().feed.responseNextCursorKey,
-        ].includes(key),
-    ) ||
-    !(currentSourceAdapterProfile().feed.responseHtmlKey in record.data) ||
-    !(
-      currentSourceAdapterProfile().feed.responseNextCursorKey in record.data
-    ) ||
-    typeof record.data[currentSourceAdapterProfile().feed.responseHtmlKey] !==
-      "string"
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    Object.keys(parsed).some((key) => !["html", "next_cursor"].includes(key)) ||
+    !("html" in parsed) ||
+    !("next_cursor" in parsed) ||
+    typeof parsed.html !== "string"
   ) {
     throw new SourceBrowserError(
       "SOURCE_FEED_SCHEMA_INVALID",
@@ -1493,16 +2044,12 @@ export function parseFeedHttpResult(
       false,
     );
   }
-  const html = FeedHtmlSchema.parse(
-    record.data[currentSourceAdapterProfile().feed.responseHtmlKey],
-  );
-  const nextCursor = normalizeNextCursor(
-    record.data[currentSourceAdapterProfile().feed.responseNextCursorKey],
-  );
+  // eslint-disable-next-line @sarj/prefer-schema-for-api-payload -- The exhaustive structural checks above are the boundary validator for this tiny dynamic feed payload.
+  const nextCursor = normalizeNextCursor(parsed.next_cursor);
   return {
-    html,
+    html: parsed.html,
     nextCursor,
-    terminal: html.trim() === "" || nextCursor === null,
+    terminal: parsed.html.trim() === "" || nextCursor === null,
   };
 }
 
@@ -1526,9 +2073,8 @@ function feedRequestUrl(
   cursor: string,
 ): string {
   const expected = new URL(configuration.endpoint);
-  const profile = currentSourceAdapterProfile();
-  expected.searchParams.set(profile.feed.cursorParameter, cursor);
-  expected.searchParams.set(profile.feed.tokenParameter, configuration.token);
+  expected.searchParams.set("cursor", cursor);
+  expected.searchParams.set("token", configuration.token);
   return expected.href;
 }
 
@@ -1564,11 +2110,8 @@ export function extractFeedConfigurationFromDocument(
 ): FeedConfiguration {
   const scripts: string[] = [];
   let bytes = 0;
-  for (const { attributes, source } of scriptElements(documentHtml)) {
-    if (
-      /(?:^|\s)src\s*=/iu.test(attributes) ||
-      !source.includes(currentSourceAdapterProfile().feed.endpointMarker)
-    )
+  for (const { attributes, source } of inlineScriptCandidates(documentHtml)) {
+    if (/(?:^|\s)src\s*=/iu.test(attributes) || !source.includes("poems-feed"))
       continue;
     bytes += new TextEncoder().encode(source).byteLength;
     if (
@@ -1586,43 +2129,41 @@ export function extractFeedConfigurationFromDocument(
   return extractFeedConfigurationFromInlineScripts(scripts, authorHref);
 }
 
-function scriptElements(
-  documentHtml: string,
-): readonly { readonly attributes: string; readonly source: string }[] {
-  const lower = documentHtml.toLowerCase();
-  const elements: { attributes: string; source: string }[] = [];
-  let cursor = 0;
-  while (elements.length <= INLINE_SCRIPT_MAX_CANDIDATES) {
-    const start = lower.indexOf("<script", cursor);
+function isTagBoundary(character: string | undefined): boolean {
+  return (
+    character === undefined ||
+    character === ">" ||
+    " \t\r\n\f/".includes(character)
+  );
+}
+
+function* inlineScriptCandidates(
+  html: string,
+): Generator<{ attributes: string; source: string }> {
+  const lower = html.toLowerCase();
+  let position = 0;
+  while (position < html.length) {
+    const start = lower.indexOf("<script", position);
     if (start < 0) break;
-    const boundary = lower[start + "<script".length];
-    if (boundary !== undefined && boundary !== ">" && !/\s/u.test(boundary)) {
-      cursor = start + "<script".length;
+    if (!isTagBoundary(lower[start + 7])) {
+      position = start + 7;
       continue;
     }
-    const openEnd = lower.indexOf(">", start + "<script".length);
+    const openEnd = lower.indexOf(">", start + 7);
     if (openEnd < 0) break;
-    let close = lower.indexOf("</script", openEnd + 1);
-    while (close >= 0) {
-      const closeBoundary = lower[close + "</script".length];
-      if (
-        closeBoundary === ">" ||
-        (closeBoundary !== undefined && /\s/u.test(closeBoundary))
-      ) {
-        break;
-      }
-      close = lower.indexOf("</script", close + "</script".length);
+    let closeStart = lower.indexOf("</script", openEnd + 1);
+    while (closeStart >= 0 && !isTagBoundary(lower[closeStart + 8])) {
+      closeStart = lower.indexOf("</script", closeStart + 8);
     }
-    if (close < 0) break;
-    const closeEnd = lower.indexOf(">", close + "</script".length);
+    if (closeStart < 0) break;
+    const closeEnd = lower.indexOf(">", closeStart + 8);
     if (closeEnd < 0) break;
-    elements.push({
-      attributes: documentHtml.slice(start + "<script".length, openEnd),
-      source: documentHtml.slice(openEnd + 1, close),
-    });
-    cursor = closeEnd + 1;
+    yield {
+      attributes: html.slice(start + 7, openEnd),
+      source: html.slice(openEnd + 1, closeStart),
+    };
+    position = closeEnd + 1;
   }
-  return elements;
 }
 
 function extractInlineValue(
@@ -1656,10 +2197,6 @@ function extractInlineValue(
   const [value] = values;
   if (!value) throw new Error("Validated inline value unexpectedly missing");
   return value;
-}
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 }
 
 function normalizeNextCursor(value: unknown): null | string {
@@ -1866,7 +2403,7 @@ interface CloudflareChallengeEvidence {
   readonly hasManagedChallengeElement?: boolean;
   readonly hasTurnstileElement?: boolean;
   readonly html?: string;
-  readonly scriptSources?: readonly string[];
+  readonly scriptSources?: string;
   readonly title?: string;
 }
 
@@ -1912,11 +2449,18 @@ export function classifyCloudflareChallengeEvidence(
   evidence: CloudflareChallengeEvidence,
   challengeConfirmed = false,
 ): "managed_challenge" | "turnstile" | null {
-  const html = (evidence.html ?? "").slice(0, INLINE_SCRIPT_MAX_BYTES);
-  const title = (evidence.title ?? htmlTitle(html)).toLowerCase();
-  const content = [evidence.bodyText ?? "", html].join("\n").toLowerCase();
+  const title = (evidence.title ?? "").toLowerCase();
+  const content = [
+    evidence.bodyText ?? "",
+    (evidence.html ?? "").slice(0, INLINE_SCRIPT_MAX_BYTES),
+    evidence.scriptSources ?? "",
+  ]
+    .join("\n")
+    .toLowerCase();
   const challengeTitle =
-    title.includes("just a moment") || title.includes("attention required");
+    title.includes("just a moment") ||
+    title.includes("attention required") ||
+    htmlTitleIndicatesChallenge(evidence.html ?? "");
   const challengePhrase =
     content.includes("verify you are human") ||
     content.includes("performing security verification") ||
@@ -1924,11 +2468,10 @@ export function classifyCloudflareChallengeEvidence(
   const challengeRuntime = content.includes("_cf_chl_opt");
   const challengeResource =
     content.includes("/orchestrate/chl_page/") ||
-    content.includes("/cdn-cgi/challenge-platform/") ||
-    evidence.scriptSources?.some(isChallengeResourceUrl) === true;
+    content.includes("/cdn-cgi/challenge-platform/");
   const turnstile =
     evidence.hasTurnstileElement === true ||
-    evidence.scriptSources?.some(isCloudflareChallengeUrl) === true ||
+    hasCloudflareChallengeScript(evidence.scriptSources) ||
     content.includes("cf-turnstile");
   const challenged =
     challengeConfirmed ||
@@ -1941,21 +2484,32 @@ export function classifyCloudflareChallengeEvidence(
   return turnstile ? "turnstile" : "managed_challenge";
 }
 
-function htmlTitle(documentHtml: string): string {
-  const lower = documentHtml.toLowerCase();
-  let start = lower.indexOf("<title");
-  while (start >= 0) {
-    const boundary = lower[start + "<title".length];
-    if (boundary === ">" || (boundary !== undefined && /\s/u.test(boundary))) {
-      const openEnd = lower.indexOf(">", start + "<title".length);
-      if (openEnd < 0) return "";
-      const close = lower.indexOf("</title", openEnd + 1);
-      if (close < 0) return "";
-      return documentHtml.slice(openEnd + 1, close).trim();
+function htmlTitleIndicatesChallenge(html: string): boolean {
+  const lower = html.slice(0, INLINE_SCRIPT_MAX_BYTES).toLowerCase();
+  const start = lower.indexOf("<title");
+  if (start < 0 || !isTagBoundary(lower[start + 6])) return false;
+  const openEnd = lower.indexOf(">", start + 6);
+  if (openEnd < 0 || openEnd - start > 512) return false;
+  const closeStart = lower.indexOf("</title", openEnd + 1);
+  if (closeStart < 0 || closeStart - openEnd > 512) return false;
+  const text = lower.slice(openEnd + 1, closeStart).trimStart();
+  return (
+    text.startsWith("just a moment") || text.startsWith("attention required")
+  );
+}
+
+function hasCloudflareChallengeScript(sources: string | undefined): boolean {
+  return (sources ?? "").split("\n").some((source) => {
+    try {
+      const url = new URL(source);
+      return (
+        url.protocol === "https:" &&
+        url.hostname === "challenges.cloudflare.com"
+      );
+    } catch {
+      return false;
     }
-    start = lower.indexOf("<title", start + "<title".length);
-  }
-  return "";
+  });
 }
 
 export async function resolveCloudflareChallenge(
@@ -2022,31 +2576,18 @@ async function inspectChallengePage(
   readonly state: ChallengePageState;
 }> {
   try {
-    const profile = currentSourceAdapterProfile();
-    const expectedPath = new URL(expectedHref).pathname;
-    const targetKind =
-      sourcePathValue(profile.routes.poemPath, "id", expectedPath) === undefined
-        ? sourcePathValue(profile.routes.authorPath, "slug", expectedPath) ===
-          undefined
-          ? "other"
-          : "author"
-        : "poem";
     const snapshot = await page.evaluate(
-      ({
-        authorLinkSelector,
-        challengeScriptMaximum,
-        contentSelector,
-        expectedHref: serializedExpectedHref,
-        poemCountLabels,
-        targetKind: serializedTargetKind,
-      }) => {
+      ({ challengeScriptMaximum, expectedHref: serializedExpectedHref }) => {
         const bodyText = document.body.innerText.slice(0, 20_000);
-        const poemContent = document.querySelector(contentSelector);
+        const expectedPath = new URL(serializedExpectedHref).pathname;
+        const poemTarget = /^\/poem[1-9]\d*\.html$/.test(expectedPath);
+        const authorTarget = /^\/cat-[^/]+$/.test(expectedPath);
+        const poemContent = document.querySelector("#poem_content");
         const hasMeaningfulPoemContent =
           (poemContent?.textContent ?? "").trim().length > 0;
         const hasAuthorEvidence =
-          document.querySelector(authorLinkSelector) !== null ||
-          poemCountLabels.some((label) => bodyText.includes(label));
+          document.querySelector('a[href*="poem"]') !== null ||
+          /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:قصيدة|قصائد)/u.test(bodyText);
         return {
           bodyText,
           hasChallengeOption: "_cf_chl_opt" in globalThis,
@@ -2054,30 +2595,22 @@ async function inspectChallengePage(
             document.querySelector("#challenge-form, .cf-challenge-running") !==
             null,
           hasTurnstileElement:
-            document.querySelector(".cf-turnstile") !== null ||
-            [
-              ...document.querySelectorAll<HTMLIFrameElement>("iframe[src]"),
-            ].some((frame) => {
-              if (!URL.canParse(frame.src)) return false;
-              const source = new URL(frame.src);
-              return (
-                source.origin === "https://challenges.cloudflare.com" &&
-                (source.pathname.startsWith("/cdn-cgi/challenge-platform/") ||
-                  source.pathname.startsWith("/turnstile/"))
-              );
-            }),
+            document.querySelector(
+              ".cf-turnstile, iframe[src*='challenges.cloudflare.com']",
+            ) !== null,
           href: location.href,
           readyState: document.readyState,
           scriptSources: [
             ...document.querySelectorAll<HTMLScriptElement>("script[src]"),
           ]
             .slice(0, challengeScriptMaximum)
-            .map((script) => script.src),
+            .map((script) => script.src)
+            .join("\n"),
           targetReady:
             location.href !== serializedExpectedHref ||
-            (serializedTargetKind === "poem"
+            (poemTarget
               ? hasMeaningfulPoemContent
-              : serializedTargetKind === "author"
+              : authorTarget
                 ? hasAuthorEvidence
                 : bodyText.trim().length > 0),
           title: document.title,
@@ -2085,11 +2618,7 @@ async function inspectChallengePage(
       },
       {
         challengeScriptMaximum: INLINE_SCRIPT_MAX_CANDIDATES,
-        authorLinkSelector: profile.dom.manifestPoemLinkSelector,
-        contentSelector: profile.dom.detailContentSelector,
         expectedHref,
-        poemCountLabels: profile.labels.poemCount,
-        targetKind,
       },
     );
     const category = classifyCloudflareChallengeEvidence(snapshot);
@@ -2207,43 +2736,15 @@ async function projectManifest(
   authorHref: string,
   terminal: boolean,
 ): Promise<AuthorPoemManifestProjection> {
-  const profile = currentSourceAdapterProfile();
   return page.evaluate(
     ({
       authorHref: serializedAuthorHref,
-      containerSelector,
       maximum,
-      poemCountLabels,
-      poemLinkSelector,
-      poemPathTemplate,
       schemaVersion,
       terminal: serializedTerminal,
-      verseCountLabels,
     }) => {
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const pathValue = (template: string, path: string) => {
-        const marker = "{id}";
-        const index = template.indexOf(marker);
-        const prefix = template.slice(0, index);
-        const suffix = template.slice(index + marker.length);
-        if (!path.startsWith(prefix) || !path.endsWith(suffix)) return null;
-        const value = path.slice(prefix.length, path.length - suffix.length);
-        return /^[1-9]\d*$/u.test(value) ? value : null;
-      };
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const countText = (text: string, labels: readonly string[]) => {
-        const normalized = text.normalize("NFC");
-        for (const label of labels) {
-          const at = normalized.indexOf(label);
-          if (at < 0) continue;
-          const before = normalized.slice(Math.max(0, at - 64), at);
-          const digits = /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*$/u.exec(before)?.[0];
-          if (digits) return `${digits}${label}`;
-        }
-        return null;
-      };
       const links = [
-        ...document.querySelectorAll<HTMLAnchorElement>(poemLinkSelector),
+        ...document.querySelectorAll<HTMLAnchorElement>('a[href*="poem"]'),
       ];
       const poems = new Map<
         string,
@@ -2254,12 +2755,22 @@ async function projectManifest(
         const url = new URL(href, location.origin);
         if (url.origin !== location.origin) continue;
         const path = url.pathname;
-        if (pathValue(poemPathTemplate, path) === null) continue;
-        const container = link.closest(containerSelector) ?? link.parentElement;
-        const title = link.textContent.trim();
+        if (!/^\/poem[1-9]\d*\.html$/.test(path)) continue;
+        const container =
+          link.closest("article, li, [class*='poem'], .row > div") ??
+          link.parentElement;
+        const title =
+          link
+            .querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")
+            ?.textContent.trim() ||
+          link
+            .querySelector<HTMLElement>(".poet-poem-line")
+            ?.textContent.trim() ||
+          link.textContent.trim();
         if (!title) continue;
         const text = (container?.textContent ?? "").trim();
-        const verseCountText = countText(text, verseCountLabels);
+        const verseCountText =
+          /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:بيت|أبيات)/u.exec(text)?.[0] ?? null;
         const existing = poems.get(path);
         if (!existing) {
           poems.set(path, { href: path, title, verseCountText });
@@ -2276,7 +2787,19 @@ async function projectManifest(
         if (poems.size > maximum) break;
       }
       const bodyText = document.body.innerText.slice(0, 100_000);
-      const declaredPoemCountText = countText(bodyText, poemCountLabels);
+      const profilePoemCount = [
+        ...document.querySelectorAll<HTMLElement>(
+          ".poet-profile-stats > div, .poet-identity-stats > div",
+        ),
+      ].find((profileEntry) =>
+        [...profileEntry.querySelectorAll<HTMLElement>(":scope > span")].some(
+          (label) => /^(?:قصيدة|قصائد)$/u.test(label.textContent.trim()),
+        ),
+      );
+      const declaredPoemCountText =
+        profilePoemCount?.textContent.trim() ??
+        /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬ \t]*(?:قصيدة|قصائد)/u.exec(bodyText)?.[0] ??
+        null;
       return {
         authorHref: serializedAuthorHref,
         challengeDetected: false,
@@ -2291,14 +2814,9 @@ async function projectManifest(
     },
     {
       authorHref,
-      containerSelector: profile.dom.manifestContainerSelector,
       maximum: LIMITS.poemsPerAuthor,
-      poemCountLabels: profile.labels.poemCount,
-      poemLinkSelector: profile.dom.manifestPoemLinkSelector,
-      poemPathTemplate: profile.routes.poemPath,
       schemaVersion: PROJECTION_SCHEMA_VERSION,
       terminal,
-      verseCountLabels: profile.labels.verseCount,
     },
   );
 }
@@ -2307,44 +2825,16 @@ async function projectPoemsFromHtml(
   page: Page,
   html: string,
 ): Promise<AuthorPoemManifestProjection["poems"]> {
-  const profile = currentSourceAdapterProfile();
   const poems = await page.evaluate(
-    ({
-      containerSelector,
-      html: serializedHtml,
-      maximum,
-      poemLinkSelector,
-      poemPathTemplate,
-      verseCountLabels,
-    }) => {
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const pathValue = (template: string, path: string) => {
-        const marker = "{id}";
-        const index = template.indexOf(marker);
-        const prefix = template.slice(0, index);
-        const suffix = template.slice(index + marker.length);
-        if (!path.startsWith(prefix) || !path.endsWith(suffix)) return null;
-        const value = path.slice(prefix.length, path.length - suffix.length);
-        return /^[1-9]\d*$/u.test(value) ? value : null;
-      };
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const countText = (text: string, labels: readonly string[]) => {
-        const normalized = text.normalize("NFC");
-        for (const label of labels) {
-          const at = normalized.indexOf(label);
-          if (at < 0) continue;
-          const before = normalized.slice(Math.max(0, at - 64), at);
-          const digits = /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*$/u.exec(before)?.[0];
-          if (digits) return `${digits}${label}`;
-        }
-        return null;
-      };
+    ({ html: serializedHtml, maximum }) => {
       const parsedDocument = new DOMParser().parseFromString(
         serializedHtml,
         "text/html",
       );
       const links = [
-        ...parsedDocument.querySelectorAll<HTMLAnchorElement>(poemLinkSelector),
+        ...parsedDocument.querySelectorAll<HTMLAnchorElement>(
+          'a[href*="poem"]',
+        ),
       ];
       const results = new Map<
         string,
@@ -2355,12 +2845,22 @@ async function projectPoemsFromHtml(
         const url = new URL(href, location.origin);
         if (url.origin !== location.origin) continue;
         const path = url.pathname;
-        if (pathValue(poemPathTemplate, path) === null) continue;
-        const container = link.closest(containerSelector) ?? link.parentElement;
-        const title = link.textContent.trim();
+        if (!/^\/poem[1-9]\d*\.html$/.test(path)) continue;
+        const container =
+          link.closest("article, li, [class*='poem'], .row > div") ??
+          link.parentElement;
+        const title =
+          link
+            .querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")
+            ?.textContent.trim() ||
+          link
+            .querySelector<HTMLElement>(".poet-poem-line")
+            ?.textContent.trim() ||
+          link.textContent.trim();
         if (!title) continue;
         const text = (container?.textContent ?? "").trim();
-        const verseCountText = countText(text, verseCountLabels);
+        const verseCountText =
+          /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:بيت|أبيات)/u.exec(text)?.[0] ?? null;
         const existing = results.get(path);
         if (!existing) {
           results.set(path, { href: path, title, verseCountText });
@@ -2379,14 +2879,7 @@ async function projectPoemsFromHtml(
       // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Serialized browser callbacks target runtimes without Iterator Helpers.
       return [...results.values()];
     },
-    {
-      containerSelector: profile.dom.manifestContainerSelector,
-      html,
-      maximum: LIMITS.poemsPerAuthor,
-      poemLinkSelector: profile.dom.manifestPoemLinkSelector,
-      poemPathTemplate: profile.routes.poemPath,
-      verseCountLabels: profile.labels.verseCount,
-    },
+    { html, maximum: LIMITS.poemsPerAuthor },
   );
   if (poems.length > LIMITS.poemsPerAuthor) {
     throw new SourceBrowserError(
@@ -2402,51 +2895,67 @@ async function projectPoem(
   page: Page,
   expectedAuthorHref: string,
 ): Promise<PoemDetailProjection> {
-  const profile = currentSourceAdapterProfile();
   const evidence = await page.evaluate(
     ({
-      authorLinkSelector,
       challengeScriptMaximum,
-      classicalLineSelector,
-      contentSelector,
       expectedAuthorHref: serializedExpectedAuthorHref,
-      fallbackLineSelector,
       maximumLines,
       schemaVersion,
-      structureLabelSelector,
-      verseCountLabels,
     }) => {
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- Playwright serializes this callback into the browser realm, so its helpers must remain inside it.
-      const countText = (text: string, labels: readonly string[]) => {
-        const normalized = text.normalize("NFC");
-        for (const label of labels) {
-          const at = normalized.indexOf(label);
-          if (at < 0) continue;
-          const before = normalized.slice(Math.max(0, at - 64), at);
-          const digits = /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*$/u.exec(before)?.[0];
-          if (digits) return `${digits}${label}`;
-        }
-        return null;
-      };
-      const content = document.querySelector(contentSelector);
-      const lineNodes = content
-        ? [...content.querySelectorAll<HTMLElement>(classicalLineSelector)]
+      const legacyContent = document.querySelector("#poem_content");
+      const modernContent = document.querySelector("#poemText");
+      const legacyLineNodes = legacyContent
+        ? [...legacyContent.querySelectorAll<HTMLElement>(":scope > h3")]
         : [];
+      const modernRows = modernContent
+        ? [
+            ...modernContent.querySelectorAll<HTMLElement>(
+              ":scope > .poem-line",
+            ),
+          ]
+        : [];
+      const modernRowLines = modernRows.map((row) =>
+        [...row.querySelectorAll<HTMLElement>(":scope > span")].map((span) =>
+          (span.innerText || span.textContent || "").trim(),
+        ),
+      );
+      const modernClassicalMalformed = modernRowLines.some(
+        (rowLines, index) =>
+          (rowLines.length !== 2 &&
+            !(index === modernRowLines.length - 1 && rowLines.length === 1)) ||
+          rowLines.some((line) => line === ""),
+      );
+      const modernLines = modernClassicalMalformed
+        ? []
+        : modernRowLines.flatMap((rowLines, index) =>
+            index === modernRowLines.length - 1 && rowLines.length === 1
+              ? [rowLines[0] ?? "", ""]
+              : rowLines,
+          );
+      // Modern prose/free-verse pages use direct <p> children under #poemText
+      // and intentionally have no classical .poem-line rows. Keep the modern
+      // container as the fallback source even when it has no classical nodes.
+      const content = modernContent ?? legacyContent;
       const fallback = content
-        ? [...content.querySelectorAll<HTMLElement>(fallbackLineSelector)]
+        ? [...content.querySelectorAll<HTMLElement>(":scope > p, :scope > div")]
         : [];
-      const selected = lineNodes.length > 0 ? lineNodes : fallback;
-      const lines = selected
-        .flatMap((node) =>
-          (node.innerText || node.textContent || "").split(/\r?\n/u),
-        )
-        .map((line) => line.trim());
-      while (lines[0] === "") lines.shift();
-      while (lines.at(-1) === "") lines.pop();
+      const selected = legacyLineNodes.length > 0 ? legacyLineNodes : fallback;
+      const lines =
+        modernLines.length > 0
+          ? modernLines
+          : selected
+              .flatMap((node) =>
+                (node.innerText || node.textContent || "").split(/\r?\n/u),
+              )
+              .map((line) => line.trim());
+      if (modernLines.length === 0) {
+        while (lines[0] === "") lines.shift();
+        while (lines.at(-1) === "") lines.pop();
+      }
       const boundedLines = lines.slice(0, maximumLines + 1);
       const expectedAuthorPath = new URL(serializedExpectedAuthorHref).pathname;
       const author = [
-        ...document.querySelectorAll<HTMLAnchorElement>(authorLinkSelector),
+        ...document.querySelectorAll<HTMLAnchorElement>('a[href*="cat-"]'),
       ].find(
         (candidate) =>
           new URL(candidate.getAttribute("href") ?? "", location.origin)
@@ -2458,9 +2967,17 @@ async function projectPoem(
           ?.getAttribute("content") ?? document.title;
       const title = metadataTitle.split(/\s+-\s+/u, 1)[0]?.trim() ?? "";
       const bodyText = document.body.innerText.slice(0, 100_000);
-      const declaredVerseCountText = countText(bodyText, verseCountLabels);
+      const reader =
+        content?.closest<HTMLElement>(".poem-reader-card") ?? content;
+      const poemMetadataText =
+        reader
+          ?.querySelector<HTMLElement>(".poem-meta-inline")
+          ?.innerText.slice(0, 2_000) ?? "";
+      const declaredVerseCountText =
+        /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:بيت|أبيات)/u.exec(poemMetadataText)?.[0] ??
+        null;
       const structureLabels = [
-        ...document.querySelectorAll<HTMLElement>(structureLabelSelector),
+        ...(reader?.querySelectorAll<HTMLElement>("a, span") ?? []),
       ]
         .slice(0, 2_000)
         .map((node) => node.textContent.trim().normalize("NFC"));
@@ -2469,7 +2986,8 @@ async function projectPoem(
         ...document.querySelectorAll<HTMLScriptElement>("script[src]"),
       ]
         .slice(0, challengeScriptMaximum)
-        .map((script) => script.src);
+        .map((script) => script.src)
+        .join("\n");
       return {
         authorHref: author?.getAttribute("href") ?? "",
         challengeEvidence: {
@@ -2479,18 +2997,9 @@ async function projectPoem(
             document.querySelector("#challenge-form, .cf-challenge-running") !==
             null,
           hasTurnstileElement:
-            document.querySelector(".cf-turnstile") !== null ||
-            [
-              ...document.querySelectorAll<HTMLIFrameElement>("iframe[src]"),
-            ].some((frame) => {
-              if (!URL.canParse(frame.src)) return false;
-              const source = new URL(frame.src);
-              return (
-                source.origin === "https://challenges.cloudflare.com" &&
-                (source.pathname.startsWith("/cdn-cgi/challenge-platform/") ||
-                  source.pathname.startsWith("/turnstile/"))
-              );
-            }),
+            document.querySelector(
+              ".cf-turnstile, iframe[src*='challenges.cloudflare.com']",
+            ) !== null,
           scriptSources: challengeScriptSources,
           title: challengeTitle,
         },
@@ -2500,26 +3009,23 @@ async function projectPoem(
         schemaVersion,
         sourceUrl: location.href,
         structureLabels,
-        classicalLineNodeCount: lineNodes.length,
+        classicalLineNodeCount:
+          modernLines.length > 0 ? modernLines.length : legacyLineNodes.length,
+        modernClassicalMalformed,
         title,
       };
     },
     {
       challengeScriptMaximum: INLINE_SCRIPT_MAX_CANDIDATES,
-      authorLinkSelector: profile.dom.detailAuthorLinkSelector,
-      classicalLineSelector: profile.dom.detailClassicalLineSelector,
-      contentSelector: profile.dom.detailContentSelector,
       expectedAuthorHref,
-      fallbackLineSelector: profile.dom.detailFallbackLineSelector,
       maximumLines: LIMITS.poemLines,
       schemaVersion: PROJECTION_SCHEMA_VERSION,
-      structureLabelSelector: profile.dom.detailStructureLabelSelector,
-      verseCountLabels: profile.labels.verseCount,
     },
   );
   const {
     challengeEvidence,
     classicalLineNodeCount,
+    modernClassicalMalformed,
     structureLabels,
     ...projection
   } = evidence;
@@ -2538,6 +3044,12 @@ async function projectPoem(
     structureLabels,
     classicalLineNodeCount > 0,
   );
+  if (modernClassicalMalformed && structure !== "free_verse") {
+    throw new SourceProjectionError(
+      "SOURCE_POEM_STRUCTURE_INVALID",
+      "Modern classical poem rows must contain exactly two nonempty hemistichs",
+    );
+  }
   return {
     ...projection,
     challengeDetected: false,
@@ -2558,9 +3070,7 @@ export function classifyPoemStructureEvidence(
 ): PoemDetailProjection["structure"] {
   if (
     markerTexts.some((value) =>
-      currentSourceAdapterProfile().labels.freeVerse.includes(
-        value.trim().normalize("NFC"),
-      ),
+      FREE_VERSE_LABELS.includes(value.trim().normalize("NFC")),
     )
   ) {
     return "free_verse";

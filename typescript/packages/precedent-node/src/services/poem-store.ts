@@ -25,6 +25,11 @@ import {
   POEM_TABLE as poem,
 } from "./schema";
 
+export interface Translation {
+  model?: string;
+  poem: string[];
+}
+
 export interface InsertPoem {
   authorId: string;
   content: string[];
@@ -68,6 +73,10 @@ export interface PoemStore {
     limit: number,
   ): Promise<UntranslatedPoemBatch>;
   upsert(poem: InsertPoem): Promise<Poem>;
+  writeTranslationGemini(
+    poemId: string,
+    translation: Translation,
+  ): Promise<Poem>;
 }
 
 function rowToPoem(row: typeof poem.$inferSelect): Poem {
@@ -476,6 +485,30 @@ export class D1PoemStore implements PoemStore {
     return AdjacentPoemRowsSchema.parse(result);
   }
 
+  async writeTranslationGemini(
+    poemId: string,
+    translation: Translation,
+  ): Promise<Poem> {
+    const rows = await this.#db
+      .update(poem)
+      .set({
+        hasEnglish: translation.poem.some((line) => line.trim().length > 0),
+        translationGemini: {
+          content: translation.poem,
+          ...(translation.model ? { model: translation.model } : {}),
+        },
+      })
+      .where(eq(poem.id, poemId))
+      .returning();
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`Poem not found: ${poemId}`);
+    }
+
+    return rowToPoem(row);
+  }
+
   async getArabicCopy(poemId: string): Promise<PoemCopy> {
     const row = await this.#db
       .select({
@@ -733,8 +766,7 @@ export class D1PoemStore implements PoemStore {
     const result = new Map<string, PoemModelEnrichment[]>();
     for (const artifact of artifacts) {
       const profile = readableEnrichmentProfile(artifact);
-      if (profile && profile.modelKey !== artifact.modelKey) continue;
-      if (!profile && artifact.modelKey === "sol-5.6") continue;
+      if (profile?.modelKey !== artifact.modelKey) continue;
       const candidateValidations = validationsByArtifact.get(artifact.id) ?? [];
       if (
         candidateValidations.some(
@@ -746,46 +778,44 @@ export class D1PoemStore implements PoemStore {
       ) {
         continue;
       }
-      const requiredValidations = profile
-        ? approvedEnrichmentValidations(profile).all.map((required) =>
-            candidateValidations.find(
-              (validation) =>
-                validationIdentity(validation) === validationIdentity(required),
-            ),
-          )
-        : ([1, 2] as const).map((attempt) =>
-            candidateValidations.find(
-              (validation) =>
-                validation.attempt === attempt &&
-                validation.validatorVersion === artifact.promptVersion &&
-                validation.validatorKey.endsWith(
-                  attempt === 1 ? "-fidelity-review" : "-grounding-review",
-                ),
-            ),
+      const byIdentity = new Map(
+        candidateValidations.map((validation) => [
+          validationIdentity(validation),
+          validation,
+        ]),
+      );
+      const reviews = approvedEnrichmentValidations(profile).all.flatMap(
+        (required) => {
+          const validation = byIdentity.get(validationIdentity(required));
+          if (!validation) return [];
+          const review = PoemEnrichmentReviewSchema.safeParse(
+            parseJsonDocument(validation.report),
           );
-      if (requiredValidations.some((validation) => !validation)) continue;
-      const reviews = requiredValidations.flatMap((validation) => {
-        const review = PoemEnrichmentReviewSchema.safeParse(
-          parseJsonDocument(validation?.report),
-        );
-        return review.success ? [review.data] : [];
-      });
+          return review.success ? [review.data] : [];
+        },
+      );
       if (!reviewsAcceptEnrichment(reviews)) continue;
       const payload = AnyPoemEnrichmentOutputSchema.safeParse(
         parseJsonDocument(artifact.payload),
       );
       if (!payload.success) continue;
-      if (artifact.schemaVersion !== ("wordGlosses" in payload.data ? 2 : 1))
+      if (
+        artifact.schemaVersion !==
+        ("schemaVersion" in payload.data ? payload.data.schemaVersion : 1)
+      )
         continue;
       const enrichments = result.get(artifact.poemId) ?? [];
       enrichments.push({
         lines: payload.data.translation.lines,
-        model: profile?.model ?? artifact.model,
-        modelKey: profile?.modelKey ?? artifact.modelKey,
-        reasoningEffort: profile?.reasoningEffort ?? artifact.reasoningEffort,
+        model: profile.model,
+        modelKey: profile.modelKey,
+        reasoningEffort: profile.reasoningEffort,
         ...("wordGlosses" in payload.data
           ? { wordGlosses: payload.data.wordGlosses }
-          : { insights: payload.data.insights }),
+          : {}),
+        ...("insights" in payload.data
+          ? { insights: payload.data.insights }
+          : {}),
       });
       result.set(artifact.poemId, enrichments);
     }

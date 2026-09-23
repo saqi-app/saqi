@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  BatchTranslateRequestSchema,
   isImmutableNextAsset,
   isTrustedMutationRequest,
   MAX_JSON_BODY_BYTES,
@@ -9,7 +10,7 @@ import {
 } from "../operations-boundary";
 
 function mutationRequest(overrides: Record<string, string> = {}) {
-  return new Request("https://ops.saqi.app/api/corpus-import", {
+  return new Request("https://ops.saqi.app/api/batch-translate", {
     method: "POST",
     headers: {
       host: "ops.saqi.app",
@@ -21,6 +22,26 @@ function mutationRequest(overrides: Record<string, string> = {}) {
     body: "{}",
   });
 }
+
+describe("operation input schemas", () => {
+  it("bounds and validates batch author identifiers", () => {
+    expect(
+      BatchTranslateRequestSchema.safeParse({ authorIds: ["valid-id"] }).success
+    ).toBe(true);
+    expect(
+      BatchTranslateRequestSchema.safeParse({ authorIds: ["not valid"] })
+        .success
+    ).toBe(false);
+    expect(
+      BatchTranslateRequestSchema.safeParse({
+        authorIds: Array.from(
+          { length: 26 },
+          (_, index) => `id-${String(index)}`
+        ),
+      }).success
+    ).toBe(false);
+  });
+});
 
 describe("mutation request checks", () => {
   it("accepts exact same-origin browser metadata", () => {

@@ -4,10 +4,9 @@ import {
   type AuthorInventoryPageProjection,
   AuthorInventoryPageSchema,
   canonicalAuthorUrl,
-  canonicalInventoryUrl,
+  canonicalInventoryPaginationUrl,
   certifyAuthorInventoryPages,
   currentSource,
-  sourceInventoryUrl,
 } from "@saqi/source-adapter";
 import { z } from "zod";
 
@@ -36,6 +35,10 @@ function authorInventoryIdentity(): AuthorInventoryIdentity {
   };
 }
 
+export function authorInventoryWorkKind(): string {
+  return authorInventoryIdentity().discoveryKind;
+}
+
 const RefreshGenerationSchema = z.string().regex(/^[\w.-]{1,64}$/);
 const ProductionAuthorSchema = z
   .object({ canonical_url: z.url().max(2_048) })
@@ -43,6 +46,29 @@ const ProductionAuthorSchema = z
 const ProductionAuthorsSchema = z.array(ProductionAuthorSchema).max(50_000);
 const RawProductionAuthorsSchema = z.array(z.unknown()).max(50_000);
 type InventoryPass = 1 | 2;
+
+export function scheduledInventoryRefreshGeneration(
+  configuredGeneration: string,
+  refreshIntervalMs: null | number,
+  now: number,
+): string {
+  const configured = RefreshGenerationSchema.parse(configuredGeneration);
+  if (refreshIntervalMs === null) return configured;
+  if (
+    !Number.isSafeInteger(refreshIntervalMs) ||
+    refreshIntervalMs < 60 * 60_000 ||
+    refreshIntervalMs > 30 * 24 * 60 * 60_000
+  )
+    throw new Error("Invalid author inventory refresh interval");
+  if (!Number.isSafeInteger(now) || now < 0)
+    throw new Error("Invalid author inventory refresh time");
+  const window = Math.floor(now / refreshIntervalMs).toString(36);
+  const identity = sha256(configured).slice(0, 8);
+  const suffix = `-${identity}-${window}`;
+  return RefreshGenerationSchema.parse(
+    `${configured.slice(0, 64 - suffix.length)}${suffix}`,
+  );
+}
 const AuthorInventoryPassSchema = z.strictObject({
   pageArtifactHashes: z.array(z.string().regex(/^[\da-f]{64}$/)),
   pages: z.array(AuthorInventoryPageSchema),
@@ -152,6 +178,7 @@ const CheckpointSchema = z.strictObject({
     .regex(/^[\da-f]{64}$/)
     .nullable(),
   nextPage: z.int().positive(),
+  nextPageHref: z.string().max(2_048).nullable(),
   pageArtifactHashes: z.array(z.string().regex(/^[\da-f]{64}$/)).max(10_000),
   pass: z.literal([1, 2]),
   terminal: z.boolean(),
@@ -160,6 +187,7 @@ const CheckpointSchema = z.strictObject({
 export interface AuthorInventoryPageBrowser {
   collectAuthorInventoryPage(
     inventoryValue: string,
+    expectedPage: number,
     signal: AbortSignal,
   ): Promise<AuthorInventoryPageProjection>;
 }
@@ -345,6 +373,7 @@ export class AuthorInventoryCollector implements AuthorInventoryCollectorPort {
           bytes: 0,
           firstPassArtifactHash: null,
           nextPage: 1,
+          nextPageHref: canonicalInventoryPaginationUrl("/authers-1").href,
           pageArtifactHashes: [],
           pass: 1 as const,
           terminal: false,
@@ -373,6 +402,7 @@ export class AuthorInventoryCollector implements AuthorInventoryCollectorPort {
             bytes: 0,
             firstPassArtifactHash: passArtifact.hash,
             nextPage: 1,
+            nextPageHref: canonicalInventoryPaginationUrl("/authers-1").href,
             pageArtifactHashes: [],
             pass: 2,
             terminal: false,
@@ -423,22 +453,23 @@ export class AuthorInventoryCollector implements AuthorInventoryCollectorPort {
       }
       if (progress.nextPage > this.#maximumPages)
         throw new Error("SOURCE_AUTHOR_INVENTORY_PAGE_LIMIT");
-      const requested = sourceInventoryUrl(progress.nextPage);
+      if (progress.nextPageHref === null)
+        throw new Error("SOURCE_AUTHOR_INVENTORY_NEXT_PAGE_MISSING");
+      const requested = canonicalInventoryPaginationUrl(progress.nextPageHref);
       const projection = AuthorInventoryPageSchema.parse(
         // eslint-disable-next-line no-await-in-loop -- Pages are checkpointed in strict ordinal order for resumability.
-        await this.#collectPage(requested.href, signal),
+        await this.#collectPage(requested.href, progress.nextPage, signal),
       );
-      const observed = canonicalInventoryUrl(projection.sourceUrl);
+      const observed = canonicalInventoryPaginationUrl(projection.sourceUrl);
       if (
-        observed.page !== progress.nextPage ||
+        observed.href !== requested.href ||
         projection.page !== progress.nextPage
       )
         throw new Error("SOURCE_AUTHOR_INVENTORY_PAGE_GAP");
-      if (
-        !projection.terminal &&
-        canonicalInventoryUrl(projection.nextPageHref ?? "").page !==
-          progress.nextPage + 1
-      )
+      const nextPageHref = projection.terminal
+        ? null
+        : canonicalInventoryPaginationUrl(projection.nextPageHref ?? "").href;
+      if (!projection.terminal && nextPageHref === requested.href)
         throw new Error("SOURCE_AUTHOR_INVENTORY_NEXT_PAGE_INVALID");
       // eslint-disable-next-line no-await-in-loop -- Page artifacts are persisted in source order before the next-page cursor advances.
       const artifact = await this.#artifacts.put(
@@ -455,6 +486,7 @@ export class AuthorInventoryCollector implements AuthorInventoryCollectorPort {
         authorReferences: nextAuthors,
         bytes: nextBytes,
         nextPage: progress.nextPage + 1,
+        nextPageHref,
         pageArtifactHashes: [...progress.pageArtifactHashes, artifact.hash],
         terminal: projection.terminal,
       };
@@ -474,12 +506,14 @@ export class AuthorInventoryCollector implements AuthorInventoryCollectorPort {
 
   async #collectPage(
     href: string,
+    expectedPage: number,
     signal: AbortSignal,
   ): Promise<AuthorInventoryPageProjection> {
     const lease = await this.#claimOrigin(signal);
     try {
       const projection = await this.#browser.collectAuthorInventoryPage(
         href,
+        expectedPage,
         signal,
       );
       this.#ledger.completeOrigin(lease, this.#now(), this.#minimumOriginGapMs);

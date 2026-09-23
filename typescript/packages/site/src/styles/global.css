@@ -91,17 +91,6 @@ main {
   margin-inline: auto;
 }
 
-.site-footer {
-  display: flex;
-  gap: 1.5rem;
-  inline-size: min(72rem, calc(100% - 2 * var(--page-gutter)));
-  margin: 4rem auto 1.5rem;
-  padding-block-start: 1rem;
-  border-block-start: 1px solid var(--rule);
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
 .site-header {
   display: grid;
   grid-template-areas: "brand tools actions";
@@ -885,6 +874,13 @@ h1:lang(ar) {
   line-height: 1.65;
   text-align: right;
   text-wrap: pretty;
+}
+
+.insights-attribution {
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .index-list a:active,

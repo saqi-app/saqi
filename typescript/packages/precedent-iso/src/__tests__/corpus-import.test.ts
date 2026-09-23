@@ -70,18 +70,13 @@ describe("corpus import contracts", () => {
     ).toBeUndefined();
   });
 
-  it("keeps only Codex profiles in the executable runtime registry", () => {
-    expect(LEGACY_ENRICHMENT_PROFILES.map(({ provider }) => provider)).toEqual([
-      "sol",
-      "sol",
-    ]);
-    expect(
-      readableEnrichmentProfile({
-        model: "claude-opus-5",
-        promptVersion: "claude-opus-5-enrichment-v1",
-        reasoningEffort: "max",
-      }),
-    ).toBeUndefined();
+  it("keeps retired non-Sol profiles readable but never writable", () => {
+    for (const profile of LEGACY_ENRICHMENT_PROFILES) {
+      if (profile.provider === "sol") continue;
+      expect(readableEnrichmentProfile(profile)).toEqual(profile);
+      expect(acceptedPublicationEnrichmentProfile(profile)).toBeUndefined();
+      expect(publicationEnrichmentProfile(profile)).toBeUndefined();
+    }
   });
 
   it("requires an existing canonical author for every staged record", () => {
@@ -140,10 +135,10 @@ function stageAction(recordOverrides: Record<string, unknown> = {}) {
           ordinal: 0,
           recordHash: HASH,
           sourceAuthorId: "495",
-          sourceAuthorUrl: "https://source.invalid/writers/495",
+          sourceAuthorUrl: "https://source.invalid/cat-495",
           sourceName: "primary-source",
           sourcePoemId: "101680",
-          sourcePoemUrl: "https://source.invalid/works/101680",
+          sourcePoemUrl: "https://source.invalid/poem101680.html",
           titleArabic: "عنوان",
           ...recordOverrides,
         },

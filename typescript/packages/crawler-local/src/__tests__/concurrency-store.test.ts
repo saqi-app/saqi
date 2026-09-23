@@ -9,6 +9,7 @@ import { Ledger } from "../persistence/ledger.js";
 import { updateRigConcurrency } from "../runtime/concurrency-control.js";
 import { ConcurrencyStore } from "../runtime/concurrency-store.js";
 import { loadScraperOperationConfig } from "../runtime/operations-contract.js";
+import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
 function fixture() {
@@ -18,6 +19,58 @@ function fixture() {
 }
 
 describe("SQLite concurrency authority", () => {
+  it("inspects a genuine schema 32 ledger without migrating or importing", async () => {
+    const root = trackedMkdtempSync(
+      join(tmpdir(), "saqi-concurrency-schema32-"),
+    );
+    const ledgerPath = join(root, "ledger.sqlite3");
+    const database = new Database(ledgerPath);
+    initializeLegacyLedgerSchema(database, 32);
+    database.close();
+    const before = readFileSync(ledgerPath);
+    const configPath = join(root, "rig.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        stateDirectory: ".",
+        sol: { concurrency: 16, initialConcurrency: 4 },
+      }),
+    );
+    expect(ConcurrencyStore.inspect(root)).toBeNull();
+    const loaded = await loadScraperOperationConfig(configPath);
+    expect(loaded.config.sol).toMatchObject({
+      concurrency: 16,
+      initialConcurrency: 4,
+    });
+    expect(readFileSync(ledgerPath)).toEqual(before);
+    const reader = new Database(ledgerPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    try {
+      expect(reader.prepare("SELECT version FROM local_schema").get()).toEqual({
+        version: 32,
+      });
+      expect(
+        reader
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name = 'runtime_provider_concurrency'",
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(
+        reader
+          .prepare(
+            "SELECT enabled FROM runtime_control WHERE control_key = 'legacy_concurrency_imported'",
+          )
+          .get(),
+      ).toBeUndefined();
+    } finally {
+      reader.close();
+    }
+  });
+
   it("rejects a present authority row when its import marker is missing", async () => {
     const root = fixture();
     ConcurrencyStore.withDatabase(root, false, (store) =>

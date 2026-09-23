@@ -217,9 +217,7 @@ function errorCauseSignal(error: unknown): string {
   return parts.join("\n");
 }
 
-class InvalidPublicationRequestError extends Error {
-  override name = "InvalidPublicationRequestError";
-}
+class InvalidPublicationRequestError extends Error {}
 
 async function parseRequest(request: Request) {
   try {

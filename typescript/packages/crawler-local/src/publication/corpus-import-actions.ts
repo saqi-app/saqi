@@ -176,6 +176,14 @@ export function prepareCollectedPoem(
   const artifact = DetailArtifactSchema.parse(rawArtifact);
   const detail = artifact.source;
   if (
+    detail.structure === "classical" &&
+    (detail.verses === null ||
+      detail.verses <= 0 ||
+      detail.lines.length !== detail.verses * 2)
+  ) {
+    throw new Error("COLLECTED_POEM_STRUCTURE_INVALID");
+  }
+  if (
     detail.numericId !== mapping.sourcePoemId ||
     detail.author.slug !== mapping.sourceAuthorSlug
   ) {

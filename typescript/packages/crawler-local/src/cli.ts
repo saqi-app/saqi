@@ -1,22 +1,35 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import { access, lstat, mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { PoemEnrichmentInputSchema } from "@saqi/precedent-iso";
-import { configureSource, currentSource } from "@saqi/source-adapter";
+import {
+  canonicalAuthorUrl,
+  configureSource,
+  currentSource,
+} from "@saqi/source-adapter";
 import { z } from "zod";
 
+import { SourceChromeCollector } from "./collection/collection-source-browser.js";
 import {
+  defaultChromeProfile,
   seedAuthorManifest,
   seedAuthorManifests,
 } from "./collection/collector.js";
 import { CollectorRecoveryController } from "./collection/collector-recovery.js";
 import { parseCatalogInventory } from "./collection/inventory-reconciliation.js";
+import { readSourceRequestTelemetryStatus } from "./collection/source-request-telemetry.js";
+import {
+  CompletionPlanInputSchema,
+  planEnrichmentCompletion,
+} from "./enrichment/completion-plan.js";
 import { SolEnrichmentCoordinator } from "./enrichment/sol-coordinator.js";
 import {
   CodexSolRunner,
   type EnrichmentProvider,
+  SOL_PIPELINE_VERSION,
 } from "./enrichment/sol-runner.js";
 import {
   ArtifactStore,
@@ -30,13 +43,17 @@ import {
   verifyProductionDetailRecoveryFiles,
 } from "./persistence/production-baseline-planner.js";
 import { exportProductionResolution } from "./persistence/production-resolution-store.js";
+import { readLedgerSourceIdentity } from "./persistence/read-ledger-source-identity.js";
 import {
   fetchScopedProductionResolution,
-  ScopedProductionResolutionStore,
+  openProductionResolutionStore,
 } from "./persistence/scoped-production-resolution.js";
 import { importLegacySolOperations } from "./persistence/sol-operation-import.js";
+import { stageLegacyOperationSchema34 } from "./persistence/stage-legacy-operation-schema34.js";
 import { canonicalJson, sha256 } from "./persistence/work-key.js";
 import { prepareCollectedPoem } from "./publication/corpus-import-actions.js";
+import { inspectCdpEndpoint } from "./runtime/cdp-diagnostics-client.js";
+import { preflightChromeCdpLaunchdService } from "./runtime/chrome-cdp-launchd-service.js";
 import { loadCliSourceConfiguration } from "./runtime/cli-source-policy.js";
 import {
   AllowedConcurrencySchema,
@@ -44,6 +61,7 @@ import {
   ConcurrencyProviderSchema,
 } from "./runtime/concurrency-control.js";
 import { ConcurrencyStore } from "./runtime/concurrency-store.js";
+import { buildDoctorReport } from "./runtime/doctor-report.js";
 import { controlLaunchdService } from "./runtime/launchd-control.js";
 import { preflightLaunchdService } from "./runtime/launchd-service.js";
 import { loadScraperOperationConfig } from "./runtime/operations-contract.js";
@@ -63,16 +81,13 @@ import {
 import { readServiceEnabled } from "./runtime/service-enabled-control.js";
 import { inspectServiceStatus } from "./runtime/service-status-inspection.js";
 import {
+  installLaunchdPublicationAccessCredentials,
   loadLaunchdDesiredConfigDigest,
   loadLaunchdSourceConfiguration,
 } from "./runtime/source-keychain.js";
 import { inspectStateInventory } from "./runtime/state-inventory.js";
 import { UnifiedSupervisor } from "./runtime/supervisor.js";
-import {
-  diagnosticLedgerStatus,
-  REDACTED_SOURCE_ORIGIN,
-  UnifiedRigRuntime,
-} from "./runtime/unified-rig.js";
+import { UnifiedRigRuntime } from "./runtime/unified-rig.js";
 
 interface Locations {
   readonly artifacts: string;
@@ -92,21 +107,28 @@ Long-running rig:
   service-control --action <status|start|stop|restart> --config FILE [--label LABEL]
   set-concurrency --config FILE --provider sol --value <2|4|8|16|32|128|256> [--initial-value <2|4|8|16|32|128|256>] [--label LABEL]
   install-service --dry-run --config FILE --executable PATH --workdir PATH --stdout PATH --stderr PATH [--codex-home DIR]
+  install-cdp-browser-service --dry-run --config FILE --executable PATH --stdout PATH --stderr PATH [--label LABEL]
   install-runtime --repository DIR --release-root DIR --commit SHA
   runtime-retention --repository DIR --release-root DIR [--retain-rollbacks N] [--apply --maximum-deletions N]
 
 Inspect and recover:
   import-sol-operations [--config FILE | --state-dir DIR] [--dry-run | --apply --expected-digest SHA256]
+  stage-sol-operation-import --config FILE [--apply]
   status [--config FILE | --state-dir DIR]
   health [--config FILE | --state-dir DIR] [--format json] [--fail-on-blocked]
   doctor [--config FILE | --state-dir DIR] [--deep-integrity]
+    Read-only diagnosis with live scrape counts, prioritized findings, and exact repair commands.
+  completion-plan --input FILE
+    Offline quality-preserving operation/ETA scenarios; never authorizes paid work.
   verify [--config FILE | --state-dir DIR]
-  pause | resume | pause-paid | resume-paid --maximum-sol-operations N [--rearm] | clear-source-stop --confirm
+  pause | resume | pause-paid | resume-paid --maximum-sol-operations N [--rearm]
+  clear-source-stop --confirm | clear-source-failures --confirm
   collector-recovery --action <status|arm> [--config FILE | --state-dir DIR]
+  verify-source --author URL [--executable FILE] [--config FILE | --state-dir DIR]
 
 One-shot maintenance and enrichment:
   init [--state-dir DIR]
-  seed-author --author URL
+  seed-author --author URL [--priority N]
   seed-authors --input FILE [--refresh-generation ID]
   seed-enrichment --input FILE [--provider sol] [--priority N]
   run-enrichment [--provider sol] [--max N]
@@ -148,6 +170,16 @@ async function main(commandArguments: readonly string[]): Promise<void> {
     process.stdout.write(`${HELP}\n`);
     return;
   }
+  if (command === "completion-plan") {
+    const inputPath = option(commandArguments, "--input");
+    if (!inputPath) throw new Error("completion-plan requires --input FILE");
+    const inputStat = await lstat(inputPath);
+    if (!inputStat.isFile() || inputStat.size > 1024 * 1024)
+      throw new Error("Completion-plan input must be a regular file <= 1 MiB");
+    const input = CompletionPlanInputSchema.parse(await readJson(inputPath));
+    print({ command, plan: planEnrichmentCompletion(input) });
+    return;
+  }
   if (serviceMode) {
     const configPath = option(commandArguments, "--config");
     if (!configPath) throw new Error("run-service requires --config");
@@ -185,6 +217,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
     loadManagedSource: loadLaunchdSourceConfiguration,
   });
   if (source !== null) configureSource(source);
+  if (source !== null) await installLaunchdPublicationAccessCredentials();
   if (command === "service-control") {
     const configPath = option(commandArguments, "--config");
     const action = option(commandArguments, "--action");
@@ -352,7 +385,11 @@ async function main(commandArguments: readonly string[]): Promise<void> {
   if (command === "validate-resolution") {
     const input = option(commandArguments, "--input");
     if (!input) throw new Error("validate-resolution requires --input");
-    const store = await ScopedProductionResolutionStore.open(input);
+    // Exported full snapshots use schema v2 while demand-fetched exact-scope
+    // snapshots use schema v3. Validate either supported format through the
+    // version-discriminating opener so the export pipeline cannot reject its
+    // own valid output.
+    const store = await openProductionResolutionStore(input);
     try {
       print({ command, result: await store.report() });
     } finally {
@@ -552,6 +589,39 @@ async function main(commandArguments: readonly string[]): Promise<void> {
     if (!report.ok) process.exitCode = 2;
     return;
   }
+  if (command === "install-cdp-browser-service") {
+    if (!commandArguments.includes("--dry-run"))
+      throw new Error("install-cdp-browser-service supports only --dry-run");
+    const configPath = option(commandArguments, "--config");
+    const executablePath = option(commandArguments, "--executable");
+    const standardOutPath = option(commandArguments, "--stdout");
+    const standardErrorPath = option(commandArguments, "--stderr");
+    if (
+      !configPath ||
+      !executablePath ||
+      !standardOutPath ||
+      !standardErrorPath
+    ) {
+      throw new Error(
+        "install-cdp-browser-service --dry-run requires --config, --executable, --stdout, and --stderr",
+      );
+    }
+    const label = option(commandArguments, "--label");
+    const throttle = option(commandArguments, "--throttle");
+    const report = await preflightChromeCdpLaunchdService({
+      configPath: resolve(configPath),
+      executablePath: resolve(executablePath),
+      ...(label === null ? {} : { label }),
+      standardErrorPath: resolve(standardErrorPath),
+      standardOutPath: resolve(standardOutPath),
+      ...(throttle === null
+        ? {}
+        : { throttleIntervalSeconds: Number(throttle) }),
+    });
+    print({ command, dryRun: true, report });
+    if (!report.ok) process.exitCode = 2;
+    return;
+  }
   const sharedConfigPath = option(commandArguments, "--config");
   if (
     sharedConfigPath !== null &&
@@ -568,6 +638,96 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       ? commandArguments
       : ["--state-dir", sharedConfiguration.config.stateDirectory],
   );
+  if (command === "verify-source") {
+    const authorValue = option(commandArguments, "--author");
+    if (!authorValue) throw new Error("verify-source requires --author URL");
+    const author = canonicalAuthorUrl(authorValue);
+    const executable =
+      option(commandArguments, "--executable") ??
+      (process.platform === "darwin"
+        ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        : null);
+    if (executable === null) {
+      throw new Error("verify-source requires --executable FILE outside macOS");
+    }
+    await access(executable);
+    const profileDirectory = defaultChromeProfile(paths.root);
+    const cdpEndpoint =
+      sharedConfiguration?.config.collector.cdpEndpoint ?? null;
+    const profileOwner = await SourceChromeCollector.create({
+      profileDirectory,
+    });
+    try {
+      process.stderr.write(
+        cdpEndpoint === null
+          ? "Complete source verification in the dedicated Chrome window, then fully quit that Chrome instance.\n"
+          : "Complete source verification in the dedicated Chrome window and leave that Chrome instance running while the collector runs.\n",
+      );
+      const launchArguments = [
+        `--user-data-dir=${profileDirectory}`,
+        "--no-first-run",
+        "--no-default-browser-check",
+        ...(cdpEndpoint === null
+          ? []
+          : [
+              `--remote-debugging-address=${new URL(cdpEndpoint).hostname.replaceAll(/^\[|\]$/gu, "")}`,
+              `--remote-debugging-port=${new URL(cdpEndpoint).port}`,
+            ]),
+        author.href,
+      ];
+      if (cdpEndpoint !== null) {
+        await new Promise<void>((resolvePromise, rejectPromise) => {
+          const child = spawn(executable, launchArguments, {
+            detached: true,
+            stdio: "ignore",
+          });
+          child.once("error", rejectPromise);
+          child.once("spawn", () => {
+            child.unref();
+            resolvePromise();
+          });
+        });
+      } else {
+        await new Promise<void>((resolvePromise, rejectPromise) => {
+          const child = spawn(executable, launchArguments, {
+            stdio: "inherit",
+          });
+          child.once("error", rejectPromise);
+          child.once("exit", (code, signal) => {
+            if (code === 0) resolvePromise();
+            else {
+              rejectPromise(
+                new Error(
+                  `Verification Chrome exited unsuccessfully (${signal ?? String(code)})`,
+                ),
+              );
+            }
+          });
+        });
+      }
+    } finally {
+      await profileOwner.close();
+    }
+    print({
+      command,
+      profileDirectory,
+      result: { url: author.href },
+      verificationStatus:
+        cdpEndpoint === null ? "chrome_exited_unverified" : "operator_required",
+      ...(cdpEndpoint === null ? {} : { browserStarted: true, cdpEndpoint }),
+    });
+    return;
+  }
+  if (command === "stage-sol-operation-import") {
+    if (!sharedConfiguration)
+      throw new Error("stage-sol-operation-import requires --config FILE");
+    const result = await stageLegacyOperationSchema34({
+      stateDirectory: paths.root,
+      apply: commandArguments.includes("--apply"),
+    });
+    print({ command, result });
+    return;
+  }
   if (command === "import-sol-operations") {
     const apply = commandArguments.includes("--apply");
     const expectedDigest = option(commandArguments, "--expected-digest");
@@ -681,12 +841,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       )
         throw new Error("INIT_UNSAFE_ATTEMPT_INDEX");
       new ArtifactStore(paths.artifacts);
-      print({
-        command,
-        initialized: true,
-        paths,
-        status: diagnosticLedgerStatus(ledger.status()),
-      });
+      print({ command, initialized: true, paths, status: ledger.status() });
     } finally {
       ledger.close();
     }
@@ -731,10 +886,13 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         paused: pauseState.paused,
         runLock: owner.lock,
         runtimeOwnerIssue: owner.issue,
+        sourceRequestTelemetry: await readSourceRequestTelemetryStatus(
+          paths.root,
+        ),
         supervisorStatus: (await pathExists(resolve(paths.root, "status.json")))
           ? await readJson(resolve(paths.root, "status.json"))
           : null,
-        status: diagnosticLedgerStatus(ledger.status()),
+        status: ledger.status(),
         stateInventory,
       });
     } finally {
@@ -781,16 +939,20 @@ async function main(commandArguments: readonly string[]): Promise<void> {
     return;
   }
 
-  if (command === "clear-source-stop") {
+  if (command === "clear-source-stop" || command === "clear-source-failures") {
     if (!commandArguments.includes("--confirm"))
-      throw new Error("clear-source-stop requires --confirm");
+      throw new Error(`${command} requires --confirm`);
+    configureSource(readLedgerSourceIdentity(paths.database));
     const ledger = await openExisting(paths.database);
     try {
       print({
-        cleared: ledger.clearOriginStop(currentSource().origin),
+        cleared:
+          command === "clear-source-stop"
+            ? ledger.clearOriginStop(currentSource().origin)
+            : ledger.clearOriginFailures(currentSource().origin),
         command,
-        origin: REDACTED_SOURCE_ORIGIN,
-        status: diagnosticLedgerStatus(ledger.status()),
+        origin: currentSource().origin,
+        status: ledger.status(),
       });
     } finally {
       ledger.close();
@@ -801,12 +963,16 @@ async function main(commandArguments: readonly string[]): Promise<void> {
   if (command === "seed-author") {
     const author = option(commandArguments, "--author");
     if (!author) throw new Error("seed-author requires --author URL");
+    const priorityRaw = option(commandArguments, "--priority");
+    const priority = priorityRaw === null ? 0 : Number(priorityRaw);
+    if (!Number.isSafeInteger(priority))
+      throw new Error("--priority must be an integer");
     const ledger = await openExisting(paths.database);
     try {
       print({
         command,
-        result: seedAuthorManifest(ledger, author),
-        status: diagnosticLedgerStatus(ledger.status()),
+        result: seedAuthorManifest(ledger, author, priority),
+        status: ledger.status(),
       });
     } finally {
       ledger.close();
@@ -833,7 +999,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         declaredPoems: inventory.declaredPoems,
         duplicate: results.filter(({ inserted }) => !inserted).length,
         inserted: results.filter(({ inserted }) => inserted).length,
-        status: diagnosticLedgerStatus(ledger.status()),
+        status: ledger.status(),
         unknownPoemCounts: inventory.unknownPoemCounts,
       });
     } finally {
@@ -873,7 +1039,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         duplicate: results.filter((result) => !result.inserted).length,
         inserted: results.filter((result) => result.inserted).length,
         paths,
-        status: diagnosticLedgerStatus(ledger.status()),
+        status: ledger.status(),
       });
     } finally {
       ledger.close();
@@ -958,12 +1124,7 @@ async function main(commandArguments: readonly string[]): Promise<void> {
           return state.paused || state.paidWorkPaused;
         },
       });
-      print({
-        command,
-        paths,
-        result,
-        status: diagnosticLedgerStatus(activeLedger.status()),
-      });
+      print({ command, paths, result, status: activeLedger.status() });
     } finally {
       process.off("SIGINT", abort);
       process.off("SIGTERM", abort);
@@ -1004,23 +1165,80 @@ async function main(commandArguments: readonly string[]): Promise<void> {
   }
 
   if (command === "doctor") {
-    const ledger = await openExisting(paths.database);
+    configureSource(readLedgerSourceIdentity(paths.database));
+    // The config digest is source-bound. Reload only after adopting the
+    // ledger's persisted source identity so read-only doctor comparisons use
+    // the same authority as the running rig without consulting Keychain.
+    const diagnosticConfiguration =
+      sharedConfigPath === null
+        ? null
+        : await loadScraperOperationConfig(sharedConfigPath);
+    const ledger = await openExisting(paths.database, { readonly: true });
     try {
+      const now = Date.now();
       const report = ledger.doctor(
-        Date.now(),
+        now,
         commandArguments.includes("--deep-integrity") ? "full" : "schema",
       );
       const stateInventory = await inspectStateInventory({
         ledger,
         root: paths.root,
       });
-      print({ command, paths, report, stateInventory });
-      if (
-        report.integrity !== "ok" ||
-        report.schemaVersion < 1 ||
-        !stateInventory.codexScheduler.safeToOperate
-      )
-        process.exitCode = 2;
+      const owner = await inspectRunOwner(resolve(paths.root, "RUN.lock"));
+      let health = null;
+      let healthReadError: null | string = null;
+      try {
+        health = await readPipelineHealth(
+          resolve(paths.root, "health/latest.json"),
+        );
+      } catch (error) {
+        healthReadError =
+          error instanceof Error ? error.message : String(error);
+      }
+      const cdpEndpoint =
+        diagnosticConfiguration?.config.collector.cdpEndpoint ?? null;
+      let controlReadError: null | string = null;
+      let pauseState = { paidWorkPaused: false, paused: false };
+      try {
+        pauseState = ledger.pauseControls.read();
+      } catch (error) {
+        controlReadError =
+          error instanceof Error ? error.message : String(error);
+      }
+      const diagnosis = buildDoctorReport({
+        cdp:
+          cdpEndpoint === null ? null : await inspectCdpEndpoint(cdpEndpoint),
+        config: diagnosticConfiguration?.config ?? null,
+        configDigest: diagnosticConfiguration?.configDigest ?? null,
+        configPath: diagnosticConfiguration?.configPath ?? null,
+        controlReadError,
+        currentEnrichmentCompleted: [
+          "saqi.poem-enrichment-input@1",
+          "saqi.poem-enrichment-input@2",
+        ].reduce(
+          (total, schemaVersion) =>
+            total +
+            ledger.profileProgress("poem-enrichment-sol", {
+              implementationVersion: SOL_PIPELINE_VERSION,
+              schemaVersion,
+            }).completed,
+          0,
+        ),
+        health,
+        healthReadError,
+        ledgerReport: report,
+        ledgerStatus: ledger.status(),
+        now,
+        paidWorkPaused: pauseState.paidWorkPaused,
+        paused: pauseState.paused,
+        root: paths.root,
+        runLock: owner.lock,
+        runtimeOwnerIssue: owner.issue,
+        solBudget: ledger.solPaidUsageBudgetStatus(),
+        stateInventory,
+      });
+      print({ command, diagnosis, paths, report, stateInventory });
+      if (!diagnosis.healthy) process.exitCode = 2;
     } finally {
       ledger.close();
     }

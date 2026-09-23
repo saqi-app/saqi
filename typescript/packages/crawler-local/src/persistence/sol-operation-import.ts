@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
+import { acquireLegacyMaintenanceLock } from "../runtime/acquire-legacy-maintenance-lock.js";
 import { acquireRunLock, readRunLock } from "../runtime/run-lock.js";
 import {
   type SolImportedAttempt,
@@ -27,7 +28,7 @@ const StoppedControlsSchema = z.strictObject({
 const EmptySchema = z.strictObject({ count: z.literal(0) });
 const ImportedSchema = z.strictObject({ enabled: z.literal(1) });
 const VersionSchema = z.strictObject({
-  version: z.literal(36),
+  version: z.literal([34, 35]),
 });
 const READ_RECEIPT = `SELECT source_digest AS sourceDigest, record_count AS records,
   source_bytes AS sourceBytes, imported_at AS importedAt FROM sol_operation_import_receipt WHERE singleton = 1`;
@@ -57,7 +58,7 @@ interface ImportPort {
     reader: SolOperationLegacyReader,
     expectedDigest: string,
   ): Promise<SolImportReceipt>;
-  assertStopped(): 36;
+  assertStopped(): 34 | 35;
   readReceipt(): SolImportReceipt | undefined;
 }
 
@@ -81,7 +82,7 @@ export async function importLegacySolOperations(
     const repository = new SolOperationImportRepository(database);
     const receipt = repository.readReceipt();
     if (receipt !== undefined) return { mode: "already_imported", receipt };
-    repository.assertStopped();
+    const version = repository.assertStopped();
     const lockPath = join(root, "RUN.lock");
     const legacyLock = await lstat(lockPath).catch((error: unknown) => {
       if (error instanceof Error && "code" in error && error.code === "ENOENT")
@@ -90,7 +91,7 @@ export async function importLegacySolOperations(
     });
     if (legacyLock !== null)
       throw new Error("RUNTIME_OWNER_LEGACY_LOCK_PRESENT");
-    if ((await readRunLock(lockPath)) !== null)
+    if (version === 35 && (await readRunLock(lockPath)) !== null)
       throw new Error("SOL_IMPORT_REQUIRES_STOPPED_OWNER");
     const reader = new SolOperationLegacyReader(join(root, "sol-attempts"));
     if (options.apply !== true) {
@@ -106,9 +107,12 @@ export async function importLegacySolOperations(
       };
     }
     const expectedDigest = HashSchema.parse(options.expectedDigest);
-    const lock = await acquireRunLock(lockPath, expectedDigest, new Date(), {
-      recoverStale: false,
-    });
+    const lock =
+      version === 34
+        ? await acquireLegacyMaintenanceLock(lockPath, expectedDigest)
+        : await acquireRunLock(lockPath, expectedDigest, new Date(), {
+            recoverStale: false,
+          });
     try {
       return {
         mode: "applied",
@@ -149,7 +153,7 @@ class SolOperationImportRepository implements ImportPort {
     return receipt;
   }
 
-  assertStopped(): 36 {
+  assertStopped(): 34 | 35 {
     const { version } = queryRequired(
       { operation: "solImport.schema" },
       () =>
@@ -245,9 +249,11 @@ class SolOperationImportRepository implements ImportPort {
   }
 
   #insert(scan: SolLegacyScan): void {
+    // eslint-disable-next-line @sarj/store-insert-requires-on-conflict -- One-time import checks both tables empty under BEGIN IMMEDIATE; conflicting legacy identities must abort the entire import, never be ignored or overwritten.
     const operation = this.#database.prepare(`INSERT INTO sol_operation(
       operation_key, kind, model, model_key, pipeline_version, provider, reasoning_effort,
       current_attempt_id, current_epoch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`);
+    // eslint-disable-next-line @sarj/store-insert-requires-on-conflict -- Duplicate attempt IDs are corrupt legacy evidence and must roll back all imported rows and the receipt.
     const attempt = this.#database.prepare(`INSERT INTO sol_invocation_attempt(
       attempt_id, operation_key, claim_epoch, input_hash, created_at, state, exit_code, signal,
       finished_at, turn_started_at, session_id, session_observed_at, observations_json)

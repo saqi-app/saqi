@@ -2,17 +2,10 @@
   "schemaVersion": 2,
   "provenance": {
     "bundleVersion": "7.29.0",
-    "consumerBaseSha": "bce9528f0124161d361c6326e0d5abcbe01c83e2",
+    "consumerBaseSha": "41dbfec7d924eb6bc0edcf1acaaaf3579d67342e",
     "catalogDigest": "0af35f4c68e41f52cdd4b6faf23f1de761c635b1eeeae825c726b75741350521"
   },
   "diagnostics": [
-    {
-      "fingerprint": "3489c6b30cbe05c94269128d672cc28d272308da00b4d12e8aad96e9cd91573d",
-      "source": "eslint",
-      "ruleId": "@sarj/no-broad-return-type",
-      "path": "typescript/packages/crawler-local/src/__tests__/migrations.test.ts",
-      "count": 2
-    },
     {
       "fingerprint": "bc7ead7dbf0e90cede7b798205566b0063c295ff89994a76454eac640e82e9cf",
       "source": "eslint",
@@ -63,6 +56,13 @@
       "count": 1
     },
     {
+      "fingerprint": "6863d0db14fc5dd19192258b3cc7ee55277e8a068cab7c8dc61369641fdd4a47",
+      "source": "eslint",
+      "ruleId": "@sarj/no-conditional-empty-object-spread",
+      "path": "typescript/packages/crawler-local/src/__tests__/cli-command-policy.test.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "f6d5ea2e06b82870600dc3f7ae6782b9b14acf0ec9f1fb529db43f4c78627f59",
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
@@ -74,7 +74,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/crawler-local/src/__tests__/ledger.test.ts",
-      "count": 1
+      "count": 2
     },
     {
       "fingerprint": "c6065cf3b26d05f2d5447239410f1159d7942e9437d5d4dc98e4947ef849e644",
@@ -130,7 +130,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/crawler-local/src/cli.ts",
-      "count": 10
+      "count": 13
     },
     {
       "fingerprint": "3ae3429c3ea8d894a74eff566c303519e6992d4ba675bd6c68e9f21aa3fcf18a",
@@ -165,7 +165,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
-      "count": 1
+      "count": 4
     },
     {
       "fingerprint": "182b2bc2e3f787a0fb9869bc4d0ec30deee9dddfbaedc4278767c9ac81447ba8",
@@ -179,7 +179,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 2
+      "count": 3
     },
     {
       "fingerprint": "426181ee98309d34a0eeba8e6c410c83484de7c86f77d4d3b57223d539dd4574",
@@ -249,7 +249,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
-      "count": 8
+      "count": 9
     },
     {
       "fingerprint": "8c1e3da536edf6ceeef6f5e75d8f1aedc1c8e180ab3be19d1052948e02e628fa",
@@ -263,14 +263,14 @@
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
-      "count": 2
+      "count": 5
     },
     {
       "fingerprint": "d8b6b5a7a542a14b4f70d6fb5aafbbd71f720b1ccabe156a805a7c90440b16fb",
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
       "path": "typescript/packages/site/src/lib/catalog.ts",
-      "count": 24
+      "count": 26
     },
     {
       "fingerprint": "3cf49d10a522e9417f5ce8ee188657da124615f7f24e52396ae21b85a9f0fa45",
@@ -280,13 +280,6 @@
       "count": 3
     },
     {
-      "fingerprint": "e1ab331bdec7b03521234d1de0575f9d32c05c96ac6b0f57ff482e1ccca42497",
-      "source": "eslint",
-      "ruleId": "@sarj/no-conditional-empty-object-spread",
-      "path": "typescript/packages/source-adapter/src/constants.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "5ea94d9c23fd0b4f7279bc145f1934b0c7edb66eb6e7eeb66265202b97715ba6",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
@@ -294,56 +287,63 @@
       "count": 1
     },
     {
-      "fingerprint": "9abc32226b7ee958d6dff9bf9608e22d1c1dd22a9dcb4046f4a4fa69fd1d0d51",
+      "fingerprint": "872953f4d17a5dd50b87e6d2bc3a715456ad9a366b2486a47e4df90634f641b2",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/cli.ts",
       "count": 1
     },
     {
-      "fingerprint": "74be20bbf0eadd113dee862e9eca36284c2e09b0bb954932c24d477893aad55d",
+      "fingerprint": "25615cc8c177e43260f793449048efd06225342b812b648b295968aa1824009a",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/author-inventory-lane.ts",
       "count": 1
     },
     {
-      "fingerprint": "00f99180698da818eb57a5a24eff4bfe15b792fba728f0ce9e9930f0f3fe09eb",
+      "fingerprint": "29402699930211e29b9ca8d15d969efc5861a1736a20fbb09a83ed6d59874418",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
       "count": 1
     },
     {
-      "fingerprint": "98a282394517a7c1a707f93b095b264d91fb940b77cebc2b4d7d807c1ee5443a",
+      "fingerprint": "428619950f5d17d3825a2d5681243da89702b0be6b4e028ba28127d7d23de0e7",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
       "count": 1
     },
     {
-      "fingerprint": "9d19c1124041807850601692b9ac557025670f9370045851fd9ebb9ebf6e57d4",
+      "fingerprint": "67df76a7405fdd569fb3e902f14508a9688943b2727b0fe1804871380cfda4fd",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
       "count": 1
     },
     {
-      "fingerprint": "b112aa66106557a799d8664f7e9fa7e21f6c072834868f8a366baa1e4eacfb2c",
+      "fingerprint": "f26e1b362329c037744b90a66a0e638f7dc0326ccf68be4165714261e3c3a25a",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
       "count": 1
     },
     {
-      "fingerprint": "b42a1a00ce6bca4191a2076c7aaee0a128d652a77feb2f361717876261129c9b",
+      "fingerprint": "f3488afc141e103432ed7e5d0fc021e9f2eca0951700c6201cf861c49dec0fb3",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "43c354fb8e54081d4c17524c1ab531a0201ca6b0f50db4e8ffa9cbfc689a7ad4",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collector.ts",
       "count": 1
     },
     {
-      "fingerprint": "d61ee0d37d17db0aedd4fa45c0c1448674d23540f131912b6189d968829bec96",
+      "fingerprint": "49775613f2f86a6d4ca601d3aea89c35c624c0478b33b18509ff14280976c820",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/collection/collector.ts",
@@ -357,7 +357,7 @@
       "count": 1
     },
     {
-      "fingerprint": "fcc6bb11dc3a4bfb53baf0e6d996bca71e3f4339d32672f17239c5b7fb330a40",
+      "fingerprint": "ff74c2c8ed80a440080cfbcbea573aef9b50fa57eca22a9aad3c6a76b5cd7b95",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/local-enrichment-fanout.ts",
@@ -392,21 +392,21 @@
       "count": 1
     },
     {
-      "fingerprint": "93ce1302c95a5b2c589b8c67c69534bdb476030af5cc692ee4e17f3a7c065973",
+      "fingerprint": "3302f1a3f9da8b16fe3e0ee17ab0bbcfa0fb58992483ab2831684d1bbcac9964",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "cc294c9cb0d0d8e17b412b75ccdb0334e0f8f278a016bfe69442b06ca3ba5c07",
+      "fingerprint": "6cdf2a75ffecb20e3859613acb09c3a3bc63e33d5f44b4190ee9224712dfb59b",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "d8afc87a706de61a3774c71923307f31073ab740d515cef1a09a12941a65a040",
+      "fingerprint": "b6dd615ce12800fcf1c01a39efec57cdc309c3255648acb30bc8d63ce4c8105c",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
@@ -434,7 +434,7 @@
       "count": 1
     },
     {
-      "fingerprint": "081c125bd5d54b160627fa30a14ac6d3ffd35441d24b444e3ecab28516206db9",
+      "fingerprint": "f91a90d5a3e5642dce0a774de0d196f6d79288652d330df54274b869efe82f4b",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-runner.ts",
@@ -448,21 +448,28 @@
       "count": 1
     },
     {
-      "fingerprint": "9b14713ce544bb5ba3f10c3b041b77acde4eb58d3847f9a870f2e675bdda1da9",
+      "fingerprint": "bb85c05b1460f55f1ce061fabc5e525b33befa1c51116993b3486c64238629fc",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
       "count": 1
     },
     {
-      "fingerprint": "553ee4b837f652a5800c5cecd488d1f02b78212aa741ab56fcc29743133152a2",
+      "fingerprint": "053af816549e5c3e32bd6941ac93a2ab0c05e66598d0898090d1825b56402040",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "37af0085da6b15c076d7c2a2a01c1c22f580819cbf1e0cd0fa1aa7fe9259f110",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
       "count": 1
     },
     {
-      "fingerprint": "57981d60a084da60c58be128b2407ace2b217942024bed785b6f4f2e8315eb24",
+      "fingerprint": "d5deade6fb26365adb1a5c70eb7462a4e07c4bf7d696ba2204959e3ba96f551e",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
@@ -483,14 +490,14 @@
       "count": 1
     },
     {
-      "fingerprint": "8f878399d6f569e09030007da18229fa8980b3d1c0fafc8d70233277a9f2f832",
+      "fingerprint": "6d26248e1a105e78d740bfc6b1169d1bae08dd768946740ee6329dc2397be1b6",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
       "count": 1
     },
     {
-      "fingerprint": "6fd8f247a07d0369a7de8c75f8519c8a1e7e915f01bfc751375811b027242790",
+      "fingerprint": "6993fb8e7a29444ad7c15027ce3eabf8c4a459d1acad23cbe22d8361efe5650e",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
@@ -511,35 +518,35 @@
       "count": 1
     },
     {
-      "fingerprint": "90ab245c4c96b754965fa09906c42fcb657e29047c76c269831850c9b34951bd",
+      "fingerprint": "63303c4972cc4f7b3bd84613510cc4f1f5801d0331999185ab2a0b337607955b",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
       "count": 1
     },
     {
-      "fingerprint": "a3430df10dde0c3c716d0872c19f87c4cfffd7df51e08f156e7d62bbaaadcff0",
+      "fingerprint": "cad047b1d89584c8412d02d380eb7a7e41bca708d5a9c42107e1185fad444d81",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
       "count": 1
     },
     {
-      "fingerprint": "c079ea8f9f3c1bd74a6a3c25503d8ed717e73c2f6809c6acfe600139b94b2a79",
+      "fingerprint": "e28a53e1844072960c016fc147d013fe1b3c7103113f96e94216f0a1b9345547",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
       "count": 1
     },
     {
-      "fingerprint": "e5508380aa94d40c68863a7eed048cecbde3886394912f30c4876976fc0f6aa5",
+      "fingerprint": "f7719392785fdd5f60fcc1f8d5003e3d8a466667c0b8046a23cc25139b48da63",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
       "count": 1
     },
     {
-      "fingerprint": "ecfcb1d09eadd36ebeccc2b37977fb14c1b3e83bf7b965d6a42d4e6b0a48238d",
+      "fingerprint": "fa06ebaaeb177abd4f046f78f4054d9e888a32d20c5c4d44282f00aeb132cc4b",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
@@ -567,35 +574,42 @@
       "count": 1
     },
     {
-      "fingerprint": "3c9c5e39602e03e01af8eada92d8b419c87d769e0a6c74c6317ba90d0f9b4da2",
+      "fingerprint": "1e0c89453fae4ca6fba2a756cebd1d277d0063f27370e6e2e72af66a98decf78",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
       "count": 1
     },
     {
-      "fingerprint": "5145425ebef7ca4ad11c596df406a3b649730765008414f216f5efe12c2f1dfd",
+      "fingerprint": "8f977fe7dc3c42d18f6b5b6111746e5b9b4cdcec5574491248dfffb046b3bf24",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
       "count": 1
     },
     {
-      "fingerprint": "8921a882a0ded5bd80b8b23bd42d1f0fe00bfc376eaf54b5da0ea7b8420e1e30",
+      "fingerprint": "d4b57ff5d24b6091c63622b4f72ce68a8d90f8f5c4a4cdad28add2e08712a7cd",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
       "count": 1
     },
     {
-      "fingerprint": "42f3ca4093b88a5ad030727f6670a58bd798faa030c76054339915d4c7287ba9",
+      "fingerprint": "d27ce9bc21d7b47d099ef59c6110d018eb2885182709aec03f54550e72f4d44f",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/doctor-report.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "422d0e58de27d94ebf0c567ce221c6ed0ed7269e928d34fbdd067d7ee2b9d7c5",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/launchd-control.ts",
       "count": 1
     },
     {
-      "fingerprint": "c1004f3a02d8347e439b0a39aa3cbc96efdcdb9e8019751d8ae55233dc744260",
+      "fingerprint": "7c7a5d45aaaa65e5795a8c30cab81e11f9f271d46dde0798e59a20ede0adab59",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/operations-contract.ts",
@@ -644,77 +658,77 @@
       "count": 1
     },
     {
-      "fingerprint": "275c17b9c20191941fa55a54b10f5b35ab162890e146516d7927e1bfa4ce8027",
+      "fingerprint": "370b631da9cf80095c08740a18ab68377538879108287245526c68a80d1684cd",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "38adcaec4dbce3bac4713d916a3dbc50860d98d4eb52a4eeeeb35afe44465584",
+      "fingerprint": "479d4b60656c1deade77396d7e2f3ca043d933ae54395648b335b053c6e92faf",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "96364339c3087bc3caea9d9f9bbee76386f921320ee93454662b4170a855d2b5",
+      "fingerprint": "67a22df114961d774f036d9572fc05759b370e0c21c14c50e383bd05866d37e5",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "ccc160ff6fbce9e1e1032694b538fafa7bdb79461490794eebfee9b048984e3a",
+      "fingerprint": "ce1fe86fd18eabb695d18dc45fa319dd63b39e20529b2288a6187bdc8fba46d9",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "fe42460dc06d9f0219762fb3e4cffb14c4f7ffe8ac2bc9763dbc265519d92942",
+      "fingerprint": "edff6c7870d7e2c196c1a2256c9433b3f1a14f4c0ec13d8f05cddb464113b92c",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "63215af1741b670db484f1c336646c77601e23be9ad50e52fca9c4b1d0c9ac74",
+      "fingerprint": "606b047be0f22b9c5ca549dd7b66410735d3007104050cbcda9ee84fec3ee6b0",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
       "count": 1
     },
     {
-      "fingerprint": "88b05fdcaa7bce13dd104a5f7c7025021800edfc025559ff68bdb6e77ebc3027",
+      "fingerprint": "6dc86b7c8f2a8374217a1d52aa789968895ca3b43ae06a376835c20eaf179d97",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/precedent-node/src/services/poem-store.ts",
       "count": 1
     },
     {
-      "fingerprint": "2bd98223f154dc71fd4acf52ab56dfec47ca149feddd74b0fa7a417b3a04f074",
+      "fingerprint": "454e3759fcac0de3931541480ae9a48787773f7176746f10c35426871f2c7625",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
       "count": 1
     },
     {
-      "fingerprint": "a75f7513aa6ffd556a991bd33baeb7c1603db66a78457b805e01cc7de179145c",
+      "fingerprint": "e20d12c85239d03fd8ebc2378dc999b9e3d0de334ae216147967fea2fd3b4d94",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/site/src/lib/catalog.ts",
       "count": 1
     },
     {
-      "fingerprint": "d7fa73f50a54118a4f747294f4b89eac6bf924ae2e74427d3c815ec0df0b509b",
+      "fingerprint": "3cfb2bc8b3f9abdc23c4e46a8e9f6198d30e1274cd5d122330e3c3100eb4edd7",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/site/src/lib/poem-translations.ts",
       "count": 1
     },
     {
-      "fingerprint": "e70a092ac5cecc96cdb087574f65e24b58e16cdea045ce7c269d815e2fbfb788",
+      "fingerprint": "5dd8b92594ed36e95fcf0722998c1ad7e0763b24e31d03eba5c2416d22b2a508",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/source-adapter/src/author-inventory.ts",
@@ -732,7 +746,7 @@
       "source": "eslint",
       "ruleId": "@sarj/no-unsafe-test-double-cast",
       "path": "typescript/packages/crawler-local/src/__tests__/collector.test.ts",
-      "count": 15
+      "count": 16
     },
     {
       "fingerprint": "1c7c0ce96d62e9f265ab08ebd1078a57b5c294b5970a7af58d375245b5e9e8ec",
@@ -767,34 +781,6 @@
       "source": "eslint",
       "ruleId": "@typescript-eslint/naming-convention",
       "path": "typescript/packages/app/cloudflare-env.d.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "0c55a8693d883cbaa69688bf6333c80a3f85582d3c5f6218a373801c7a1cfd68",
-      "source": "eslint",
-      "ruleId": "@typescript-eslint/naming-convention",
-      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "5395c4edc2b07b63113c060bcd27ec08f545f47801af51241f9585c837277d1c",
-      "source": "eslint",
-      "ruleId": "@typescript-eslint/naming-convention",
-      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "5c482ea3b96a397b9fd3115dd9439577a7a0b76c93121e3a90523a476e75b732",
-      "source": "eslint",
-      "ruleId": "@typescript-eslint/naming-convention",
-      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "7e4482b9878c1e93879fbc7b74e6671f2d7d518d80b28b3e365d8673aa720f5e",
-      "source": "eslint",
-      "ruleId": "@typescript-eslint/naming-convention",
-      "path": "typescript/packages/app/src/lib/source-lineage-maintenance.ts",
       "count": 1
     },
     {
@@ -896,6 +882,13 @@
       "count": 3
     },
     {
+      "fingerprint": "4a9d922585cf68939aa0505e6cd2e23f1812b68bb57e56a7b951e8252fcfd67d",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "4e129006bff0f8f05b3edb7d574b16cd6552403c21122ab39212480dbbfba59b",
       "source": "eslint",
       "ruleId": "@typescript-eslint/naming-convention",
@@ -915,6 +908,20 @@
       "ruleId": "@typescript-eslint/naming-convention",
       "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
       "count": 2
+    },
+    {
+      "fingerprint": "6e48e84a25ec450c30103a7c2d63f52acaaf1715abef934004bc853bc84e1dca",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "7add74e9b124ffc12597f3ba47b07a97be7b49e9516cea4d703f898e59b1069c",
+      "source": "eslint",
+      "ruleId": "@typescript-eslint/naming-convention",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-store.ts",
+      "count": 1
     },
     {
       "fingerprint": "8a4042a12347890a2c340fce2059e27bc91858cc9edebd1f250313c6469177d6",
@@ -1134,6 +1141,34 @@
       "count": 2
     },
     {
+      "fingerprint": "ac7142cffe732551ef52fc152ea71f8fcebc71b83ef245386eb67c19a193bbe6",
+      "source": "eslint",
+      "ruleId": "arrow-body-style",
+      "path": "typescript/packages/crawler-local/src/persistence/production-resolution-demand-cache.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "59ecc83a6a08a114dd53b9c70ec22ff1481f87cea9f909ec3841bb1527ef58b3",
+      "source": "eslint",
+      "ruleId": "eslint/file",
+      "path": "typescript/packages/crawler-local/src/persistence/sol-operation-import.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "8c951cc77edc881cb226e60ddede6451861374bbc929b709f5ca13d4cc349959",
+      "source": "eslint",
+      "ruleId": "eslint/file",
+      "path": "typescript/packages/crawler-local/src/runtime/chrome-cdp-launchd-service.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "223bbfa45b8f2f126f47a43d2d396e9ada4e5c9d6952558506433121d108c37b",
+      "source": "eslint",
+      "ruleId": "eslint/file",
+      "path": "typescript/packages/crawler-local/src/runtime/launchd-service.ts",
+      "count": 2
+    },
+    {
       "fingerprint": "5ceda1cea3aad80f94472ce38e04fab6038f7f9a4c03412d369b950efcf10e29",
       "source": "eslint",
       "ruleId": "no-control-regex",
@@ -1190,13 +1225,6 @@
       "count": 1
     },
     {
-      "fingerprint": "fa151d25f2da76142a73d0946a1aedfc8db91cee1c33c93149d2544b20b6a981",
-      "source": "eslint",
-      "ruleId": "no-control-regex",
-      "path": "typescript/packages/source-adapter/src/profile.ts",
-      "count": 2
-    },
-    {
       "fingerprint": "1f12eff0a55c480f1b605884e1e9546990411bd12ffe8f336473c1211b929027",
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
@@ -1208,6 +1236,13 @@
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/app/src/lib/cloudflare.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "2b25c9fb312fb3562065f7acdaf8eb947a56c37faced871c998dbce12e5dd2a8",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/__tests__/cdp-diagnostics-client.test.ts",
       "count": 1
     },
     {
@@ -1257,13 +1292,20 @@
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
-      "count": 8
+      "count": 9
     },
     {
       "fingerprint": "0245f085e81859f90ad497f51c4948853743dbd35b3cdbf430d12122e23b361e",
       "source": "eslint",
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/crawler-local/src/collection/collector.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "528528bb9b64a70aea07748be43eafb750619f5699cd71ecb4929f261188029a",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/collection/source-request-telemetry.ts",
       "count": 2
     },
     {
@@ -1335,6 +1377,13 @@
       "ruleId": "no-restricted-syntax",
       "path": "typescript/packages/crawler-local/src/publication/publication-lane.ts",
       "count": 1
+    },
+    {
+      "fingerprint": "f98115f0ffa4d5993b321b1a3d9447b459be3f3f0a9b2979ed68e7e445e4c681",
+      "source": "eslint",
+      "ruleId": "no-restricted-syntax",
+      "path": "typescript/packages/crawler-local/src/runtime/chrome-cdp-launchd-service.ts",
+      "count": 2
     },
     {
       "fingerprint": "bea1c58defda6628f930692662914fcb279d6dc2417bb29b987cde09dd0f9d35",
@@ -1484,6 +1533,13 @@
       "count": 3
     },
     {
+      "fingerprint": "92e53cc3c739d83a94a2b1b199d65a1eb0832c0952a7b79ed223e48dd7204c7c",
+      "source": "eslint",
+      "ruleId": "no-undef",
+      "path": "typescript/scripts/configure-ops-secrets.test.mjs",
+      "count": 1
+    },
+    {
       "fingerprint": "34f80dcd7ab5176dc8c0cb3cba13e5d5cba1b2eeb9f2e77707fd6e991f248b53",
       "source": "eslint",
       "ruleId": "no-undef",
@@ -1537,6 +1593,13 @@
       "source": "eslint",
       "ruleId": "no-useless-assignment",
       "path": "typescript/packages/crawler-local/src/__tests__/sol-runner.test.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "5aa8b485f3c2cd38423848b55895a9d9e5401830831496a2d8f8deb48515320f",
+      "source": "eslint",
+      "ruleId": "no-useless-assignment",
+      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
       "count": 1
     },
     {
@@ -1631,6 +1694,20 @@
       "count": 2
     },
     {
+      "fingerprint": "74e189740f90f6438cb184b58d6670c62ba56610bc90e4ca71fc069f7f01b4b5",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/app/src/app/api/v2/enrichment-publications/route.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "414501a82fc6b4d4d5a5d5a2db34b10915549db1e646119762688c2b1918e9c5",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/app/src/lib/public-cache.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "7d2ec8cb6becbe3e08c8446e36b8ac597f80bb3593cf808db7d47bb74a83ea4b",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
@@ -1659,10 +1736,24 @@
       "count": 1
     },
     {
+      "fingerprint": "d2e038f88611673ed2b269c85f61e13065411cf12ec8f3b1414114ce2cf78460",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "b70b58c747f8652bf1109ac6e13f0057f04cd9dadfc3ed7d7227f6ad669911f9",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3c650a8c7af2355dca8b46ecbfeb39823dde1d780393079bc670424e823915ca",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
       "count": 1
     },
     {
@@ -1673,7 +1764,28 @@
       "count": 1
     },
     {
+      "fingerprint": "fda95f448ecfd54d4cb0cd028b14c821dce41952fb52600d36249e9b57580766",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/persistence/runtime-owner-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "32225b9a66742d713f27000463f311125ba504d1127160b153a3046ed22d03dc",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/persistence/sqlite-query.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "0e3fa2f74f0ff40d526504a2162cdea3eb1bb9744648920d28506ab1582fe7ea",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "9535333d0d3101b7c9b7243950c61b87498a34460f8430ee8c974309871face5",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/publication/fanout-reconciler.ts",
@@ -1687,10 +1799,24 @@
       "count": 1
     },
     {
+      "fingerprint": "b81d778a234ff85847571b7dc82436206e90a4bc35dd51bbb5c9d47acd011120",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
       "fingerprint": "ffa8cc3b4cb188f93164b97951174e6c17e4fc7c0e07e33ad5f718f38e881dd2",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/precedent-node/src/services/corpus-revision-store.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "f89f6f39d3c357c8a678553ab64cbcf79ee2c33dda13efa660638f3ae7db302d",
+      "source": "eslint",
+      "ruleId": "unicorn/custom-error-definition",
+      "path": "typescript/packages/precedent-node/src/services/production-resolution-reader.ts",
       "count": 1
     },
     {
@@ -1701,11 +1827,11 @@
       "count": 1
     },
     {
-      "fingerprint": "2671c0a576897b28b0b1e134bdaae55a4803a6fa224ab434dd21c62e637c1a3f",
+      "fingerprint": "a6be4d9f493f18553042b1cb537f72ffa26809a0f5afe7c8389f80a086724f7e",
       "source": "eslint",
-      "ruleId": "unicorn/no-computed-property-existence-check",
-      "path": "typescript/packages/crawler-local/src/collection/collection-source-browser.ts",
-      "count": 2
+      "ruleId": "unicorn/iteration-fallback-style",
+      "path": "typescript/packages/site/src/lib/poem-translations.ts",
+      "count": 1
     },
     {
       "fingerprint": "3e9542bd7d9883bf519aa2c7b204b986cbbce4bd7bc1ec673f21d38d1e2b4951",

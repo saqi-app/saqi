@@ -11,6 +11,7 @@ import { z } from "zod";
 import { Ledger } from "../persistence/ledger.js";
 import { inputHash, sha256 } from "../persistence/work-key.js";
 import { acquireRunLock, readRunLock } from "../runtime/run-lock.js";
+import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
 const execFileAsync = promisify(execFile);
@@ -28,12 +29,13 @@ function inspectLedger(path: string): Ledger {
   return new Ledger(database, { readonly: true, path });
 }
 
-function fixture() {
+function fixture(version: 34 | 35 = 35) {
   const root = trackedMkdtempSync(join(tmpdir(), "sol-import-cli-"));
   const path = join(root, "ledger.sqlite3");
-  Ledger.initialize(path).close();
+  if (version === 35) Ledger.initialize(path).close();
   const db = new Database(path);
   try {
+    if (version === 34) initializeLegacyLedgerSchema(db, 34);
     db.exec(`INSERT INTO runtime_control VALUES('service_enabled', 0)
       ON CONFLICT(control_key) DO UPDATE SET enabled = 0;
       INSERT INTO runtime_control VALUES('global_paused', 1), ('paid_work_paused', 1),
@@ -70,67 +72,76 @@ async function run(root: string, ...args: string[]): Promise<unknown> {
   return JSON.parse(result.stdout);
 }
 
-test("CLI import requires explicit digest apply and never rearms paused budgets", async () => {
-  const { root, path } = fixture();
-  let ledger = inspectLedger(path);
-  expect(ledger.solOperations).toBe(ledger.solOperations);
-  expect(() => ledger.solOperations.assertImported()).toThrow();
-  const budget = ledger.solPaidUsageBudgetStatus();
-  const pauses = ledger.pauseControls.read();
-  ledger.close();
-  const before = sha256(readFileSync(path));
-  const dryRun = DryRunSchema.parse(await run(root, "--dry-run"));
-  expect(sha256(readFileSync(path))).toBe(before);
-  await expect(run(root, "--apply")).rejects.toThrow(
-    "--apply requires --expected-digest",
-  );
-  await expect(
-    run(
-      root,
-      "--apply",
-      "--dry-run",
-      "--expected-digest",
-      dryRun.result.sourceDigest,
-    ),
-  ).rejects.toThrow("mutually exclusive");
-  await expect(
-    run(root, "--apply", "--expected-digest", "0".repeat(64)),
-  ).rejects.toThrow();
-  await expect(readRunLock(join(root, "RUN.lock"))).resolves.toBeNull();
-  const state = new Database(path, { readonly: true });
-  try {
-    expect(
-      state.prepare("SELECT epoch,held,owner_kind FROM runtime_owner").get(),
-    ).toEqual({ epoch: 1, held: 0, owner_kind: "maintenance" });
-    expect(state.prepare("SELECT * FROM sol_operation").all()).toEqual([]);
-    expect(state.prepare("SELECT * FROM sol_invocation_attempt").all()).toEqual(
-      [],
-    );
-    expect(
-      state.prepare("SELECT * FROM sol_operation_import_receipt").all(),
-    ).toEqual([]);
-  } finally {
-    state.close();
-  }
-  await expect(
-    run(root, "--apply", "--expected-digest", dryRun.result.sourceDigest),
-  ).resolves.toMatchObject({
-    result: { mode: "applied", receipt: { records: 0 } },
-  });
-  ledger = inspectLedger(path);
-  try {
-    expect(ledger.solOperations.assertImported().sourceDigest).toBe(
-      dryRun.result.sourceDigest,
-    );
-    expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
-    expect(ledger.pauseControls.read()).toEqual(pauses);
-  } finally {
+test.each([34, 35] as const)(
+  "schema%s CLI import requires explicit digest apply and never rearms paused budgets",
+  async (version) => {
+    const { root, path } = fixture(version);
+    let ledger = inspectLedger(path);
+    expect(ledger.solOperations).toBe(ledger.solOperations);
+    expect(() => ledger.solOperations.assertImported()).toThrow();
+    const budget = ledger.solPaidUsageBudgetStatus();
+    const pauses = ledger.pauseControls.read();
     ledger.close();
-  }
-  await expect(run(root)).resolves.toMatchObject({
-    result: { mode: "already_imported" },
-  });
-}, 30_000);
+    const before = sha256(readFileSync(path));
+    const dryRun = DryRunSchema.parse(await run(root, "--dry-run"));
+    expect(sha256(readFileSync(path))).toBe(before);
+    await expect(run(root, "--apply")).rejects.toThrow(
+      "--apply requires --expected-digest",
+    );
+    await expect(
+      run(
+        root,
+        "--apply",
+        "--dry-run",
+        "--expected-digest",
+        dryRun.result.sourceDigest,
+      ),
+    ).rejects.toThrow("mutually exclusive");
+    await expect(
+      run(root, "--apply", "--expected-digest", "0".repeat(64)),
+    ).rejects.toThrow();
+    if (version === 34) expect(sha256(readFileSync(path))).toBe(before);
+    else {
+      await expect(readRunLock(join(root, "RUN.lock"))).resolves.toBeNull();
+      const state = new Database(path, { readonly: true });
+      try {
+        expect(
+          state
+            .prepare("SELECT epoch,held,owner_kind FROM runtime_owner")
+            .get(),
+        ).toEqual({ epoch: 1, held: 0, owner_kind: "maintenance" });
+        expect(state.prepare("SELECT * FROM sol_operation").all()).toEqual([]);
+        expect(
+          state.prepare("SELECT * FROM sol_invocation_attempt").all(),
+        ).toEqual([]);
+        expect(
+          state.prepare("SELECT * FROM sol_operation_import_receipt").all(),
+        ).toEqual([]);
+      } finally {
+        state.close();
+      }
+    }
+    await expect(
+      run(root, "--apply", "--expected-digest", dryRun.result.sourceDigest),
+    ).resolves.toMatchObject({
+      result: { mode: "applied", receipt: { records: 0 } },
+    });
+    ledger = inspectLedger(path);
+    try {
+      expect(ledger.solOperations.assertImported().sourceDigest).toBe(
+        dryRun.result.sourceDigest,
+      );
+      expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
+      expect(ledger.pauseControls.read()).toEqual(pauses);
+    } finally {
+      ledger.close();
+    }
+    await expect(run(root)).resolves.toMatchObject({
+      result: { mode: "already_imported" },
+    });
+  },
+  30_000,
+);
 
 test("CLI import refuses enabled service without changing controls", async () => {
   const { root, path } = fixture();

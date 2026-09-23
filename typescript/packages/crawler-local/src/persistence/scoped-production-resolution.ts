@@ -31,7 +31,10 @@ import {
   createAuthenticatedPublicationTransport,
 } from "../publication/publication-auth-client.js";
 import type { PublicationTransport } from "../publication/publication-client.js";
-import { ProductionResolutionStore } from "./production-resolution-store.js";
+import {
+  PRODUCTION_RESOLUTION_SCHEMA_VERSION,
+  ProductionResolutionStore,
+} from "./production-resolution-store.js";
 import type { WorkItem } from "./schema.js";
 import {
   queryMany,
@@ -531,7 +534,7 @@ class ScopedResolutionDatabase {
   }
 }
 
-/** Opens legacy full snapshots or exact-scope v3 snapshots without guessing. */
+/** Opens full snapshots or exact-scope v3 snapshots without guessing. */
 export async function openProductionResolutionStore(
   path: string,
   options: { readonly now?: () => number } = {},
@@ -548,7 +551,8 @@ export async function openProductionResolutionStore(
   }
   if (version === SCOPED_PRODUCTION_RESOLUTION_SCHEMA_VERSION)
     return ScopedProductionResolutionStore.open(input, options);
-  if (version === 2) return ProductionResolutionStore.open(input, options);
+  if (version === 2 || version === PRODUCTION_RESOLUTION_SCHEMA_VERSION)
+    return ProductionResolutionStore.open(input, options);
   throw new Error("PRODUCTION_RESOLUTION_SCHEMA_VERSION_UNSUPPORTED");
 }
 

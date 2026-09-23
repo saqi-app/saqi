@@ -15,9 +15,6 @@ import {
   canonicalAuthorUrl,
   canonicalPoemUrl,
   currentSource,
-  sourceAuthorUrl,
-  sourcePoemIdFromSlug,
-  sourcePoemUrl,
 } from "@saqi/source-adapter";
 import { z } from "zod";
 
@@ -599,8 +596,8 @@ export async function seedProductionDetailRecovery(options: {
     const author = authors.get(poem.author_id);
     if (!author) continue;
     const identity = {
-      authorHref: sourceAuthorUrl(author.slug).href,
-      poemHref: sourcePoemUrl(sourcePoemIdFromSlug(poem.slug)).href,
+      authorHref: canonicalAuthorUrl(`/cat-${author.slug}`).href,
+      poemHref: canonicalPoemUrl(`/${poem.slug}.html`).href,
     };
     plannedAuthors.set(identity.authorHref, {
       authorNameArabic: author.name_arabic,

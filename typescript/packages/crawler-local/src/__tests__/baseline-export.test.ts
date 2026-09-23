@@ -44,13 +44,13 @@ describe("production baseline export", () => {
     fixture.database
       .prepare(
         `UPDATE poem SET id = ?, slug = ?, active_source_revision_id = ?
-         WHERE slug = 'work-4'`,
+         WHERE slug = 'poem4'`,
       )
       .run(sourceBoundId, `source-${sourceBoundId}`, "b".repeat(64));
     insertPoem(fixture.database, 1, null, null, null, null);
     insertPoem(fixture.database, 2, AUTHOR_ID, "legacy", null, "legacy");
     fixture.database
-      .prepare("UPDATE poem SET content_arabic = ? WHERE slug = 'work-2'")
+      .prepare("UPDATE poem SET content_arabic = ? WHERE slug = 'poem2'")
       .run(JSON.stringify({ content: ["صدر\u{2029}عجز"] }));
     insertPoem(
       fixture.database,
@@ -62,7 +62,7 @@ describe("production baseline export", () => {
     );
     insertPoem(fixture.database, 67, AUTHOR_ID, null, null, null);
     fixture.database
-      .prepare("UPDATE poem SET content_arabic = ? WHERE slug = 'work-67'")
+      .prepare("UPDATE poem SET content_arabic = ? WHERE slug = 'poem67'")
       .run(JSON.stringify({ content: ["بيت\u{0007} غير آمن"] }));
     for (const [index, content, emptyTitle] of [
       [76_154, [], false],
@@ -78,7 +78,7 @@ describe("production baseline export", () => {
         .run(
           emptyTitle ? "" : `قصيدة ${String(index)}`,
           JSON.stringify({ content }),
-          `work-${String(index)}`,
+          `poem${String(index)}`,
         );
     }
     fixture.database.close();
@@ -93,31 +93,31 @@ describe("production baseline export", () => {
             canonicalSourceId: "source:poem:1",
             poemId: "00000000-0000-4000-8000-000000000001",
             reason: "missing_arabic_author",
-            slug: "work-1",
+            slug: "poem1",
           },
           {
             canonicalSourceId: "source:poem:3",
             poemId: "00000000-0000-4000-8000-000000000003",
             reason: "missing_arabic_author",
-            slug: "work-3",
+            slug: "poem3",
           },
           {
             canonicalSourceId: "source:poem:67",
             poemId: "00000000-0000-4000-8000-000000000067",
             reason: "unsafe_source_text",
-            slug: "work-67",
+            slug: "poem67",
           },
           {
             canonicalSourceId: "source:poem:76154",
             poemId: "00000000-0000-4000-8000-000000076154",
             reason: "missing_arabic_content",
-            slug: "work-76154",
+            slug: "poem76154",
           },
           {
             canonicalSourceId: "source:poem:78927",
             poemId: "00000000-0000-4000-8000-000000078927",
             reason: "missing_arabic_title_and_content",
-            slug: "work-78927",
+            slug: "poem78927",
           },
         ]),
         orphans: 2,
@@ -143,32 +143,32 @@ describe("production baseline export", () => {
       expect.objectContaining({
         author_id: null,
         insights_missing: true,
-        slug: "work-1",
+        slug: "poem1",
         translation_missing: true,
       }),
       expect.objectContaining({
         author_id: AUTHOR_ID,
         content_arabic: { content: ["صدر\u{2029}عجز"] },
         insights_missing: false,
-        slug: "work-2",
+        slug: "poem2",
         translation_missing: false,
       }),
       expect.objectContaining({
         author_id: "00000000-0000-4000-8000-000000000999",
-        slug: "work-3",
+        slug: "poem3",
       }),
     ]);
-    expect(poems.find(({ slug }) => slug === "work-80293")?.name_arabic).toBe(
+    expect(poems.find(({ slug }) => slug === "poem80293")?.name_arabic).toBe(
       "أَنا الَّذي نَظَرَ الأَعمى إِلى أَدَبي",
     );
-    expect(poems.find(({ slug }) => slug === "work-91494")?.name_arabic).toBe(
+    expect(poems.find(({ slug }) => slug === "poem91494")?.name_arabic).toBe(
       "أول سطر عربي صالح",
     );
-    expect(poems.find(({ slug }) => slug === "work-78927")).toMatchObject({
+    expect(poems.find(({ slug }) => slug === "poem78927")).toMatchObject({
       ineligible_reason: "missing_arabic_title_and_content",
       name_arabic: "",
     });
-    expect(poems.find(({ slug }) => slug === "work-67")).toMatchObject({
+    expect(poems.find(({ slug }) => slug === "poem67")).toMatchObject({
       ineligible_reason: "unsafe_source_text",
     });
     expect(poems.find(({ id }) => id === sourceBoundId)).toMatchObject({
@@ -244,7 +244,7 @@ describe("production baseline export", () => {
     `);
     fixture.database
       .prepare("UPDATE poem SET active_source_revision_id = ? WHERE slug = ?")
-      .run(sourceRevisionId, "work-1");
+      .run(sourceRevisionId, "poem1");
     fixture.database
       .prepare(
         "INSERT INTO model_enrichment_artifact(id, prompt_version) VALUES (?, ?)",
@@ -305,7 +305,7 @@ describe("production baseline export", () => {
     );
     fixture.database
       .prepare("UPDATE poem SET active_source_revision_id = ? WHERE slug = ?")
-      .run(sourceRevisionId, "work-1");
+      .run(sourceRevisionId, "poem1");
     fixture.database.close();
 
     await exportProductionBaseline(fixture.paths);
@@ -397,7 +397,7 @@ describe("production baseline export", () => {
             AUTHOR_ID,
             ineligible ? "" : `قصيدة ${value}`,
             JSON.stringify({ content: [ineligible ? "" : `بيت ${value}`] }),
-            `work-${String(index)}`,
+            `poem${String(index)}`,
           );
         }
       });
@@ -411,7 +411,7 @@ describe("production baseline export", () => {
             canonicalSourceId: "source:poem:78927",
             poemId: "00000000-0000-4000-8000-000000078927",
             reason: "missing_arabic_title_and_content",
-            slug: "work-78927",
+            slug: "poem78927",
           },
         ],
         orphans: 0,
@@ -420,11 +420,9 @@ describe("production baseline export", () => {
       const lines = readFileSync(fixture.paths.poemsOutput, "utf8")
         .trimEnd()
         .split("\n");
-      expect(JSON.parse(lines[0]!) as unknown).toMatchObject({
-        slug: "work-1",
-      });
+      expect(JSON.parse(lines[0]!) as unknown).toMatchObject({ slug: "poem1" });
       expect(JSON.parse(lines.at(-1)!) as unknown).toMatchObject({
-        slug: "work-100064",
+        slug: "poem100064",
       });
     },
   );
@@ -490,7 +488,7 @@ function insertPoem(
       authorId,
       `قصيدة ${String(index)}`,
       JSON.stringify({ content: [`بيت ${String(index)}`] }),
-      `work-${String(index)}`,
+      `poem${String(index)}`,
       translation,
       translationGemini,
       insights,

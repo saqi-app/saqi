@@ -312,7 +312,7 @@ function poem(index: number) {
     id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     insights_missing: true,
     name_arabic: `قصيدة ${String(index)}`,
-    slug: `work-${String(index)}`,
+    slug: `poem${String(index)}`,
     translation_missing: true,
   };
 }

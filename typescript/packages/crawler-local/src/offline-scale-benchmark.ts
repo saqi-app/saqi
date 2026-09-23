@@ -121,7 +121,7 @@ async function benchmarkBaseline(
       id: uuid(index + 1),
       insights_missing: false,
       name_arabic: `قصيدة ${String(index)}`,
-      slug: `work-${String(index)}`,
+      slug: `poem${String(index)}`,
       translation_missing: false,
     })}\n`;
     if (!stream.write(line)) {
@@ -276,6 +276,10 @@ async function benchmarkLedger(
 
 async function benchmarkIdleSupervisor(root: string) {
   const stateDirectory = join(root, "idle-supervisor");
+  // Production startup initializes the owned database before acquiring its
+  // run lock. Mirror that prerequisite in this provider-free benchmark.
+  const ledger = Ledger.initialize(join(stateDirectory, "ledger.sqlite3"));
+  ledger.close();
   const config = parseScraperOperationConfig({
     logging: { maximumBytes: 2 * 1024 * 1024, retainedFiles: 2 },
     restart: { errorBackoffMs: 1_000, idlePollMs: 1_000 },

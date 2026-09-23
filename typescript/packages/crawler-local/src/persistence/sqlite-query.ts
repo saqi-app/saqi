@@ -29,21 +29,17 @@ export class SqliteQueryValidationError extends Error {
   readonly paths: readonly (readonly (number | string)[])[];
   readonly rowIndex: null | number;
 
-  constructor(
-    input: {
-      readonly cardinality: SqliteQueryCardinality;
-      readonly operation: string;
-      readonly paths: readonly (readonly (number | string)[])[];
-      readonly rowIndex: null | number;
-    },
-    options?: ErrorOptions,
-  ) {
+  constructor(input: {
+    readonly cardinality: SqliteQueryCardinality;
+    readonly operation: string;
+    readonly paths: readonly (readonly (number | string)[])[];
+    readonly rowIndex: null | number;
+  }) {
     const paths = input.paths
       .map((path) => (path.length === 0 ? "$" : path.join(".")))
       .join(",");
     super(
       `SQLITE_ROW_VALIDATION_FAILED:${input.operation}:${input.cardinality}:${input.rowIndex === null ? "row" : String(input.rowIndex)}:${paths}`,
-      options,
     );
     this.name = "SqliteQueryValidationError";
     this.cardinality = input.cardinality;

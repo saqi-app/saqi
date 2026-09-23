@@ -11,6 +11,7 @@ import {
 } from "../parse.js";
 import {
   canonicalAuthorUrl,
+  canonicalInventoryPaginationUrl,
   canonicalInventoryUrl,
   canonicalPoemUrl,
 } from "../url.js";
@@ -27,14 +28,14 @@ beforeEach(() => {
 function manifest(overrides: Record<string, unknown> = {}) {
   return {
     ...PROJECTION_ENVELOPE,
-    authorHref: "/writers/poet-almaarri",
+    authorHref: "/cat-poet-almaarri",
     declaredPoemCountText: "٢",
     kind: "author_poem_manifest",
     poems: [
-      { href: "/works/20", title: "الثاني", verseCountText: "۱۲ بيت" },
-      { href: "/works/10", title: "الأول", verseCountText: "٣" },
+      { href: "/poem20.html", title: "الثاني", verseCountText: "۱۲ بيت" },
+      { href: "/poem10.html", title: "الأول", verseCountText: "٣" },
     ],
-    sourceUrl: "https://source.invalid/writers/poet-almaarri",
+    sourceUrl: "https://source.invalid/cat-poet-almaarri",
     terminal: true,
     ...overrides,
   };
@@ -43,11 +44,11 @@ function manifest(overrides: Record<string, unknown> = {}) {
 function detail(overrides: Record<string, unknown> = {}) {
   return {
     ...PROJECTION_ENVELOPE,
-    authorHref: "/writers/poet-almaarri",
+    authorHref: "/cat-poet-almaarri",
     declaredVerseCountText: "٢",
     kind: "poem_detail",
     lines: [" صدرٌ ", "عجزٌ", "ثانٍ", "تامٌ"],
-    sourceUrl: "https://source.invalid/works/101680",
+    sourceUrl: "https://source.invalid/poem101680.html",
     structure: "classical",
     title: " قصيدةٌ ",
     ...overrides,
@@ -82,9 +83,9 @@ describe("canonical source URLs", () => {
       name: "archive",
       origin: "https://example.test",
     });
-    expect(canonicalPoemUrl("/works/1")).toMatchObject({
+    expect(canonicalPoemUrl("/poem1.html")).toMatchObject({
       canonicalId: "archive:poem:1",
-      href: "https://example.test/works/1",
+      href: "https://example.test/poem1.html",
     });
   });
 
@@ -105,38 +106,74 @@ describe("canonical source URLs", () => {
   });
 
   it("produces stable canonical IDs", () => {
-    expect(canonicalPoemUrl("/works/1").canonicalId).toBe("source:poem:1");
-    expect(canonicalInventoryUrl("/directory/72").page).toBe(72);
+    expect(canonicalPoemUrl("/poem1.html").canonicalId).toBe("source:poem:1");
+    expect(canonicalInventoryUrl("/authers-72").page).toBe(72);
+    expect(
+      canonicalInventoryPaginationUrl("/authers-1?cursor=opaque"),
+    ).toMatchObject({ cursor: "opaque", page: 1 });
+    expect(() =>
+      canonicalInventoryPaginationUrl("/authers-1?cursor=x&extra=y"),
+    ).toThrow("SOURCE_INVENTORY_CURSOR_INVALID");
   });
 
   it("normalizes encoded author Unicode deterministically", () => {
-    const raw = canonicalAuthorUrl(
-      "/writers/%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
-    );
-    const unicode = canonicalAuthorUrl("/writers/المعري");
+    const raw = canonicalAuthorUrl("/cat-%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A");
+    const unicode = canonicalAuthorUrl("/cat-المعري");
     expect(raw).toEqual(unicode);
     expect(raw.canonicalId).toBe("source:author:المعري");
   });
 
   it("canonically encodes source slugs containing internal spaces", () => {
-    const author = canonicalAuthorUrl("/writers/poet-Yazid bin Al-Hakam");
+    const author = canonicalAuthorUrl("/cat-poet-Yazid bin Al-Hakam");
     expect(author).toMatchObject({
       slug: "poet-Yazid bin Al-Hakam",
-      href: "https://source.invalid/writers/poet-Yazid%20bin%20Al-Hakam",
+      href: "https://source.invalid/cat-poet-Yazid%20bin%20Al-Hakam",
+    });
+  });
+
+  it.each([
+    {
+      expectedHref: "https://source.invalid/cat-poet-%E2%80%8EAhmed-Al-Luwaim",
+      expectedSlug: "poet-Ahmed-Al-Luwaim",
+      input: "/cat-poet-%E2%80%8EAhmed-Al-Luwaim",
+    },
+    {
+      expectedHref: "https://source.invalid/cat-poet-Ibn-Wahbon",
+      expectedSlug: "poet-Ibn-Wahbon",
+      input: "/cat-poet-Ibn-Wahbon%20",
+    },
+    {
+      expectedHref: "https://source.invalid/cat-poet-Malik-Al%E2%80%91Asamm",
+      expectedSlug: "poet-Malik-Al‑Asamm",
+      input: "/cat-poet-Malik-Al%E2%80%91Asamm",
+    },
+  ])("normalizes source slug presentation anomaly $input", (fixture) => {
+    expect(canonicalAuthorUrl(fixture.input)).toMatchObject({
+      href: fixture.expectedHref,
+      slug: fixture.expectedSlug,
+    });
+  });
+
+  it("preserves decomposed Unicode path bytes while normalizing identity", () => {
+    const decomposed = canonicalAuthorUrl("/cat-poet-T%CC%A3arif");
+    expect(decomposed).toMatchObject({
+      canonicalId: "source:author:poet-Ṭarif",
+      href: "https://source.invalid/cat-poet-T%CC%A3arif",
+      slug: "poet-Ṭarif",
     });
   });
 
   it.each([
     // eslint-disable-next-line unicorn/prefer-https -- Intentional insecure-URL rejection fixture.
-    "http://source.invalid/works/1",
-    "https://source.invalid.evil.example/works/1",
-    "https://example.invalid/works/1",
-    "https://source.invalid/works/1?x=1",
-    "//evil.example/works/1",
+    "http://source.invalid/poem1.html",
+    "https://source.invalid.evil.example/poem1.html",
+    "https://example.invalid/poem1.html",
+    "https://source.invalid/poem1.html?x=1",
+    "//evil.example/poem1.html",
     "/other1.html",
-    "/works/0",
-    "/works/01",
-    "/writers/../admin",
+    "/poem0.html",
+    "/poem01.html",
+    "/cat-../admin",
   ])("rejects %s", (url) => {
     expect(() => canonicalPoemUrl(url)).toThrow();
     expect(() => canonicalAuthorUrl(url)).toThrow();
@@ -148,11 +185,11 @@ describe("author inventory", () => {
     const result = parseAuthorInventory({
       ...PROJECTION_ENVELOPE,
       authors: [
-        { href: "/writers/z", name: " زيد ", poemCountText: "۲" },
-        { href: "/writers/a", name: "أحمد", poemCountText: null },
+        { href: "/cat-z", name: " زيد ", poemCountText: "۲" },
+        { href: "/cat-a", name: "أحمد", poemCountText: null },
       ],
       kind: "author_inventory",
-      sourceUrl: "https://source.invalid/directory/1",
+      sourceUrl: "https://source.invalid/authers-1",
       terminal: true,
     });
     expect(result.authors.map(({ canonicalId }) => canonicalId)).toEqual([
@@ -167,14 +204,14 @@ describe("author inventory", () => {
       ...PROJECTION_ENVELOPE,
       authors: [
         {
-          href: "/writers/%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
+          href: "/cat-%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
           name: "أ",
           poemCountText: null,
         },
-        { href: "/writers/المعري", name: "ب", poemCountText: null },
+        { href: "/cat-المعري", name: "ب", poemCountText: null },
       ],
       kind: "author_inventory",
-      sourceUrl: "https://source.invalid/directory/1",
+      sourceUrl: "https://source.invalid/authers-1",
       terminal: true,
     };
     expect(() => parseAuthorInventory(base)).toThrow("SOURCE_AUTHOR_DUPLICATE");
@@ -190,7 +227,7 @@ describe("author inventory", () => {
         ...PROJECTION_ENVELOPE,
         authors: [],
         kind: "author_inventory",
-        sourceUrl: "https://source.invalid/directory/1",
+        sourceUrl: "https://source.invalid/authers-1",
         terminal: false,
       }),
     ).toThrow("SOURCE_PROJECTION_PARTIAL");
@@ -208,12 +245,29 @@ describe("author poem manifests", () => {
     expect(parsed.poems[1]?.verses).toBe(12);
   });
 
+  it("accepts book-scale verse metadata without relaxing poem body limits", () => {
+    const parsed = parseAuthorPoemManifest(
+      manifest({
+        declaredPoemCountText: "1",
+        poems: [
+          {
+            href: "/poem10.html",
+            title: "نونية",
+            verseCountText: "5,804 بيت",
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.poems[0]?.verses).toBe(5_804);
+  });
+
   it("rejects duplicate poem IDs", () => {
     const duplicate = manifest({
       poems: [
-        { href: "/works/10", title: "أ", verseCountText: "1" },
+        { href: "/poem10.html", title: "أ", verseCountText: "1" },
         {
-          href: "https://source.invalid/works/10",
+          href: "https://source.invalid/poem10.html",
           title: "ب",
           verseCountText: "1",
         },
@@ -230,7 +284,7 @@ describe("author poem manifests", () => {
     ).toThrow("SOURCE_MANIFEST_COUNT_MISMATCH");
     expect(() =>
       parseAuthorPoemManifest(
-        manifest({ sourceUrl: "https://source.invalid/writers/other" }),
+        manifest({ sourceUrl: "https://source.invalid/cat-other" }),
       ),
     ).toThrow("SOURCE_MANIFEST_AUTHOR_MISMATCH");
   });

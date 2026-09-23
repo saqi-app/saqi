@@ -20,6 +20,7 @@ import {
   PoemEnrichmentInputSchema,
   PoemEnrichmentInputV2Schema,
   PoemEnrichmentOutputV2Schema,
+  PoemEnrichmentOutputV3Schema,
   PoemEnrichmentReviewSchema,
   publicationEnrichmentProfile,
   publicationIntentIdBody,
@@ -163,7 +164,7 @@ const SolArtifactSchema = z.strictObject({
 });
 const PublicationSolArtifactSchema = SolArtifactSchema.extend({
   input: z.union([PoemEnrichmentInputSchema, PoemEnrichmentInputV2Schema]),
-  output: PoemEnrichmentOutputV2Schema,
+  output: z.union([PoemEnrichmentOutputV3Schema, PoemEnrichmentOutputV2Schema]),
 });
 const CollectedDetailArtifactSchema = z.looseObject({
   source: z.strictObject({
@@ -497,7 +498,10 @@ export function prepareEnrichmentPublication(
         payloadHash: artifact.outputHash,
         promptVersion: profile.promptVersion,
         reasoningEffort: profile.reasoningEffort,
-        schemaVersion: "schemaVersion" in artifact.output ? 2 : 1,
+        schemaVersion:
+          "schemaVersion" in artifact.output
+            ? artifact.output.schemaVersion
+            : 1,
         sourceRevisionId,
         taskKey: options.taskKey,
         variant: options.variant ?? 0,
@@ -601,7 +605,7 @@ export function prepareBoundEnrichmentPublication(
       payloadHash: artifact.outputHash,
       promptVersion: profile.promptVersion,
       reasoningEffort: profile.reasoningEffort,
-      schemaVersion: 2,
+      schemaVersion: artifact.output.schemaVersion,
       sourceRevisionId: binding.sourceRevisionId,
       taskKey: PublicationSourceHashSchema.parse(translationWorkKey),
       variant: 0,

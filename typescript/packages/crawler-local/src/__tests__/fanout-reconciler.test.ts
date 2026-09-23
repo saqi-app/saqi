@@ -61,21 +61,21 @@ import {
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
 
 const DETAIL_INPUT = {
-  authorHref: "https://source.invalid/writers/a",
-  poemHref: "https://source.invalid/works/42",
+  authorHref: "https://source.invalid/cat-a",
+  poemHref: "https://source.invalid/poem42.html",
 };
 const DETAIL_SOURCE = {
   author: {
     canonicalId: "source:author:a",
-    href: "https://source.invalid/writers/a",
-    path: "/writers/a",
+    href: "https://source.invalid/cat-a",
+    path: "/cat-a",
     slug: "a",
   },
   canonicalId: "source:poem:42",
-  href: "https://source.invalid/works/42",
+  href: "https://source.invalid/poem42.html",
   lines: ["صدر", "عجز"],
   numericId: "42",
-  slug: "work-42",
+  slug: "poem42",
   structure: "classical",
   title: "قصيدة",
   verses: 1,
@@ -1846,7 +1846,7 @@ describe("fanout reconciliation", () => {
       const numericId = String(index + 1);
       const detailInput = {
         authorHref: DETAIL_INPUT.authorHref,
-        poemHref: `https://source.invalid/works/${numericId}`,
+        poemHref: `https://source.invalid/poem${numericId}.html`,
       };
       const definition = {
         implementationVersion: collectorImplementationVersion(),
@@ -1861,7 +1861,7 @@ describe("fanout reconciliation", () => {
         canonicalId: `source:poem:${numericId}`,
         href: detailInput.poemHref,
         numericId,
-        slug: `work-${numericId}`,
+        slug: `poem${numericId}`,
       };
       const artifact = await artifacts.put(
         `${canonicalJson({
@@ -1976,6 +1976,16 @@ describe("fanout reconciliation", () => {
 
     expect(admitSource).toHaveBeenCalledTimes(5);
     expect(enrichment).toHaveBeenCalledOnce();
+    expect(
+      ledger
+        .status()
+        .kindProgress.find(({ kind }) => kind === FANOUT_DETAIL_KIND),
+    ).toMatchObject({
+      byState: { dead_letter: 0, pending: 9, retry_wait: 0 },
+    });
+    expect(
+      detailFanoutKeys.map((workKey) => ledger.get(workKey)?.attemptCount),
+    ).toEqual(Array.from({ length: 9 }, () => 0));
     ledger.close();
   });
 
@@ -2093,8 +2103,8 @@ describe("fanout reconciliation", () => {
       const ledger = Ledger.initialize(join(root, "ledger.sqlite"));
       const stored = await artifacts.put(`${canonicalJson(DETAIL)}\n`);
       const input = {
-        authorHref: "https://source.invalid/writers/a",
-        poemHref: "https://source.invalid/works/42",
+        authorHref: "https://source.invalid/cat-a",
+        poemHref: "https://source.invalid/poem42.html",
       };
       const seeded = ledger.seed(
         {
@@ -2149,17 +2159,113 @@ describe("fanout reconciliation", () => {
       const pending = ledger
         .status()
         .kindProgress.find(({ kind }) => kind === "fanout-collected-detail");
-      expect(pending?.byState).toMatchObject({ dead_letter: 0, retry_wait: 1 });
+      expect(pending?.byState).toMatchObject({ dead_letter: 0, pending: 1 });
       const job = ledger.claim("inspection", now, 1_000, [
         "fanout-collected-detail",
       ]);
-      expect(job?.work.attemptCount).toBe(102);
+      // The initial artifact repair consumes one attempt; 101 subsequent
+      // infrastructure waits do not consume any more.
+      expect(job?.work.attemptCount).toBe(1);
       expect(job?.work.lastErrorCode).toBe(
         "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN",
       );
       ledger.close();
     },
   );
+
+  it("gates later cycles after a bounded shared infrastructure failure", async () => {
+    const root = mkdtempSync(join(tmpdir(), "fanout-infrastructure-gate-"));
+    const artifacts = new ArtifactStore(join(root, "artifacts"), {
+      minimumFreeBytes: 0,
+    });
+    const ledger = Ledger.initialize(join(root, "ledger.sqlite"));
+    for (const numericId of ["42", "43"]) {
+      const source = {
+        ...DETAIL_SOURCE,
+        canonicalId: `source:poem:${numericId}`,
+        href: `https://source.invalid/poem${numericId}.html`,
+        numericId,
+        slug: `poem${numericId}`,
+      };
+      const input = {
+        ...DETAIL_INPUT,
+        poemHref: source.href,
+      };
+      const definition = {
+        implementationVersion: collectorImplementationVersion(),
+        input,
+        inputHash: inputHash(input),
+        kind: collectionWorkKinds().poemDetail,
+        priority: 0,
+        schemaVersion: collectorSchemaVersion(),
+      };
+      const seeded = ledger.seed(definition, 1);
+      const artifact = await artifacts.put(
+        `${canonicalJson({
+          ...DETAIL,
+          source,
+          sourceHash: sha256(canonicalJson(source)),
+          workKey: seeded.workKey,
+        })}\n`,
+      );
+      const sourceClaim = ledger.claim("collector", 1, 1_000, [
+        collectionWorkKinds().poemDetail,
+      ]);
+      if (!sourceClaim) throw new Error("detail claim missing");
+      ledger.succeed(sourceClaim, artifact.hash, 2);
+    }
+    const publication = new PublicationLane({
+      artifacts,
+      client: new PublicationClient({
+        endpoint: "https://example.test/api/corpus-import",
+        transport: async () => {
+          throw new Error("unavailable");
+        },
+      }),
+      ledger,
+    });
+    const reconciler = new FanoutReconciler({
+      artifacts,
+      batchSize: 10,
+      enrichment: [
+        {
+          implementationVersion: SOL_PIPELINE_VERSION,
+          modelKey: ENRICHMENT_PROVIDER_SPECS.sol.modelKey,
+          seed: () => {
+            throw new Error("not called");
+          },
+          workKind: SOL_ENRICHMENT_WORK_KIND,
+        },
+      ],
+      ledger,
+      publication,
+      resolvers: { collected: () => null, enrichment: () => null },
+    });
+    const now = Date.now() + 1_000;
+
+    await expect(
+      reconciler.cycle({ maximum: 10, now: () => now }),
+    ).resolves.toMatchObject({
+      infrastructureRetryAt: now + 5 * 60_000,
+      retried: 2,
+    });
+    await expect(
+      reconciler.cycle({ maximum: 10, now: () => now + 1 }),
+    ).resolves.toMatchObject({
+      infrastructureRetryAt: now + 5 * 60_000,
+      retried: 0,
+    });
+    expect(
+      ledger
+        .status()
+        .affectedByKindAndErrorCode.find(
+          ({ code, kind }) =>
+            code === "PUBLICATION_TRANSPORT_OUTCOME_UNKNOWN" &&
+            kind === FANOUT_DETAIL_KIND,
+        )?.count,
+    ).toBe(2);
+    ledger.close();
+  });
 
   it("preserves a priority-1000 detail source through fanout seeding", async () => {
     const root = mkdtempSync(join(tmpdir(), "fanout-detail-priority-"));
@@ -2430,7 +2536,7 @@ describe("fanout reconciliation", () => {
     expect(ledger.get(detailFanout.workKey)).toMatchObject({
       lastErrorCode: "PUBLICATION_RATE_LIMITED",
       priority: 1_000,
-      state: "retry_wait",
+      state: "pending",
     });
     ledger.close();
   });
@@ -2941,8 +3047,8 @@ describe("fanout reconciliation", () => {
     const ledger = Ledger.initialize(join(root, "ledger.sqlite"));
     const detailArtifact = await artifacts.put(`${canonicalJson(DETAIL)}\n`);
     const detailInput = {
-      authorHref: "https://source.invalid/writers/a",
-      poemHref: "https://source.invalid/works/42",
+      authorHref: "https://source.invalid/cat-a",
+      poemHref: "https://source.invalid/poem42.html",
     };
     ledger.seed(
       {

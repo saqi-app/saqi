@@ -311,7 +311,26 @@ async function start(
   await setLaunchdServiceEnabled(root, true);
   // A matching launchd process and RUN.lock already own startup. Preserve that
   // ownership and wait for readiness instead of creating a competing process.
-  if (before.actualState !== "starting") await launchctl(["kickstart", target]);
+  if (before.actualState !== "starting") {
+    try {
+      await launchctl(["kickstart", target]);
+    } catch (error) {
+      // A freshly bootstrapped RunAtLoad job can be in launchd's
+      // `spawn scheduled` throttle window after its disabled first run.
+      // kickstart reports failure in that state even though launchd will run
+      // it shortly. Preserve genuine fencing errors, but otherwise let the
+      // existing bounded acknowledgement poll distinguish recovery from a
+      // real startup timeout.
+      const afterKickstart = await snapshot(
+        action,
+        target,
+        root,
+        configDigest,
+        minimumExitTimeoutSeconds,
+      );
+      if (afterKickstart.actualState === "fenced") throw error;
+    }
+  }
   return poll(
     startupTimeoutMs,
     async () => {

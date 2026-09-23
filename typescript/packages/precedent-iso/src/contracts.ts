@@ -25,6 +25,35 @@ const PositiveIntegerSegmentSchema = z
   .regex(/^[1-9]\d*$/)
   .describe("A base-10 positive integer path segment");
 
+export const BatchTranslateRequestSchema = z
+  .strictObject({ authorIds: z.array(ResourceIdSchema).min(1).max(25) })
+  .describe("Create translation tasks for one to twenty-five authors");
+
+const BatchTranslateItemSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    authorId: ResourceIdSchema,
+    status: z.literal("created"),
+    taskId: ResourceIdSchema,
+  }),
+  z.strictObject({ authorId: ResourceIdSchema, status: z.literal("skipped") }),
+  z.strictObject({
+    authorId: ResourceIdSchema,
+    status: z.literal("error"),
+    error: z.string().min(1),
+  }),
+]);
+
+export const BatchTranslateResponseSchema = z
+  .strictObject({
+    summary: z.strictObject({
+      created: z.number().int().nonnegative(),
+      skipped: z.number().int().nonnegative(),
+      errors: z.number().int().nonnegative(),
+    }),
+    results: z.array(BatchTranslateItemSchema),
+  })
+  .describe("Batch translation task creation result");
+
 export const ErrorResponseSchema = z
   .strictObject({ error: z.string().min(1) })
   .describe("Non-sensitive API error response");
@@ -108,38 +137,6 @@ const LegacySourceLineageAdoptionResponseSchema = z.discriminatedUnion("ok", [
       scanned: z.number().int().nonnegative().max(10),
       unchanged: z.number().int().nonnegative().max(10),
     }),
-  }),
-  z.strictObject({
-    error: z.string().min(1),
-    ok: z.literal(false),
-    retryable: z.boolean(),
-  }),
-]);
-const SourceLineageMaintenanceRequestSchema = z.strictObject({
-  maxPages: z.number().int().min(1).max(2).default(2),
-});
-const SourceLineageMaintenanceStateSchema = z.enum([
-  "active",
-  "blocked",
-  "complete",
-  "failed",
-  "idle",
-]);
-const SourceLineageMaintenanceStatusSchema = z.strictObject({
-  adoptedTotal: z.number().int().nonnegative(),
-  conflictTotal: z.number().int().nonnegative(),
-  cursorPoemId: z.string().nullable(),
-  lastErrorCode: z.string().nullable(),
-  pass: z.number().int().nonnegative(),
-  remaining: z.number().int().nonnegative(),
-  scannedTotal: z.number().int().nonnegative(),
-  state: SourceLineageMaintenanceStateSchema,
-  updatedAt: z.number().int().nonnegative(),
-});
-const SourceLineageMaintenanceResponseSchema = z.discriminatedUnion("ok", [
-  z.strictObject({
-    ok: z.literal(true),
-    result: SourceLineageMaintenanceStatusSchema,
   }),
   z.strictObject({
     error: z.string().min(1),
@@ -395,36 +392,6 @@ export const HTTP_CONTRACTS = [
     summary: "Adopt legacy source lineage for explicit poem UUIDs",
   },
   {
-    ...EMPTY_INPUT,
-    audience: "authenticated",
-    id: "operations.source-lineage-maintenance-status",
-    method: "GET",
-    path: "/api/source-lineage-maintenance-status",
-    responses: [200, 503].map((status) => ({
-      body: SourceLineageMaintenanceResponseSchema,
-      contentType: "application/json",
-      status,
-    })),
-    service: "operations",
-    summary: "Report exact legacy source-lineage maintenance progress",
-  },
-  {
-    audience: "authenticated",
-    body: SourceLineageMaintenanceRequestSchema,
-    id: "operations.source-lineage-maintenance-run",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/source-lineage-maintenance",
-    query: EmptyHttpPartSchema,
-    responses: [200, 400, 403, 415, 503].map((status) => ({
-      body: SourceLineageMaintenanceResponseSchema,
-      contentType: "application/json",
-      status,
-    })),
-    service: "operations",
-    summary: "Run bounded self-healing source-lineage maintenance",
-  },
-  {
     audience: "authenticated",
     body: SourceFingerprintBackfillRequestSchema,
     id: "operations.corpus-fingerprint-backfill",
@@ -440,6 +407,36 @@ export const HTTP_CONTRACTS = [
     service: "operations",
     summary:
       "Backfill authoritative active source fingerprints in bounded pages",
+  },
+  {
+    audience: "authenticated",
+    body: BatchTranslateRequestSchema,
+    id: "operations.batch-translate",
+    method: "POST",
+    params: EmptyHttpPartSchema,
+    path: "/api/batch-translate",
+    query: EmptyHttpPartSchema,
+    responses: [
+      {
+        body: ErrorResponseSchema.extend({
+          code: z.literal("TRANSLATION_PROVIDER_RETIRED"),
+        }),
+        contentType: "application/json",
+        status: 410,
+      },
+      {
+        body: ErrorResponseSchema,
+        contentType: "application/json",
+        status: 400,
+      },
+      {
+        body: ErrorResponseSchema,
+        contentType: "application/json",
+        status: 500,
+      },
+    ],
+    service: "operations",
+    summary: "Report retirement of legacy translation task creation",
   },
   {
     audience: "authenticated",

@@ -15,6 +15,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { z } from "zod";
 
+import { collectionWorkKinds } from "../collection/collection-scheduler.js";
 import {
   CURRENT_SCHEMA_VERSION,
   Ledger,
@@ -42,6 +43,120 @@ const LEGACY_SOL_INPUT: PoemEnrichmentInput = {
 afterEach(() => {
   for (const ledger of LEDGERS) ledger.close();
   LEDGERS.length = 0;
+});
+
+test("coalesces legacy author generations before inventory can run", () => {
+  const ledger = open();
+  const authorHref = "https://source.invalid/cat-test";
+  const seed = (
+    refreshGeneration: string | undefined,
+    now: number,
+    priority = 0,
+  ) => {
+    const input = {
+      authorHref,
+      ...(refreshGeneration === undefined ? {} : { refreshGeneration }),
+    };
+    return ledger.seed(
+      {
+        implementationVersion: "source-chrome-v5",
+        input,
+        inputHash: inputHash(input),
+        kind: collectionWorkKinds().authorManifest,
+        priority,
+        schemaVersion: "source-projection-v1",
+      },
+      now,
+    );
+  };
+  const terminal = seed("terminal-generation", 1, 10);
+  const terminalClaim = ledger.claim("terminal", 2, 1_000, [
+    collectionWorkKinds().authorManifest,
+  ]);
+  if (!terminalClaim) throw new Error("Expected terminal evidence claim");
+  ledger.succeed(terminalClaim, "a".repeat(64), 3);
+  const running = seed("running-generation", 4, 9);
+  const runningClaim = ledger.claim("running", 5, 1_000, [
+    collectionWorkKinds().authorManifest,
+  ]);
+  if (!runningClaim) throw new Error("Expected running evidence claim");
+  const oldest = seed("generation-1", 6);
+  const newest = seed("generation-2", 7);
+  const stable = seed(undefined, 8);
+  const eventsBefore = ledger.eventCount(oldest.workKey);
+
+  expect(ledger.coalesceLegacyAuthorManifestGenerations(10)).toBe(1);
+  expect(ledger.get(oldest.workKey)?.state).toBe("imported");
+  expect(ledger.eventCount(oldest.workKey)).toBe(eventsBefore + 1);
+  expect(ledger.get(newest.workKey)?.state).toBe("pending");
+  expect(ledger.get(stable.workKey)?.state).toBe("pending");
+  expect(ledger.get(terminal.workKey)?.state).toBe("succeeded");
+  expect(ledger.get(running.workKey)?.state).toBe("running");
+  expect(ledger.coalesceLegacyAuthorManifestGenerations(11)).toBe(0);
+});
+
+test("admits stable-identity bootstrap only for an all-legacy active backlog", () => {
+  const eligible = open();
+  const legacyInput = {
+    authorHref: "https://source.invalid/cat-legacy",
+    refreshGeneration: "legacy-generation",
+  };
+  eligible.seed({
+    implementationVersion: "source-chrome-v5",
+    input: legacyInput,
+    inputHash: inputHash(legacyInput),
+    kind: collectionWorkKinds().authorManifest,
+    priority: 0,
+    schemaVersion: "source-projection-v1",
+  });
+  expect(
+    eligible.legacyAuthorManifestBootstrapEligible(
+      "a".repeat(64),
+      "source_author_inventory_discovery",
+    ),
+  ).toBe(false);
+  const inventoryInput = { refreshGeneration: "current" };
+  const inventory = eligible.seed({
+    implementationVersion: "source-inventory-v1",
+    input: inventoryInput,
+    inputHash: inputHash(inventoryInput),
+    kind: "source_author_inventory_discovery",
+    priority: 0,
+    schemaVersion: "source-inventory-work-v1",
+  });
+  expect(
+    eligible.legacyAuthorManifestBootstrapEligible(
+      inventory.workKey,
+      "source_author_inventory_discovery",
+    ),
+  ).toBe(true);
+
+  const stableInput = {
+    authorHref: "https://source.invalid/cat-stable",
+    inventoryPoemCount: null,
+  };
+  eligible.seed({
+    implementationVersion: "source-chrome-v5",
+    input: stableInput,
+    inputHash: inputHash(stableInput),
+    kind: collectionWorkKinds().authorManifest,
+    priority: 0,
+    schemaVersion: "source-projection-v1",
+  });
+  expect(
+    eligible.legacyAuthorManifestBootstrapEligible(
+      inventory.workKey,
+      "source_author_inventory_discovery",
+    ),
+  ).toBe(false);
+
+  const empty = open();
+  expect(
+    empty.legacyAuthorManifestBootstrapEligible(
+      "a".repeat(64),
+      "source_author_inventory_discovery",
+    ),
+  ).toBe(false);
 });
 
 test("tracks exact-profile Sol poem throughput without counting provider operations", () => {
@@ -129,8 +244,8 @@ function definition(
 
 function poemDefinition(
   implementationVersion = "crawler@1",
-  authorHref = "https://source.invalid/writers/poet-one",
-  poemHref = "https://source.invalid/works/42",
+  authorHref = "https://source.invalid/cat-poet-one",
+  poemHref = "https://source.invalid/poem42.html",
 ): WorkDefinition {
   const input = {
     authorHref,
@@ -1063,7 +1178,7 @@ describe("work identity and fenced leases", () => {
     expect(ledger.seed(poemDefinition("crawler@2"), 2).inserted).toBe(true);
     expect(() =>
       ledger.seed(
-        poemDefinition("crawler@3", "https://source.invalid/writers/poet-two"),
+        poemDefinition("crawler@3", "https://source.invalid/cat-poet-two"),
         3,
       ),
     ).toThrow(PoemIdentityConflictError);
@@ -1075,11 +1190,11 @@ describe("work identity and fenced leases", () => {
     ledger.seed(poemDefinition(), 1);
     const result = ledger.seedPoems(
       [
-        poemDefinition("crawler@2", "https://source.invalid/writers/poet-two"),
+        poemDefinition("crawler@2", "https://source.invalid/cat-poet-two"),
         poemDefinition(
           "crawler@2",
-          "https://source.invalid/writers/poet-two",
-          "https://source.invalid/works/43",
+          "https://source.invalid/cat-poet-two",
+          "https://source.invalid/poem43.html",
         ),
       ],
       2,
@@ -1087,7 +1202,7 @@ describe("work identity and fenced leases", () => {
     expect(result).toMatchObject({
       conflicts: [
         {
-          poemHref: "https://source.invalid/works/42",
+          poemHref: "https://source.invalid/poem42.html",
         },
       ],
       results: [{ inserted: true }],
@@ -1332,6 +1447,44 @@ describe("work identity and fenced leases", () => {
         105,
       ),
     ).toBe(1);
+  });
+
+  test("requeues only explicitly fenced dead-letter work keys", () => {
+    const ledger = open();
+    const first = ledger.seed(definition({ authorId: "recoverable" }), 1);
+    const second = ledger.seed(definition({ authorId: "quarantined" }), 2);
+    const firstClaim = ledger.claim("owner", 2, 100, ["author-manifest"]);
+    if (!firstClaim) throw new Error("Expected first claim");
+    ledger.deadLetter(firstClaim, "SOURCE_MANIFEST_NONTERMINAL", 3);
+    const secondClaim = ledger.claim("owner", 3, 100, ["author-manifest"]);
+    if (!secondClaim) throw new Error("Expected second claim");
+    ledger.deadLetter(secondClaim, "SOURCE_MANIFEST_NONTERMINAL", 4);
+
+    expect(
+      ledger.requeueDeadLetterWorkKeys(
+        [first.workKey],
+        ["author-manifest"],
+        ["SOURCE_MANIFEST_NONTERMINAL"],
+        5,
+      ),
+    ).toBe(1);
+    expect(ledger.get(first.workKey)).toMatchObject({
+      lastErrorCode: null,
+      state: "pending",
+    });
+    expect(ledger.get(second.workKey)).toMatchObject({
+      lastErrorCode: "SOURCE_MANIFEST_NONTERMINAL",
+      state: "dead_letter",
+    });
+    expect(ledger.eventCount(first.workKey)).toBe(4);
+    expect(() =>
+      ledger.requeueDeadLetterWorkKeys(
+        [second.workKey],
+        ["poem-detail"],
+        ["SOURCE_MANIFEST_NONTERMINAL"],
+        6,
+      ),
+    ).toThrow("Dead-letter requeue target does not match its fence");
   });
 
   test("reports lane availability with exact version filters", () => {
@@ -1604,7 +1757,7 @@ describe("work identity and fenced leases", () => {
 
   test("reuses a completed input across implementation versions", () => {
     const ledger = open();
-    const input = { poemHref: "https://source.invalid/works/1" };
+    const input = { poemHref: "https://source.invalid/poem1.html" };
     const first: WorkDefinition = {
       implementationVersion: "v1",
       input,
@@ -2834,6 +2987,211 @@ test.each(["sol-5.6", 42])(
     });
   },
 );
+
+test("retired provider work is exact, bounded, idempotent, and audited", () => {
+  const statements: string[] = [];
+  const database = new Database(":memory:", {
+    verbose: (statement) => {
+      statements.push(String(statement));
+    },
+  });
+  const ledger = new Ledger(database);
+  LEDGERS.push(ledger);
+  const profiles = [
+    [
+      "poem-enrichment-agy-claude-opus-4.6-thinking",
+      "agy-claude-opus-4-6-enrichment-v1",
+    ],
+    [
+      "poem-enrichment-agy-claude-opus-4.6-thinking",
+      "agy-claude-opus-4-6-word-gloss-v2",
+    ],
+    [
+      "poem-enrichment-agy-gemini-3.1-pro-high",
+      "agy-gemini-3-1-pro-high-word-gloss-v2",
+    ],
+    ["poem-enrichment-claude-opus-5", "claude-opus-5-enrichment-v1"],
+    ["poem-enrichment-claude-opus-5", "claude-opus-5-word-gloss-v2"],
+  ] as const;
+  const candidates = profiles.map(([kind, implementationVersion], index) =>
+    ledger.seed(
+      {
+        ...definition({ providerRetirement: index }),
+        implementationVersion,
+        kind,
+        schemaVersion: "saqi.poem-enrichment-input@1",
+      },
+      index + 1,
+    ),
+  );
+  const retryCandidate = ledger.seed(
+    {
+      ...definition({ providerRetirement: "retry" }),
+      implementationVersion: profiles[0][1],
+      kind: profiles[0][0],
+      schemaVersion: "saqi.poem-enrichment-input@2",
+    },
+    10,
+  );
+  const retryClaim = ledger.claimMany(
+    "retirement-retry",
+    10,
+    1_000,
+    [profiles[0][0]],
+    1,
+    {},
+    [],
+    [retryCandidate.workKey],
+  )[0];
+  if (!retryClaim) throw new Error("retirement retry claim missing");
+  ledger.retry(retryClaim, "SOURCE_TIMEOUT", 100, 11);
+
+  const completed = ledger.seed(
+    {
+      ...definition({ providerRetirement: "completed" }),
+      implementationVersion: profiles[4][1],
+      kind: profiles[4][0],
+      schemaVersion: "saqi.poem-enrichment-input@1",
+    },
+    12,
+  );
+  const completedClaim = ledger.claimMany(
+    "retirement-completed",
+    12,
+    1_000,
+    [profiles[4][0]],
+    1,
+    {},
+    [],
+    [completed.workKey],
+  )[0];
+  if (!completedClaim) throw new Error("retirement completed claim missing");
+  ledger.succeed(completedClaim, "a".repeat(64), 13);
+  const priorTerminal = ledger.seed(
+    {
+      ...definition({ providerRetirement: "prior-terminal" }),
+      implementationVersion: profiles[3][1],
+      kind: profiles[3][0],
+      schemaVersion: "saqi.poem-enrichment-input@1",
+    },
+    13,
+  );
+  const terminalClaim = ledger.claimMany(
+    "retirement-prior-terminal",
+    14,
+    1_000,
+    [profiles[3][0]],
+    1,
+    {},
+    [],
+    [priorTerminal.workKey],
+  )[0];
+  if (!terminalClaim) throw new Error("prior terminal claim missing");
+  ledger.deadLetter(terminalClaim, "SOL_REVIEW_REJECTED", 15);
+  const unrelated = ledger.seed(definition({ providerRetirement: false }), 14);
+
+  expect(ledger.retireLegacyProviderWork(2, 20)).toBe(2);
+  expect(ledger.retireLegacyProviderWork(2, 21)).toBe(2);
+  expect(ledger.retireLegacyProviderWork(2, 22)).toBe(2);
+  expect(ledger.retireLegacyProviderWork(2, 23)).toBe(0);
+  for (const candidate of [...candidates, retryCandidate]) {
+    expect(ledger.get(candidate.workKey)).toMatchObject({
+      lastErrorCode: "PROVIDER_RETIRED",
+      outputArtifactHash: null,
+      state: "dead_letter",
+    });
+  }
+  expect(
+    (
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count FROM work_event
+            WHERE event_type = 'failed'
+              AND json_extract(payload_json, '$.errorCode') = 'PROVIDER_RETIRED'
+              AND json_extract(payload_json, '$.terminal') = 1`,
+        )
+        .get() as { count: number }
+    ).count,
+  ).toBe(candidates.length + 1);
+  expect(ledger.get(completed.workKey)).toMatchObject({
+    outputArtifactHash: "a".repeat(64),
+    state: "succeeded",
+  });
+  expect(ledger.get(priorTerminal.workKey)).toMatchObject({
+    lastErrorCode: "SOL_REVIEW_REJECTED",
+    state: "dead_letter",
+  });
+  expect(ledger.get(unrelated.workKey)?.state).toBe("pending");
+  expect(
+    statements.some((statement) =>
+      statement.includes("INDEXED BY work_item_worker_claim"),
+    ),
+  ).toBe(true);
+});
+
+test("provider retirement fails closed on live claims and nonterminal outputs", () => {
+  const database = new Database(":memory:");
+  const ledger = new Ledger(database);
+  LEDGERS.push(ledger);
+  const definitionToRetire = {
+    ...definition({ providerRetirement: "guard" }),
+    implementationVersion: "claude-opus-5-word-gloss-v2",
+    kind: "poem-enrichment-claude-opus-5",
+    schemaVersion: "saqi.poem-enrichment-input@2",
+  };
+  const live = ledger.seed(definitionToRetire, 1);
+  const claim = ledger.claimMany(
+    "provider-retirement-live",
+    2,
+    1_000,
+    [definitionToRetire.kind],
+    1,
+    {},
+    [],
+    [live.workKey],
+  )[0];
+  if (!claim) throw new Error("provider retirement live claim missing");
+  expect(() => ledger.retireLegacyProviderWork(500, 3)).toThrow(
+    "PROVIDER_RETIREMENT_LIVE_CLAIM",
+  );
+  expect(ledger.get(live.workKey)?.state).toBe("running");
+  ledger.operatorRelease(claim, "OPERATOR_RELEASED", 3, 3);
+  database
+    .prepare("UPDATE work_item SET output_artifact_hash = ? WHERE work_key = ?")
+    .run("b".repeat(64), live.workKey);
+  expect(() => ledger.retireLegacyProviderWork(500, 4)).toThrow(
+    "PROVIDER_RETIREMENT_OUTPUT_PRESENT",
+  );
+  expect(ledger.get(live.workKey)).toMatchObject({
+    outputArtifactHash: "b".repeat(64),
+    state: "pending",
+  });
+  const unsafeClaim = ledger.claimMany(
+    "provider-retirement-output-cleanup",
+    5,
+    1_000,
+    [definitionToRetire.kind],
+    1,
+    {},
+    [],
+    [live.workKey],
+  )[0];
+  if (!unsafeClaim) throw new Error("provider output guard claim missing");
+  ledger.deadLetter(unsafeClaim, "TEST_TERMINAL", 6);
+  const unknownSchema = ledger.seed(
+    {
+      ...definitionToRetire,
+      input: { providerRetirement: "unknown-schema" },
+      inputHash: inputHash({ providerRetirement: "unknown-schema" }),
+      schemaVersion: "saqi.poem-enrichment-input@3",
+    },
+    7,
+  );
+  expect(() => ledger.retireLegacyProviderWork(500, 8)).toThrow(
+    "PROVIDER_RETIREMENT_SCHEMA_UNKNOWN",
+  );
+  expect(ledger.get(unknownSchema.workKey)?.state).toBe("pending");
+});
 
 test("resolution wakes are exact, bounded, idempotent, and preserve live claims", () => {
   const ledger = open();

@@ -67,6 +67,71 @@ export const LEGACY_ENRICHMENT_PROFILES = [
     promptVersion: "sol-enrichment-v1",
     reasoningEffort: "high",
   },
+  {
+    backendKey: "anthropic-claude-code-cli",
+    displayName: "Claude Opus 5",
+    displayOrder: 200,
+    iconKey: "anthropic",
+    model: "claude-opus-5",
+    modelKey: "claude-opus-5",
+    modelVendorKey: "anthropic",
+    provider: "claude",
+    promptVersion: "claude-opus-5-word-gloss-v2",
+    reasoningEffort: "max",
+    validatorPrefix: "claude-opus-5",
+  },
+  {
+    backendKey: "anthropic-claude-code-cli",
+    displayName: "Claude Opus 5",
+    displayOrder: 201,
+    iconKey: "anthropic",
+    model: "claude-opus-5",
+    modelKey: "claude-opus-5",
+    modelVendorKey: "anthropic",
+    provider: "claude",
+    promptVersion: "claude-opus-5-enrichment-v1",
+    reasoningEffort: "max",
+    validatorPrefix: "claude-opus-5",
+  },
+  {
+    backendKey: "agy-cli",
+    displayName: "Gemini 3.1 Pro High",
+    displayOrder: 300,
+    iconKey: "google",
+    model: "gemini-3.1-pro-high",
+    modelKey: "agy-gemini-3.1-pro-high",
+    modelVendorKey: "google",
+    provider: "agy",
+    promptVersion: "agy-gemini-3-1-pro-high-word-gloss-v2",
+    reasoningEffort: "high",
+    validatorPrefix: "agy-gemini-3-1-pro-high",
+  },
+  {
+    backendKey: "agy-cli",
+    displayName: "Claude Opus 4.6",
+    displayOrder: 310,
+    iconKey: "anthropic",
+    model: "claude-opus-4-6-thinking",
+    modelKey: "agy-claude-opus-4.6-thinking", // gitleaks:allow -- Public legacy model identifier, not a credential.
+    modelVendorKey: "anthropic",
+    provider: "agy",
+    promptVersion: "agy-claude-opus-4-6-word-gloss-v2",
+    reasoningEffort: "high",
+    validatorPrefix: "agy-claude-opus-4-6-thinking",
+  },
+  {
+    backendKey: "agy-cli",
+    displayName: "Claude Opus 4.6",
+    displayOrder: 311,
+    iconKey: "anthropic",
+    model: "claude-opus-4-6-thinking",
+    modelKey: "agy-claude-opus-4.6-thinking", // gitleaks:allow -- Public legacy model identifier, not a credential.
+    modelVendorKey: "anthropic",
+    provider: "agy",
+    promptVersion: "agy-claude-opus-4-6-enrichment-v1",
+    reasoningEffort: "high",
+    validatorPrefix: "agy-claude-opus-4-6-thinking",
+  },
   PREVIOUS_SOL_ENRICHMENT_PROFILE,
 ] as const;
 export const READABLE_ENRICHMENT_PROFILES = [
@@ -142,8 +207,8 @@ export function acceptedPublicationEnrichmentProfile(input: {
 
 /**
  * Profiles accepted by the generic publication endpoint. The endpoint retains
- * one exact legacy Sol recipe for create-only backfill. Retired non-Codex
- * execution profiles are deliberately absent from the runtime registry.
+ * one exact legacy Sol recipe for create-only backfill; all other legacy
+ * recipes remain readable but cannot create or move public pointers.
  */
 export function publicationEnrichmentProfile(input: {
   readonly model: string;

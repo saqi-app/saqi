@@ -31,59 +31,19 @@ export const LEGACY_TRANSLATION_ATTRIBUTION_NOTE =
   "Claude 2 is inferred from the historical translator configuration. The original record does not identify its model.";
 export const LEGACY_GEMINI_ATTRIBUTION_NOTE =
   "Gemini 3.5 Flash is a user-supplied attribution. The original record does not identify its model.";
+const HISTORICAL_CLAUDE_LABEL = "Claude 1 or 2";
+const HISTORICAL_GEMINI_LABEL = "Gemini (legacy model unknown)";
 
 export type TranslationModelProvider =
   "anthropic" | "google" | "openai" | "other";
 
-// Historical display metadata is intentionally separate from executable
-// enrichment profiles. These entries can label preserved translations but
-// cannot schedule, validate, or publish model work.
-const HISTORICAL_MODEL_PRESENTATIONS = [
-  {
-    displayName: "Claude Opus 5",
-    model: "claude-opus-5",
-    modelVendorKey: "anthropic",
-  },
-  {
-    displayName: "Claude Opus 4.6",
-    model: "claude-opus-4-6-thinking",
-    modelVendorKey: "anthropic",
-  },
-  {
-    displayName: "Gemini 3.1 Pro High",
-    model: "gemini-3.1-pro-high",
-    modelVendorKey: "google",
-  },
-] as const;
-
-function isHistoricalClaudeEstimate(model: string): boolean {
-  return (
-    model === "Claude 1 or 2" || model === LEGACY_TRANSLATION_MODEL_ESTIMATE
-  );
-}
-
-function isHistoricalGeminiEstimate(model: string): boolean {
-  return (
-    model === LEGACY_GEMINI_MODEL_ESTIMATE ||
-    model === "Gemini (legacy model unknown)"
-  );
-}
-
 function profileForModelLabel(model: string) {
   const normalized = model.split(" · ", 1)[0]?.trim() ?? model;
-  return (
-    READABLE_ENRICHMENT_PROFILES.find(
-      ({ displayName, model: profileModel }) =>
-        normalized === displayName ||
-        normalized === profileModel ||
-        normalized === `${displayName} (${profileModel})`,
-    ) ??
-    HISTORICAL_MODEL_PRESENTATIONS.find(
-      ({ displayName, model: profileModel }) =>
-        normalized === displayName ||
-        normalized === profileModel ||
-        normalized === `${displayName} (${profileModel})`,
-    )
+  return READABLE_ENRICHMENT_PROFILES.find(
+    ({ displayName, model: profileModel }) =>
+      normalized === displayName ||
+      normalized === profileModel ||
+      normalized === `${displayName} (${profileModel})`,
   );
 }
 
@@ -93,27 +53,24 @@ export function translationModelProvider(
   const normalized = model.split(" · ", 1)[0]?.trim() ?? model;
   const profile = profileForModelLabel(model);
   if (profile) return profile.modelVendorKey;
-  if (
-    normalized === "claude-2" ||
-    normalized === "claude-sonnet-4-5-20250929"
-  ) {
+  if (normalized === "claude-2" || normalized === "claude-sonnet-4-5-20250929") {
     return "anthropic";
   }
   if (normalized === "gemini-3-pro-preview") return "google";
   if (normalized === "gemini-3.7-flash") return "google";
-  if (isHistoricalGeminiEstimate(normalized)) return "google";
-  if (isHistoricalClaudeEstimate(normalized)) return "anthropic";
+  if (normalized === HISTORICAL_GEMINI_LABEL) return "google";
+  if (normalized === HISTORICAL_CLAUDE_LABEL) return "anthropic";
+  if (normalized === LEGACY_GEMINI_MODEL_ESTIMATE) return "google";
+  if (normalized === LEGACY_TRANSLATION_MODEL_ESTIMATE) return "anthropic";
   return "other";
 }
 
 export function translationModelName(model: string): string {
   const normalized = model.split(" · ", 1)[0]?.trim() ?? model;
-  if (isHistoricalClaudeEstimate(normalized)) {
+  if (normalized === HISTORICAL_CLAUDE_LABEL) {
     return LEGACY_TRANSLATION_MODEL_ESTIMATE;
   }
-  if (isHistoricalGeminiEstimate(normalized)) {
-    return LEGACY_GEMINI_MODEL_ESTIMATE;
-  }
+  if (normalized === HISTORICAL_GEMINI_LABEL) return LEGACY_GEMINI_MODEL_ESTIMATE;
   return profileForModelLabel(model)?.displayName ?? normalized;
 }
 
@@ -124,8 +81,7 @@ function modelPresentation(
     approvedEnrichmentProfileByModelKey(enrichment.modelKey) ??
     READABLE_ENRICHMENT_PROFILES.find(
       ({ modelKey }) => modelKey === enrichment.modelKey,
-    ) ??
-    profileForModelLabel(enrichment.model);
+    );
   return {
     model: enrichment.displayName ?? profile?.displayName ?? enrichment.model,
     provider:
@@ -168,16 +124,14 @@ export function poemTranslationTracks(
   >,
 ): TranslationTrack[] {
   const tracks: TranslationTrack[] = [];
-  if (poem.modelEnrichments != null) {
-    for (const enrichment of poem.modelEnrichments) {
-      if (!hasTranslation(enrichment.lines)) continue;
-      const presentation = modelPresentation(enrichment);
-      tracks.push({
-        key: enrichment.modelKey,
-        lines: enrichment.lines,
-        ...presentation,
-      });
-    }
+  for (const enrichment of poem.modelEnrichments ?? []) {
+    if (!hasTranslation(enrichment.lines)) continue;
+    const presentation = modelPresentation(enrichment);
+    tracks.push({
+      key: enrichment.modelKey,
+      lines: enrichment.lines,
+      ...presentation,
+    });
   }
   if (
     hasTranslation(poem.linesEnglishSol) &&
@@ -202,21 +156,18 @@ export function poemTranslationTracks(
     });
   }
   if (hasTranslation(poem.linesEnglish)) {
-    const inferred =
-      !poem.linesEnglishModel ||
-      isHistoricalClaudeEstimate(poem.linesEnglishModel);
+    const inferred = !poem.linesEnglishModel ||
+      poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
     tracks.push({
       ...(inferred
         ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
         : {}),
       attributionCertainty:
-        poem.linesEnglishAttributionCertainty ??
-        (inferred ? "inferred_range" : undefined),
+        poem.linesEnglishAttributionCertainty ?? (inferred ? "inferred_range" : undefined),
       key: "legacy",
       lines: poem.linesEnglish,
       model: poem.linesEnglishModel ?? LEGACY_TRANSLATION_MODEL_ESTIMATE,
-      provider:
-        poem.linesEnglishModelVendor ??
+      provider: poem.linesEnglishModelVendor ??
         (poem.linesEnglishModel
           ? translationModelProvider(poem.linesEnglishModel)
           : "anthropic"),
@@ -225,7 +176,7 @@ export function poemTranslationTracks(
   if (hasTranslation(poem.linesEnglishGemini)) {
     tracks.push({
       ...(!poem.linesEnglishGeminiModel ||
-      isHistoricalGeminiEstimate(poem.linesEnglishGeminiModel)
+      poem.linesEnglishGeminiModel === HISTORICAL_GEMINI_LABEL
         ? { attributionNote: LEGACY_GEMINI_ATTRIBUTION_NOTE }
         : {}),
       key: "gemini",

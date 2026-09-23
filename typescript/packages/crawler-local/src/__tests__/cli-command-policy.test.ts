@@ -8,6 +8,7 @@ import { configureSource, currentSource } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
+import { seedAuthorManifest } from "../collection/collector";
 import { Ledger } from "../persistence/ledger";
 import { importEmptyTestOperations } from "./support/import-empty-test-operations.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root";
@@ -27,7 +28,65 @@ function runCli(commandArguments: readonly string[]): unknown {
   );
 }
 
+function runFailingCli(commandArguments: readonly string[]): unknown {
+  try {
+    runCli(commandArguments);
+  } catch (error) {
+    const output = (error as { stdout?: Buffer | string }).stdout;
+    if (output) return JSON.parse(output.toString());
+    throw error;
+  }
+  throw new Error("CLI unexpectedly succeeded");
+}
+
 describe("crawler CLI command policy", () => {
+  it("completion planning is offline and never creates runtime authority", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-completion-cli-"));
+    const inputPath = join(root, "plan.json");
+    writeFileSync(
+      inputPath,
+      JSON.stringify({
+        totalUniquePoems: 100,
+        acceptedCurrentPoems: 1,
+        reusableAcceptedPoems: 0,
+        generatedWithOnePassingReview: 0,
+        generatedWithoutReviews: 0,
+        authorizedRemainingOperations: 0,
+        scenarios: [
+          {
+            name: "illustrative-not-measured",
+            invocationConcurrency: 2,
+            meanOperationSeconds: 60,
+            operationRateCapPerHour: 100,
+          },
+        ],
+      }),
+    );
+    expect(
+      runCli(["completion-plan", "--input", inputPath, "--state-dir", root]),
+    ).toMatchObject({
+      command: "completion-plan",
+      plan: {
+        minimumOperations: 297,
+        additionalAuthorizationRequired: 297,
+        monetaryCost: null,
+        qualityPolicy: { passingReviewsRequired: 2 },
+        scenarios: [{ executableCompletionHours: null }],
+      },
+    });
+    expect(existsSync(join(root, "ledger.sqlite3"))).toBe(false);
+    expect(existsSync(join(root, "sol-attempts"))).toBe(false);
+  });
+
+  it("completion planning rejects invalid input rather than emitting an ETA", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-completion-invalid-"));
+    const inputPath = join(root, "plan.json");
+    writeFileSync(inputPath, JSON.stringify({ totalUniquePoems: -1 }));
+    expect(() => runCli(["completion-plan", "--input", inputPath])).toThrow();
+    expect(() => runCli(["completion-plan"])).toThrow();
+    expect(existsSync(join(root, "ledger.sqlite3"))).toBe(false);
+  });
+
   it.each(["pause", "resume", "pause-paid"])(
     "%s changes existing controls without source identity, migration, or budget changes",
     (command) => {
@@ -185,6 +244,14 @@ describe("crawler CLI command policy", () => {
     ledger.close();
 
     expect(runCli(["doctor", "--state-dir", root])).toMatchObject({
+      diagnosis: {
+        healthy: true,
+        snapshot: {
+          poems: { active: 0, queued: 0, scraped: 0 },
+          runtime: "not_running",
+        },
+        summary: { errors: 0, warnings: 2 },
+      },
       report: { integrity: "ok", integrityScope: "schema" },
       stateInventory: {
         codexScheduler: { fallback: "none", safeToOperate: true },
@@ -202,6 +269,103 @@ describe("crawler CLI command policy", () => {
     Ledger.initialize(join(root, "ledger.sqlite3")).close();
 
     expect(() => runCli(["doctor", "--state-dir", root])).toThrow();
+  }, 15_000);
+
+  it("diagnoses a shared origin cooldown that strands ready work", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-doctor-cooldown-cli-"));
+    const path = join(root, "ledger.sqlite3");
+    const originalSource = currentSource();
+    configureSource({
+      name: "fixture-archive",
+      origin: "https://archive.example",
+    });
+    try {
+      const ledger = Ledger.initialize(path);
+      const scheduler = schedulerState();
+      ledger.saveSchedulerState(
+        "provider-v10:sol",
+        scheduler,
+        hash("sha256", scheduler, "hex"),
+        null,
+        1,
+      );
+      seedAuthorManifest(ledger, "https://archive.example/cat-ready");
+      const now = Date.now();
+      const claimed = ledger.claimOrigin(
+        "https://archive.example",
+        now,
+        10_000,
+      );
+      if (claimed.state !== "claimed")
+        throw new Error("TEST_ORIGIN_LEASE_MISSING");
+      ledger.failOrigin(claimed.lease, now + 1, 0, {
+        circuitBreakerAfter: 1,
+        circuitBreakerCooldownMs: 60_000,
+        retryAt: now + 60_000,
+      });
+      ledger.close();
+    } finally {
+      configureSource(originalSource);
+    }
+
+    expect(runFailingCli(["doctor", "--state-dir", root])).toMatchObject({
+      diagnosis: {
+        findings: expect.arrayContaining([
+          expect.objectContaining({
+            code: "SOURCE_ORIGIN_COOLDOWN_STALL",
+            fix: expect.objectContaining({
+              command: `saqi-crawler clear-source-failures --state-dir '${root}' --confirm`,
+            }),
+            severity: "error",
+          }),
+        ]),
+      },
+    });
+  }, 15_000);
+
+  it("reports isolated author-manifest dead letters", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-doctor-author-dead-cli-"));
+    const path = join(root, "ledger.sqlite3");
+    const originalSource = currentSource();
+    configureSource({
+      name: "aldiwan",
+      origin: "https://www.aldiwan.net",
+    });
+    try {
+      const ledger = Ledger.initialize(path);
+      const scheduler = schedulerState();
+      ledger.saveSchedulerState(
+        "provider-v10:sol",
+        scheduler,
+        hash("sha256", scheduler, "hex"),
+        null,
+        1,
+      );
+      const { workKey } = seedAuthorManifest(
+        ledger,
+        "https://www.aldiwan.net/cat-incomplete",
+      );
+      const claim = ledger.claim("fixture", Date.now(), 10_000, [
+        "aldiwan_author_manifest",
+      ]);
+      if (claim?.work.workKey !== workKey)
+        throw new Error("Expected author fixture claim");
+      ledger.deadLetter(claim, "SOURCE_MANIFEST_NONTERMINAL");
+      ledger.close();
+    } finally {
+      configureSource(originalSource);
+    }
+
+    expect(runCli(["doctor", "--state-dir", root])).toMatchObject({
+      diagnosis: {
+        findings: expect.arrayContaining([
+          expect.objectContaining({
+            code: "AUTHOR_MANIFEST_DEAD_LETTERS_PRESENT",
+            severity: "warning",
+          }),
+        ]),
+      },
+    });
   }, 15_000);
 
   it("requires and durably arms an explicit paid Sol operation ceiling", () => {
@@ -273,6 +437,58 @@ describe("crawler CLI command policy", () => {
       "clear-source-stop requires --confirm",
     );
   });
+
+  it.each([
+    ["clear-source-stop", true],
+    ["clear-source-failures", false],
+  ] as const)(
+    "%s adopts persisted source identity and clears only an inactive gate",
+    (command, stopped) => {
+      const root = mkdtempSync(join(tmpdir(), "saqi-source-gate-cli-"));
+      const path = join(root, "ledger.sqlite3");
+      const originalSource = currentSource();
+      configureSource({
+        name: "fixture-archive",
+        origin: "https://archive.example",
+      });
+      try {
+        const ledger = Ledger.initialize(path);
+        const claimed = ledger.claimOrigin(
+          "https://archive.example",
+          1_000,
+          10_000,
+        );
+        if (claimed.state !== "claimed")
+          throw new Error("TEST_ORIGIN_LEASE_MISSING");
+        ledger.failOrigin(claimed.lease, 2_000, 0, {
+          circuitBreakerAfter: 1,
+          circuitBreakerCooldownMs: 60_000,
+          retryAt: 62_000,
+          ...(stopped ? { stopReason: "SOURCE_RATE_LIMITED" } : {}),
+        });
+        ledger.close();
+      } finally {
+        configureSource(originalSource);
+      }
+
+      expect(runCli([command, "--state-dir", root, "--confirm"])).toMatchObject(
+        {
+          cleared: true,
+          command,
+          origin: "https://archive.example",
+          status: {
+            origins: [
+              {
+                consecutiveFailures: 0,
+                cooldownUntil: 0,
+                stopReason: null,
+              },
+            ],
+          },
+        },
+      );
+    },
+  );
 
   it("exposes browser-free durable recovery status and explicit arming", () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-recovery-cli-"));

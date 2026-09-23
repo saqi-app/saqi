@@ -300,7 +300,7 @@ describe("Playwright evaluation serialization boundary", () => {
     const analysis = analyzeEvaluateCallbacks(program, sourceFiles);
     expect(analysis.nonInlineCallbacks).toEqual([]);
     expect(analysis.callbackCount).toBeGreaterThanOrEqual(7);
-    expect(analysis.callbackCount).toBe(7);
+    expect(analysis.callbackCount).toBe(8);
     expect(analysis.captures).toEqual([]);
   });
 

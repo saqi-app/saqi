@@ -3,10 +3,7 @@ import { lstat, open } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import { SourceConfigurationSchema } from "@saqi/precedent-iso";
-import {
-  SourceAdapterProfileV1Schema,
-  type SourceConfiguration,
-} from "@saqi/source-adapter";
+import type { SourceConfiguration } from "@saqi/source-adapter";
 import Database from "better-sqlite3";
 import { z } from "zod";
 
@@ -79,14 +76,9 @@ export async function loadServiceStatusInspection(
   });
   let configuredSource: SourceConfiguration | undefined;
   try {
-    const managed = await loadManagedSource();
-    configuredSource = {
-      ...SourceConfigurationSchema.parse({
-        name: managed.name,
-        origin: managed.origin,
-      }),
-      profile: SourceAdapterProfileV1Schema.parse(managed.profile),
-    };
+    configuredSource = SourceConfigurationSchema.parse(
+      await loadManagedSource(),
+    );
   } catch {
     // Retained identity permits inspection, never source admission or control.
   }

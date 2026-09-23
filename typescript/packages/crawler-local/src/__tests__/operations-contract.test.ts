@@ -1,4 +1,3 @@
-import { DEFAULT_SOURCE_ADAPTER_PROFILE } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -29,13 +28,6 @@ describe("scraper operations contract", () => {
         origin: "https://a.example",
       }),
     ).toBe(first);
-    expect(
-      operationConfigDigestForSource(configuration, {
-        name: "archive-a",
-        origin: "https://a.example",
-        profile: DEFAULT_SOURCE_ADAPTER_PROFILE,
-      }),
-    ).not.toBe(first);
   });
 
   it("allows a completed one-time enrichment reconciliation to be disabled", () => {
@@ -66,13 +58,16 @@ describe("scraper operations contract", () => {
         resolutionFormat: null,
         resolutionPath: null,
       },
-      inventory: { statusPath: null },
+      inventory: { refreshIntervalMs: null, statusPath: null },
       localFanout: {
         enabled: false,
         resolutionFormat: null,
         resolutionPath: null,
       },
       collector: {
+        cdpEndpoint: null,
+        challengeResolutionTimeoutMs: 60_000,
+        continuousDiscoveryRequired: false,
         detailBurst: 100,
         enabled: true,
         headless: false,
@@ -186,6 +181,26 @@ describe("scraper operations contract", () => {
   });
 
   it("requires explicit files and endpoint for autonomous mutation lanes", () => {
+    expect(() =>
+      parseScraperOperationConfig({
+        collector: { continuousDiscoveryRequired: true },
+        schemaVersion: 1,
+        stateDirectory: "/tmp/runtime",
+      }),
+    ).toThrow("Continuous collector discovery requires inventory");
+    expect(
+      parseScraperOperationConfig({
+        collector: { continuousDiscoveryRequired: true },
+        inventory: {
+          enabled: true,
+          productionAuthorsPath: "./authors.json",
+          refreshGeneration: "continuous",
+          refreshIntervalMs: 86_400_000,
+        },
+        schemaVersion: 1,
+        stateDirectory: "/tmp/runtime",
+      }).inventory.refreshIntervalMs,
+    ).toBe(86_400_000);
     expect(() =>
       parseScraperOperationConfig({
         collector: { enabled: false, recovery: { enabled: true } },
@@ -364,6 +379,28 @@ describe("scraper operations contract", () => {
   });
 
   it("rejects unsafe source pacing and unknown configuration", () => {
+    expect(() =>
+      parseScraperOperationConfig({
+        // eslint-disable-next-line unicorn/prefer-https -- A non-loopback HTTP endpoint must be rejected explicitly.
+        collector: { cdpEndpoint: "http://example.com:9222/" },
+        schemaVersion: 1,
+        stateDirectory: "/tmp/runtime",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseScraperOperationConfig({
+        collector: { challengeResolutionTimeoutMs: 999 },
+        schemaVersion: 1,
+        stateDirectory: "/tmp/runtime",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseScraperOperationConfig({
+        collector: { challengeResolutionTimeoutMs: 900_001 },
+        schemaVersion: 1,
+        stateDirectory: "/tmp/runtime",
+      }),
+    ).toThrow();
     expect(() =>
       parseScraperOperationConfig({
         collector: { minimumSourceGapMs: 12_999 },

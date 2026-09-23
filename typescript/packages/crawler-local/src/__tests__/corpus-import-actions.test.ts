@@ -18,15 +18,15 @@ const ARTIFACT = {
   source: {
     author: {
       canonicalId: "source:author:test",
-      href: "https://source.invalid/writers/test",
-      path: "/writers/test",
+      href: "https://source.invalid/cat-test",
+      path: "/cat-test",
       slug: "test",
     },
     canonicalId: "source:poem:42",
-    href: "https://source.invalid/works/42",
+    href: "https://source.invalid/poem42.html",
     lines: ["صدر", "عجز"],
     numericId: "42",
-    slug: "work-42",
+    slug: "poem42",
     structure: "classical",
     title: "قصيدة",
     verses: 1,
@@ -118,6 +118,38 @@ describe("prepareCollectedPoem", () => {
         1,
       ),
     ).toThrow("COLLECTED_POEM_MAPPING_MISMATCH");
+  });
+
+  it("rejects classical artifacts whose hemistich count does not match the verse count", () => {
+    expect(() =>
+      prepareCollectedPoem(
+        {
+          ...ARTIFACT,
+          source: { ...ARTIFACT.source, lines: ["صدر"], verses: 1 },
+        },
+        MAPPING,
+        "2026-08-25T12:00:00.000Z",
+        1,
+      ),
+    ).toThrow("COLLECTED_POEM_STRUCTURE_INVALID");
+  });
+
+  it("preserves a realistic 59-verse poem as 118 ordered translation slots", () => {
+    const lines = Array.from(
+      { length: 118 },
+      (_, index) => `شطر عربي ${String(index + 1)}`,
+    );
+    const prepared = prepareCollectedPoem(
+      {
+        ...ARTIFACT,
+        source: { ...ARTIFACT.source, lines, verses: 59 },
+      },
+      MAPPING,
+      "2026-08-25T12:00:00.000Z",
+      1,
+    );
+    expect(prepared.enrichmentInput.linesArabic).toEqual(lines);
+    expect(prepared.enrichmentInput.linesArabic).toHaveLength(118);
   });
 
   it("creates a new revision for a title-only correction", () => {

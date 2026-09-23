@@ -6,6 +6,7 @@ import {
   sourceLineNfcHashBody,
   sourcePromptMaterialHashBody,
 } from "@saqi/precedent-iso";
+import { configureSource, currentSource } from "@saqi/source-adapter";
 import { describe, expect, it } from "vitest";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler";
@@ -35,15 +36,15 @@ const DETAIL = {
   source: {
     author: {
       canonicalId: "source:author:poet",
-      href: "https://source.invalid/writers/poet",
-      path: "/writers/poet",
+      href: "https://source.invalid/cat-poet",
+      path: "/cat-poet",
       slug: "poet",
     },
     canonicalId: "source:poem:42",
-    href: "https://source.invalid/works/42",
+    href: "https://source.invalid/poem42.html",
     lines: ["صدر", "عجز"],
     numericId: "42",
-    slug: "work-42",
+    slug: "poem42",
     structure: "classical",
     title: "قصيدة",
     verses: 1,
@@ -60,6 +61,18 @@ const MAPPING = {
 };
 
 describe("local enrichment fanout", () => {
+  it("binds its control schema after a nondefault source is configured", () => {
+    const originalSource = currentSource();
+    configureSource({ name: "archive", origin: "https://source.invalid" });
+    try {
+      const fixture = createFixture();
+      expect(() => createFanout(fixture, "sol-5.6")).not.toThrow();
+      fixture.ledger.close();
+    } finally {
+      configureSource(originalSource);
+    }
+  });
+
   it("replays both durable boundaries without duplicating provider work", async () => {
     const fixture = createFixture();
     await seedDetail(fixture);
@@ -156,6 +169,100 @@ describe("local enrichment fanout", () => {
       fanout.cycle({ maximum: 10, now: () => Date.now() + 1_000 }),
     ).resolves.toMatchObject({ pendingResolution: 1, seeded: 0 });
     expect(providerTotal(fixture.ledger, "provider-sol-5.6")).toBe(0);
+    fixture.ledger.close();
+  });
+
+  it("parks a bounded page of resolution misses without head-of-line blocking", async () => {
+    const fixture = createFixture();
+    await seedDetail(fixture, DETAIL, "refresh-1", 1);
+    await seedDetail(
+      fixture,
+      {
+        ...DETAIL,
+        source: { ...DETAIL.source, title: "عنوان مصحح" },
+      },
+      "refresh-2",
+      3,
+    );
+    const fanout = createFanout(fixture, "sol-5.6", undefined, () => null);
+    const now = Date.now() + 1_000;
+
+    await expect(
+      fanout.cycle({ maximum: 10, now: () => now }),
+    ).resolves.toMatchObject({
+      pendingResolution: 2,
+      ready: 0,
+      resolutionRetryAt: now + 5 * 60_000,
+      scanned: 2,
+    });
+    expect(fixture.ledger.status().affectedByKindAndErrorCode).toContainEqual({
+      code: "LOCAL_ENRICHMENT_IDENTITY_PENDING",
+      count: 2,
+      kind: expect.stringMatching(/^local-enrichment-source-/),
+    });
+    fixture.ledger.close();
+  });
+
+  it("continues to resolvable work after an identity miss", async () => {
+    const fixture = createFixture();
+    await seedDetail(fixture, DETAIL, "refresh-1", 1);
+    await seedDetail(
+      fixture,
+      {
+        ...DETAIL,
+        source: { ...DETAIL.source, title: "عنوان مصحح" },
+      },
+      "refresh-2",
+      3,
+    );
+    const fanout = createFanout(fixture, "sol-5.6", undefined, (artifact) =>
+      artifact.source.title === DETAIL.source.title
+        ? null
+        : {
+            mapping: MAPPING,
+            observedAt: "2026-08-26T00:00:00.000Z",
+            writerEpoch: 7,
+          },
+    );
+
+    await expect(
+      fanout.cycle({ maximum: 10, now: () => Date.now() + 1_000 }),
+    ).resolves.toMatchObject({ pendingResolution: 1, seeded: 1, scanned: 2 });
+    expect(providerTotal(fixture.ledger, "provider-sol-5.6")).toBe(1);
+    fixture.ledger.close();
+  });
+
+  it("does not let an older resolution miss monopolize later bounded cycles", async () => {
+    const fixture = createFixture();
+    await seedDetail(fixture, DETAIL, "refresh-1", 1, 300);
+    await seedDetail(
+      fixture,
+      {
+        ...DETAIL,
+        source: { ...DETAIL.source, title: "عنوان مصحح" },
+      },
+      "refresh-2",
+      3,
+    );
+    const fanout = createFanout(fixture, "sol-5.6", undefined, (artifact) =>
+      artifact.source.title === DETAIL.source.title
+        ? null
+        : {
+            mapping: MAPPING,
+            observedAt: "2026-08-26T00:00:00.000Z",
+            writerEpoch: 7,
+          },
+    );
+    let now = Date.now() + 1_000;
+
+    await expect(
+      fanout.cycle({ maximum: 1, now: () => now }),
+    ).resolves.toMatchObject({ pendingResolution: 1, seeded: 0 });
+    now += 5 * 60_000 + 1;
+    await expect(
+      fanout.cycle({ maximum: 1, now: () => now }),
+    ).resolves.toMatchObject({ pendingResolution: 0, seeded: 1 });
+    expect(providerTotal(fixture.ledger, "provider-sol-5.6")).toBe(1);
     fixture.ledger.close();
   });
 
@@ -359,7 +466,7 @@ describe("local enrichment fanout", () => {
     const poemMismatch = [
       { ...artifact.source, canonicalId: "source:poem:43" },
       { ...artifact.source, numericId: "43" },
-      { ...artifact.source, href: "https://source.invalid/works/43" },
+      { ...artifact.source, href: "https://source.invalid/poem43.html" },
     ];
     for (const source of poemMismatch) {
       expect(() =>
@@ -391,7 +498,7 @@ describe("local enrichment fanout", () => {
           ...work,
           input: {
             ...work.input,
-            poemHref: "https://source.invalid/works/43",
+            poemHref: "https://source.invalid/poem43.html",
           },
         },
         artifact,
@@ -464,7 +571,7 @@ function createFanout(
   fixture: ReturnType<typeof createFixture>,
   modelKey: string,
   afterBoundary?: (boundary: "provider_seeded" | "source_jobs_seeded") => void,
-  resolve: () => {
+  resolve: (artifact: typeof DETAIL) => {
     mapping: typeof MAPPING;
     observedAt: string;
     writerEpoch: number;
@@ -489,7 +596,7 @@ function createFanout(
     },
     resolver: {
       resolve: (_source, artifact) => {
-        const resolution = resolve();
+        const resolution = resolve(artifact as typeof DETAIL);
         if (!resolution || !withBinding) return resolution;
         const input = prepareCollectedPoem(
           artifact,
@@ -585,10 +692,11 @@ async function seedDetail(
   detail = DETAIL,
   refreshGeneration?: string,
   seededAt = 1,
+  priority = 200,
 ): Promise<WorkItem> {
   const input = {
-    authorHref: "https://source.invalid/writers/poet",
-    poemHref: "https://source.invalid/works/42",
+    authorHref: "https://source.invalid/cat-poet",
+    poemHref: "https://source.invalid/poem42.html",
     ...(refreshGeneration === undefined ? {} : { refreshGeneration }),
   };
   const seeded = fixture.ledger.seed(
@@ -597,7 +705,7 @@ async function seedDetail(
       input,
       inputHash: inputHash(input),
       kind: collectionWorkKinds().poemDetail,
-      priority: 200,
+      priority,
       schemaVersion: collectorSchemaVersion(),
     },
     seededAt,
@@ -625,8 +733,8 @@ function seedMissingDetail(
   seededAt: number,
 ): void {
   const input = {
-    authorHref: "https://source.invalid/writers/poet",
-    poemHref: "https://source.invalid/works/42",
+    authorHref: "https://source.invalid/cat-poet",
+    poemHref: "https://source.invalid/poem42.html",
     refreshGeneration,
   };
   fixture.ledger.seed(

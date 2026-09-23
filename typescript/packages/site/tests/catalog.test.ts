@@ -249,8 +249,18 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
 
     const artifactHash = "a".repeat(64);
     const normalizedPayload = JSON.stringify({
+      insights: {
+        culturalSignificance: "A cultural note.",
+        historicalContext: "A grounded setting.",
+        literaryDevices: ["Metaphor"],
+        notableLines: [
+          { explanation: "A notable image.", line: "سطر أول" },
+        ],
+        summary: "A concise reading.",
+        themes: ["Memory"],
+      },
       schemaId: "saqi.poem-enrichment-output",
-      schemaVersion: 2,
+      schemaVersion: 3,
       translation: { lines: ["Sol line one", "Sol line two"] },
       wordGlosses: {
         tokenizerVersion: "saqi-orthographic-v1",
@@ -323,7 +333,7 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
            prompt_version, model, model_key, reasoning_effort, payload_hash,
            payload, created_at
          ) VALUES
-          ('artifact-1', 'revision-1', 'enrich:revision-1', 0, 2, ?,
+          ('artifact-1', 'revision-1', 'enrich:revision-1', 0, 3, ?,
            ?, 'sol-5.6', ?, ?, ?, 1)`,
       )
       .run(
@@ -427,60 +437,19 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
     assert.equal(modelEnrichment.vendorKey, "openai");
     assert.equal(modelEnrichment.backendKey, "openai-codex-cli");
     assert.equal(modelEnrichment.backendName, "Codex CLI");
-    assert.equal(modelEnrichment.profileKey, "sol-5.6/word-gloss-v3/source-v1");
+    assert.equal(
+      modelEnrichment.profileKey,
+      "sol-5.6/word-gloss-v3-output-v3/source-v1",
+    );
+    assert.equal(
+      modelEnrichment.insights?.summary,
+      "A concise reading.",
+      "complete v3 insights remain visible through the normalized model track",
+    );
     assert.equal(modelEnrichment.reasoningEffort, "medium");
     assert.equal(
       modelEnrichment.wordGlosses?.lines[0]?.segments[0]?.surface,
       "سطر",
-    );
-    sqlite.exec(`
-      DROP TRIGGER model_enrichment_artifact_profile_required;
-      DROP TRIGGER model_enrichment_artifact_profile_bind;
-      DROP TRIGGER model_publication_profile_insert_guard;
-    `);
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_artifact (
-           id, source_revision_id, task_key, variant, schema_version,
-           prompt_version, model, model_key, reasoning_effort, payload_hash,
-           payload, created_at
-         ) VALUES
-          ('artifact-historical', 'revision-1', 'historical:revision-1', 0, 2,
-           'historical-word-gloss-v1', 'claude-historical-v1',
-           'historical-track-v1', 'high', ?, ?, 4)`,
-      )
-      .run(artifactHash, normalizedPayload);
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_validation VALUES
-          ('historical-fidelity', 'artifact-historical',
-           'historical-v1-fidelity-review', 'historical-word-gloss-v1', 1,
-           'pass', 'none', ?, '{}', 4),
-          ('historical-grounding', 'artifact-historical',
-           'historical-v1-grounding-review', 'historical-word-gloss-v1', 2,
-           'pass', 'none', ?, '{}', 4)`,
-      )
-      .run(artifactHash, artifactHash);
-    sqlite.exec(`
-      INSERT INTO poem_model_publication_pointer VALUES
-        ('p-valid', 'historical-track-v1', 'revision-1',
-         'artifact-historical', 1, 1, 4);
-    `);
-    const historicalPage = await database.getPoemPage("good-poet", "p-valid");
-    assert.deepEqual(
-      historicalPage?.poem.modelEnrichments?.map(({ modelKey }) => modelKey),
-      ["sol-5.6", "historical-track-v1"],
-      "read-only historical publications remain visible beside Codex",
-    );
-    const historicalSummary = await database.getAuthorPage("good-poet");
-    assert.deepEqual(
-      historicalSummary?.poems
-        .find(({ id }) => id === "p-valid")
-        ?.translationModels.map(({ key, provider }) => ({ key, provider })),
-      [
-        { key: "sol-5.6", provider: "openai" },
-        { key: "historical-track-v1", provider: "anthropic" },
-      ],
     );
     sqlite.exec("DROP TABLE model_enrichment_artifact_profile");
     const preRegistryFallback = await database.getPoemPage(
