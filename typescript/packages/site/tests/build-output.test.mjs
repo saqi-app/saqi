@@ -36,24 +36,7 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
     0,
     "unused sessions must remain disabled",
   );
-  const readerFiles = clientFiles.filter(
-    (file) => !file.pathname.includes("/docs/diagrams/"),
-  );
-  const diagramFiles = clientFiles.filter((file) =>
-    file.pathname.includes("/docs/diagrams/"),
-  );
-  assert.ok(readerFiles.length <= 10, "public reader artifact must stay tiny");
-  const architecture = JSON.parse(
-    await readFile(new URL("src/generated/architecture.json", siteRoot), "utf8"),
-  );
-  assert.deepEqual(
-    diagramFiles.map((file) => file.pathname.split("/docs/diagrams/", 2)[1]).toSorted(),
-    architecture.diagrams
-      .flatMap((diagram) => [diagram.file, diagram.image])
-      .map((file) => file.split("/").at(-1))
-      .toSorted(),
-    "architecture ships Mermaid sources and SVG previews",
-  );
+  assert.ok(clientFiles.length <= 10, "public reader artifact must stay tiny");
   assert.doesNotMatch(entry, /_next\/|elevenlabs|favorite/iu);
   const serverSource = await Promise.all(
     serverFiles
@@ -72,17 +55,11 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
   );
 
   let bytes = 0;
-  for (const file of readerFiles) {
+  for (const file of clientFiles) {
     const fileStat = await stat(file);
     bytes += fileStat.size;
   }
   assert.ok(bytes < 141_000, "public reader assets must stay under 141 KB");
-  const diagramStats = await Promise.all(diagramFiles.map((file) => stat(file)));
-  const diagramBytes = diagramStats.map((fileStat) => fileStat.size);
-  assert.ok(
-    diagramBytes.reduce((total, size) => total + size, 0) < 20_000,
-    "architecture assets stay compact",
-  );
 });
 
 void test("static assets retain immutable and strict security headers", async () => {
@@ -99,10 +76,6 @@ void test("static assets retain immutable and strict security headers", async ()
   assert.match(headers, /max-age=31536000, immutable/u);
   assert.match(headers, /\/favicon\.svg/u);
   assert.match(headers, /max-age=86400, stale-while-revalidate=604800/u);
-  assert.ok(
-    headers.includes("/docs/diagrams/*.mmd\n  Content-Type: text/plain; charset=utf-8"),
-    "Mermaid sources must be served as plain text",
-  );
 });
 
 void test("one verified Amiri subset serves poems and the bilingual wordmark", async () => {

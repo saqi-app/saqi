@@ -4585,13 +4585,6 @@
       "count": 3
     },
     {
-      "fingerprint": "27730e208babf5fb53fa4d84b090ef8038ddd0c26c76c895ff8a43f85b2b9177",
-      "source": "eslint",
-      "ruleId": "no-await-in-loop",
-      "path": "typescript/scripts/generate-architecture.mjs",
-      "count": 1
-    },
-    {
       "fingerprint": "5ceda1cea3aad80f94472ce38e04fab6038f7f9a4c03412d369b950efcf10e29",
       "source": "eslint",
       "ruleId": "no-control-regex",

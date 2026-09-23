@@ -5,7 +5,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "yarn docs:generate && astro build",
+    "build": "astro build",
     "check": "astro check",
     "deploy:preview": "yarn build && yarn deploy:artifact",
     "deploy:artifact": "wrangler deploy --config dist/server/wrangler.json",

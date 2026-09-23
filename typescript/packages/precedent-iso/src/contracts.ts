@@ -163,16 +163,6 @@ export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
     audience: "public",
-    id: "public.docs",
-    method: "GET",
-    path: "/docs",
-    responses: [HTML_RESPONSE],
-    service: "public-site",
-    summary: "Explain the source-derived architecture with Mermaid diagrams",
-  },
-  {
-    ...EMPTY_INPUT,
-    audience: "public",
     id: "public.legacy-author-page",
     method: "GET",
     params: z.strictObject({ pageNumber: PositiveIntegerSegmentSchema }),
