@@ -97,7 +97,8 @@ internal struct MonitorOperationalStatus: Equatable {
             return Self(label: "Pipeline blocked · attention needed", severity: .attention, wait: nil)
         }
         if paused, runtime?.matches(service: service) == true,
-           runtime?.providerExecution?.providers.first(where: { $0.provider == "sol" })?.gates.operator.globalPaused == true
+           runtime?.providerExecution?.providers.first(where: { $0.provider == "sol" })?.gates.operator
+           .globalPaused == true
         {
             return pausedStatus(health: health)
         }
