@@ -99,6 +99,10 @@ void test("static assets retain immutable and strict security headers", async ()
   assert.match(headers, /max-age=31536000, immutable/u);
   assert.match(headers, /\/favicon\.svg/u);
   assert.match(headers, /max-age=86400, stale-while-revalidate=604800/u);
+  assert.ok(
+    headers.includes("/docs/diagrams/*.mmd\n  Content-Type: text/plain; charset=utf-8"),
+    "Mermaid sources must be served as plain text",
+  );
 });
 
 void test("one verified Amiri subset serves poems and the bilingual wordmark", async () => {
