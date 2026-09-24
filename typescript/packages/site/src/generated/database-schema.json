@@ -22,7 +22,7 @@
     "0056_stage_database_identity.sql",
     "0057_retire_production_deployment_identity.sql"
   ],
-  "localVersion": 44,
+  "localVersion": 45,
   "databases": [
     {
       "id": "corpus",
@@ -1650,43 +1650,7 @@
           "foreignKeys": []
         },
         {
-          "name": "ledger_profile_error_count",
-          "columns": [
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "implementation_version",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "schema_version",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "error_code",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "ledger_profile_state_count",
+          "name": "ledger_profile_count",
           "columns": [
             {
               "name": "kind",
@@ -1708,6 +1672,12 @@
             },
             {
               "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "error_code",
               "type": "TEXT",
               "nullable": false,
               "primaryKey": true
