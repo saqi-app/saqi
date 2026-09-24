@@ -41,3 +41,5 @@ jobs:
           )
           yarn workspace @saqi/operations db:execute --remote --json --command "$sql"
           yarn workspace @saqi/operations db:execute --remote --json --command "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' ORDER BY name"
+          yarn workspace @saqi/operations db:execute --remote --json --command "SELECT (SELECT COUNT(*) FROM catalog_unsafe_control) AS catalog_unsafe_control_rows, (SELECT COUNT(*) FROM source_lineage_conflict) AS source_lineage_conflict_rows, (SELECT COUNT(*) FROM source_lineage_maintenance_job) AS source_lineage_maintenance_job_rows"
+          yarn workspace @saqi/operations db:execute --remote --json --command "SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name IN ('catalog_unsafe_control', 'source_lineage_conflict', 'source_lineage_maintenance_job') OR (type IN ('view', 'trigger') AND (sql LIKE '%catalog_unsafe_control%' OR sql LIKE '%source_lineage_conflict%' OR sql LIKE '%source_lineage_maintenance_job%')) ORDER BY type, name"
