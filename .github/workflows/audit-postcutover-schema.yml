@@ -40,3 +40,4 @@ jobs:
           SQL
           )
           yarn workspace @saqi/operations db:execute --remote --json --command "$sql"
+          yarn workspace @saqi/operations db:execute --remote --json --command "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' ORDER BY name"
