@@ -91,6 +91,11 @@ main {
   margin-inline: auto;
 }
 
+main.full-width {
+  inline-size: calc(100% - 2 * var(--page-gutter));
+  max-inline-size: none;
+}
+
 .site-header {
   display: grid;
   grid-template-areas: "brand tools actions";

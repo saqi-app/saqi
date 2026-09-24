@@ -28,7 +28,7 @@ const StoppedControlsSchema = z.strictObject({
 const EmptySchema = z.strictObject({ count: z.literal(0) });
 const ImportedSchema = z.strictObject({ enabled: z.literal(1) });
 const VersionSchema = z.strictObject({
-  version: z.literal([34, 35]),
+  version: z.literal([34, 35, 36]),
 });
 const READ_RECEIPT = `SELECT source_digest AS sourceDigest, record_count AS records,
   source_bytes AS sourceBytes, imported_at AS importedAt FROM sol_operation_import_receipt WHERE singleton = 1`;
@@ -58,7 +58,7 @@ interface ImportPort {
     reader: SolOperationLegacyReader,
     expectedDigest: string,
   ): Promise<SolImportReceipt>;
-  assertStopped(): 34 | 35;
+  assertStopped(): 34 | 35 | 36;
   readReceipt(): SolImportReceipt | undefined;
 }
 
@@ -91,7 +91,7 @@ export async function importLegacySolOperations(
     });
     if (legacyLock !== null)
       throw new Error("RUNTIME_OWNER_LEGACY_LOCK_PRESENT");
-    if (version === 35 && (await readRunLock(lockPath)) !== null)
+    if (version >= 35 && (await readRunLock(lockPath)) !== null)
       throw new Error("SOL_IMPORT_REQUIRES_STOPPED_OWNER");
     const reader = new SolOperationLegacyReader(join(root, "sol-attempts"));
     if (options.apply !== true) {
@@ -153,7 +153,7 @@ class SolOperationImportRepository implements ImportPort {
     return receipt;
   }
 
-  assertStopped(): 34 | 35 {
+  assertStopped(): 34 | 35 | 36 {
     const { version } = queryRequired(
       { operation: "solImport.schema" },
       () =>

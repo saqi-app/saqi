@@ -1,10 +1,15 @@
 .schema-explorer {
-  margin-block: 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  block-size: calc(100dvh - 9rem);
+  min-block-size: 32rem;
+  margin-block-end: 1rem;
 }
 .schema-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  flex: none;
   margin-block-end: 0.75rem;
 }
 .schema-toolbar button {
@@ -28,15 +33,19 @@
 }
 .schema-workspace {
   display: grid;
-  grid-template-columns: 16rem minmax(0, 1fr);
-  min-block-size: 38rem;
+  grid-template-columns: 17rem minmax(0, 1fr) minmax(19rem, 26rem);
+  flex: 1;
+  min-block-size: 0;
   border: 1px solid var(--rule);
   border-radius: 0.85rem;
   overflow: hidden;
   background: var(--surface);
 }
 .schema-index {
+  display: flex;
+  flex-direction: column;
   min-inline-size: 0;
+  min-block-size: 0;
   border-inline-end: 1px solid var(--rule);
   padding: 1rem;
 }
@@ -61,7 +70,8 @@
   color: var(--muted);
 }
 .schema-table-list {
-  max-block-size: 32rem;
+  flex: 1;
+  min-block-size: 0;
   overflow: auto;
 }
 .schema-table-list button {
@@ -89,9 +99,24 @@
   white-space: nowrap;
 }
 .schema-canvas {
+  position: relative;
   min-inline-size: 0;
-  block-size: 38rem;
+  min-block-size: 0;
   background: var(--canvas);
+}
+.schema-filter-note {
+  position: absolute;
+  inset-block-end: 0.5rem;
+  inset-inline-start: 0.75rem;
+  z-index: 5;
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.7rem;
+  pointer-events: none;
 }
 .schema-canvas .react-flow__background {
   opacity: 0.6;
@@ -182,35 +207,11 @@
   background: var(--accent);
   border: 0;
 }
-.schema-preview {
-  position: absolute;
-  z-index: 40;
-  inset-inline-start: calc(100% + 0.75rem);
-  inset-block-start: 0;
-  inline-size: min(35rem, 75vw);
-  padding: 0.8rem;
-  border: 1px solid var(--accent);
-  border-radius: 0.6rem;
-  background: var(--surface);
-  box-shadow: 0 16px 35px #102f2733;
-  font-size: 0.7rem;
-}
-.schema-preview p {
-  margin: 0.2rem 0 0.6rem;
-  color: var(--muted);
-}
-.schema-preview-scroll {
-  overflow: auto;
-  max-block-size: 14rem;
-}
-.schema-preview table,
 .schema-inspector table {
   border-collapse: collapse;
   font-size: 0.75rem;
   white-space: nowrap;
 }
-.schema-preview th,
-.schema-preview td,
 .schema-inspector th,
 .schema-inspector td {
   border-block-end: 1px solid var(--rule);
@@ -218,12 +219,12 @@
   text-align: start;
 }
 .schema-inspector {
-  margin-block-start: 0.75rem;
-  border: 1px solid var(--rule);
-  border-radius: 0.85rem;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: auto;
+  border-inline-start: 1px solid var(--rule);
   padding: 1rem;
   background: var(--surface);
-  min-block-size: 6rem;
 }
 .schema-inspector-title {
   display: flex;
@@ -241,28 +242,53 @@
   color: var(--muted);
   font-size: 0.8rem;
 }
-.schema-inspector h3 {
-  font-size: 0.9rem;
-  margin: 0.8rem 0 0.25rem;
+.schema-detail-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-block: 0.8rem;
 }
-.schema-inspector-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.5rem;
+.schema-detail-tabs button {
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
 }
-.schema-inspector-grid > div {
+.schema-detail-tabs button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.schema-detail-content {
   min-inline-size: 0;
   overflow: auto;
 }
 .schema-inspector-samples {
   overflow: auto;
-  max-block-size: 19rem;
+}
+@media (max-width: 80rem) {
+  .schema-workspace {
+    grid-template-columns: 16rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(12rem, 31dvh);
+  }
+  .schema-inspector {
+    grid-column: 1 / -1;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--rule);
+  }
 }
 @media (max-width: 52rem) {
+  .schema-explorer {
+    block-size: auto;
+  }
   .schema-workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
   }
   .schema-index {
+    block-size: auto;
     border-inline-end: 0;
     border-block-end: 1px solid var(--rule);
   }
@@ -270,10 +296,8 @@
     max-block-size: 10rem;
   }
   .schema-canvas {
-    block-size: 30rem;
-  }
-  .schema-inspector-grid {
-    grid-template-columns: 1fr;
+    block-size: 55dvh;
+    min-block-size: 22rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {

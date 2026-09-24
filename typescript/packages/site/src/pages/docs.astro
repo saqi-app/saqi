@@ -4,34 +4,22 @@ import schema from "../generated/database-schema.json";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { pageTitle } from "../lib/metadata";
 
-const corpus = schema.databases.find((database) => database.id === "corpus");
-const rig = schema.databases.find((database) => database.id === "rig");
-if (!corpus || !rig) throw new Error("DATABASE_SCHEMA_INCOMPLETE");
-const corpusCount = corpus.tables.length;
-const rigCount = rig.tables.length;
 ---
 
 <BaseLayout
   title={pageTitle("Database schema")}
   description="Explore the Saqi corpus and local rig database schemas, generated from their migrations."
   canonicalPath="/docs"
+  fullWidth={true}
   preloadArabicFont={false}
 >
   <nav class="breadcrumbs" aria-label="Breadcrumb">
     <a href="/">Poets</a>
     <h1 aria-current="page">Database schema</h1>
   </nav>
-  <p class="schema-intro">
-    {corpusCount} corpus tables and {rigCount} local rig tables. This is the expected schema built from the repository's migrations, not a live database snapshot. Relationship lines show declared foreign keys.
-  </p>
-  <p class="schema-intro">Hover over a table or select it to see five illustrative row shapes. Every example is invented; some singleton and audit tables cannot accept five real rows.</p>
   <SchemaExplorer catalog={schema} client:only="react" />
   <noscript>
     <p>Enable JavaScript for the relationship diagram. The table inventory is below.</p>
     {schema.databases.map((database) => <section><h2>{database.label}</h2><ul>{database.tables.map((table) => <li>{table.name} · {table.columns.length} columns</li>)}</ul></section>)}
   </noscript>
 </BaseLayout>
-
-<style>
-  .schema-intro { max-inline-size: 66ch; color: var(--muted); }
-</style>

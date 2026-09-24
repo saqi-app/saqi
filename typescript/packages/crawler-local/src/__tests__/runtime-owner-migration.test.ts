@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import { expect, test, vi } from "vitest";
 
 import {
+  CURRENT_SCHEMA_VERSION,
   LedgerMigrationEngine,
   LedgerMigrator,
   MIGRATIONS,
@@ -47,10 +48,10 @@ test("a fresh ledger opener accepts a schema initialized after its first inspect
     });
   });
   try {
-    expect(new LedgerMigrator(follower).migrate()).toBe(35);
+    expect(new LedgerMigrator(follower).migrate()).toBe(CURRENT_SCHEMA_VERSION);
     expect(injected).toBe(true);
     expect(follower.prepare("SELECT version FROM local_schema").get()).toEqual({
-      version: 35,
+      version: CURRENT_SCHEMA_VERSION,
     });
   } finally {
     prepareSpy.mockRestore();
@@ -108,7 +109,7 @@ test("stopped imported schema34 upgrades to empty owner35 without changing contr
     const controls = database
       .prepare("SELECT * FROM runtime_control ORDER BY control_key")
       .all();
-    expect(new LedgerMigrator(database).migrate()).toBe(35);
+    expect(new LedgerMigrator(database).migrate()).toBe(CURRENT_SCHEMA_VERSION);
     expect(new RuntimeOwnerStore(database).read()).toBeNull();
     expect(
       database
@@ -184,7 +185,7 @@ test.each([
 test("fresh schema0 initializes owner35 without imported control prerequisites", () => {
   const database = new Database(":memory:");
   try {
-    expect(new LedgerMigrator(database).migrate()).toBe(35);
+    expect(new LedgerMigrator(database).migrate()).toBe(CURRENT_SCHEMA_VERSION);
     expect(new RuntimeOwnerStore(database).read()).toBeNull();
   } finally {
     database.close();
@@ -252,7 +253,7 @@ test("fresh bootstrap failure rolls back every earlier schema and can retry", ()
         )
         .all(),
     ).toEqual([]);
-    expect(new LedgerMigrator(database).migrate()).toBe(35);
+    expect(new LedgerMigrator(database).migrate()).toBe(CURRENT_SCHEMA_VERSION);
     expect(new RuntimeOwnerStore(database).read()).toBeNull();
   } finally {
     database.close();
@@ -373,7 +374,7 @@ test("historical33 stages and imports through strict legacy maintenance before o
   expect(existsSync(join(root, "RUN.lock"))).toBe(false);
   const migrated = new Database(path);
   try {
-    expect(new LedgerMigrator(migrated).migrate()).toBe(35);
+    expect(new LedgerMigrator(migrated).migrate()).toBe(CURRENT_SCHEMA_VERSION);
     expect(new RuntimeOwnerStore(migrated).read()).toBeNull();
     expect(
       migrated
@@ -396,7 +397,7 @@ test("future schema refuses with SELECT-only inspection", () => {
   });
   try {
     database.exec(
-      "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY,version INTEGER); INSERT INTO local_schema VALUES(1,36)",
+      `CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY,version INTEGER); INSERT INTO local_schema VALUES(1,${String(CURRENT_SCHEMA_VERSION + 1)})`,
     );
     statements.length = 0;
     expect(() => new LedgerMigrator(database).migrate()).toThrow(
@@ -406,7 +407,7 @@ test("future schema refuses with SELECT-only inspection", () => {
       statements.every((statement) => statement.startsWith("SELECT ")),
     ).toBe(true);
     expect(database.prepare("SELECT version FROM local_schema").get()).toEqual({
-      version: 36,
+      version: CURRENT_SCHEMA_VERSION + 1,
     });
   } finally {
     database.close();

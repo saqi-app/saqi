@@ -65,7 +65,16 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0043_retire_unused_schema.sql");
+    expect(first.at(-1)).toBe(
+      "0044_remove_duplicate_legacy_attribution_index.sql",
+    );
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE name = 'idx_legacy_attribution_lookup'",
+        )
+        .get(),
+    ).toBeUndefined();
     expectCorpusRevisionSchema(database);
     expectModelPublicationGuards(database);
     expectLegacySolPublicationPrecedence(database);
