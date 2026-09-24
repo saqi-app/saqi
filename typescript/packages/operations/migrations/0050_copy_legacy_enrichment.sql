@@ -1,6 +1,6 @@
--- Move every legacy artifact and validation into the model-scoped ledger before
--- removing the parallel publication path. The current model pointer wins when
--- a poem already has one; historical artifacts remain available by identity.
+-- Copy legacy artifacts and validation evidence into the model-scoped ledger.
+-- Keep the old storage until the new site reader has deployed and live parity
+-- checks pass. A later migration retires the old tables and poem columns.
 CREATE TABLE IF NOT EXISTS _legacy_enrichment_guard (
   invalid_count INTEGER NOT NULL CHECK (invalid_count = 0)
 );
@@ -111,6 +111,18 @@ WHERE NOT EXISTS (
 
 -- A newer model publication is authoritative. Add only current-revision
 -- legacy publications for poems that lack that model track entirely.
+-- A stale model pointer would hide an otherwise current legacy publication.
+-- Stop for explicit repair instead of silently losing its visible translation.
+INSERT INTO _legacy_enrichment_guard -- sarj-noqa: SARJ105 — A conflicting stale publication must abort the copy.
+SELECT count(*)
+FROM poem_publication_pointer legacy
+JOIN poem canonical ON canonical.id = legacy.poem_id
+JOIN _legacy_enrichment_map map ON map.legacy_id = legacy.enrichment_artifact_id
+JOIN poem_model_publication_pointer current
+  ON current.poem_id = legacy.poem_id AND current.model_key = map.model_key
+WHERE canonical.active_source_revision_id = legacy.source_revision_id
+  AND current.source_revision_id IS NOT legacy.source_revision_id;
+
 INSERT INTO poem_model_publication_pointer ( -- sarj-noqa: SARJ105 — Conflicting current pointers must abort the migration.
   poem_id, model_key, source_revision_id, enrichment_artifact_id,
   pointer_version, writer_epoch, updated_at
@@ -144,12 +156,5 @@ WHERE NOT EXISTS (
     AND current.attempt = legacy.attempt
 );
 
-DROP INDEX IF EXISTS idx_poem_active_enrichment_artifact;
-ALTER TABLE poem DROP COLUMN active_enrichment_artifact_id;
-ALTER TABLE poem DROP COLUMN translation_sol;
-ALTER TABLE poem DROP COLUMN insights_sol;
-DROP TABLE IF EXISTS poem_publication_pointer;
-DROP TABLE IF EXISTS enrichment_validation;
-DROP TABLE IF EXISTS enrichment_artifact;
 DROP TABLE IF EXISTS _legacy_enrichment_map;
 DROP TABLE IF EXISTS _legacy_enrichment_guard;
