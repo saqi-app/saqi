@@ -53,12 +53,6 @@ CREATE TABLE IF NOT EXISTS poem (
   legacy_translation_attributions TEXT
 );
 
-CREATE TABLE IF NOT EXISTS task (
-  id TEXT PRIMARY KEY,
-  work_key TEXT,
-  status TEXT NOT NULL
-);
-
 CREATE TABLE model_enrichment_artifact (
   id TEXT PRIMARY KEY,
   source_revision_id TEXT NOT NULL,
