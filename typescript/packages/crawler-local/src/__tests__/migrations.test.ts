@@ -19,6 +19,170 @@ const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("schema 43 derives populated status clocks from event sequence", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 42);
+      const workKey = "a".repeat(64);
+      database
+        .prepare(
+          `INSERT INTO work_item(
+          work_key, kind, input_json, input_hash, schema_version,
+          implementation_version, state, available_at, created_at, updated_at
+        ) VALUES(?, 'author-manifest', '{}', ?, 'input@1',
+          'crawler@1', 'pending', 1, 1, 1)`,
+        )
+        .run(workKey, "b".repeat(64));
+      const insertEvent = database.prepare(`INSERT INTO work_event(
+        event_id, work_key, event_type, payload_json, created_at
+      ) VALUES(?, ?, ?, '{}', ?)`);
+      insertEvent.run("success-1", workKey, "succeeded", 30);
+      insertEvent.run("failure-1", workKey, "retry_wait", 20);
+      insertEvent.run("success-2", workKey, "imported", 10);
+      expect(
+        database
+          .prepare(
+            "SELECT last_success_at, last_failure_at FROM ledger_status_clock",
+          )
+          .get(),
+      ).toEqual({ last_success_at: 10, last_failure_at: 20 });
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name = 'ledger_status_clock'",
+          )
+          .get(),
+      ).toBeUndefined();
+      const latest = `SELECT
+        (SELECT created_at FROM work_event INDEXED BY work_event_latest_success
+         WHERE event_type IN ('succeeded','imported')
+         ORDER BY sequence DESC LIMIT 1) AS last_success_at,
+        (SELECT created_at FROM work_event INDEXED BY work_event_latest_failure
+         WHERE event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired')
+         ORDER BY sequence DESC LIMIT 1) AS last_failure_at`;
+      expect(database.prepare(latest).get()).toEqual({
+        last_success_at: 10,
+        last_failure_at: 20,
+      });
+      expect(database.prepare(`EXPLAIN QUERY PLAN ${latest}`).all()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: expect.stringContaining("work_event_latest_success"),
+          }),
+          expect.objectContaining({
+            detail: expect.stringContaining("work_event_latest_failure"),
+          }),
+        ]),
+      );
+      insertEvent.run("failure-2", workKey, "dead_letter", 5);
+      expect(database.prepare(latest).get()).toEqual({
+        last_success_at: 10,
+        last_failure_at: 5,
+      });
+      expect(database.pragma("foreign_key_check")).toEqual([]);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("schema 44 preserves populated Sol import proof and removes its table", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 43);
+      const digest = "a".repeat(64);
+      database
+        .prepare(
+          `INSERT INTO sol_operation_import_receipt(
+            singleton, source_digest, record_count, source_bytes, imported_at
+          ) VALUES(1, ?, 2, 4096, 123)`,
+        )
+        .run(digest);
+      database.exec(
+        "INSERT INTO runtime_control VALUES('sol_operation_import_complete', 1)",
+      );
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            `SELECT sol_import_source_digest, sol_import_record_count,
+                    sol_import_source_bytes, sol_imported_at
+             FROM local_schema WHERE singleton = 1`,
+          )
+          .get(),
+      ).toEqual({
+        sol_import_source_digest: digest,
+        sol_import_record_count: 2,
+        sol_import_source_bytes: 4096,
+        sol_imported_at: 123,
+      });
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sol_operation_import_receipt'",
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(() =>
+        database
+          .prepare(
+            "UPDATE local_schema SET sol_import_record_count = 3 WHERE singleton = 1",
+          )
+          .run(),
+      ).toThrow("SOL_IMPORT_RECEIPT_IMMUTABLE");
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("schema 44 preserves old receipt after failed guard and succeeds on restart", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-sol-import-receipt-"));
+    const path = join(root, "ledger.sqlite3");
+    const database = new Database(path);
+    try {
+      initializeLegacyLedgerSchema(database, 43);
+      database.exec(
+        "INSERT INTO runtime_control VALUES('sol_operation_import_complete', 1)",
+      );
+      expect(() => migrate(database)).toThrow();
+      expect(
+        database.prepare("SELECT version FROM local_schema").get(),
+      ).toEqual({
+        version: 43,
+      });
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name = 'sol_operation_import_receipt'",
+          )
+          .get(),
+      ).toEqual({ name: "sol_operation_import_receipt" });
+      database
+        .prepare(
+          "INSERT INTO sol_operation_import_receipt VALUES(1, ?, 0, 0, 7)",
+        )
+        .run("b".repeat(64));
+    } finally {
+      database.close();
+    }
+    const restarted = new Database(path);
+    try {
+      expect(migrate(restarted)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        restarted
+          .prepare("SELECT sol_import_source_digest FROM local_schema")
+          .get(),
+      ).toEqual({ sol_import_source_digest: "b".repeat(64) });
+      expect(migrate(restarted)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      restarted.close();
+    }
+  });
+
   test("schema 42 preserves published translation lineage and removes its one-to-one table", () => {
     const database = new Database(":memory:");
     try {

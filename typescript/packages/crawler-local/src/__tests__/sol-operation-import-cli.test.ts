@@ -115,7 +115,11 @@ test.each([34, 35] as const)(
           state.prepare("SELECT * FROM sol_invocation_attempt").all(),
         ).toEqual([]);
         expect(
-          state.prepare("SELECT * FROM sol_operation_import_receipt").all(),
+          state
+            .prepare(
+              "SELECT sol_import_source_digest FROM local_schema WHERE sol_import_source_digest IS NOT NULL",
+            )
+            .all(),
         ).toEqual([]);
       } finally {
         state.close();

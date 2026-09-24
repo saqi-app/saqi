@@ -14,6 +14,7 @@ import {
   type SolLegacyScan,
 } from "./sol-operation-import-schema.js";
 import { SolOperationLegacyReader } from "./sol-operation-legacy-reader.js";
+import { solImportReceiptQuery } from "./sol-operation-receipt-schema.js";
 import { queryOptional, queryRequired } from "./sqlite-query.js";
 import { canonicalJson } from "./work-key.js";
 
@@ -27,11 +28,11 @@ const StoppedControlsSchema = z.strictObject({
 });
 const EmptySchema = z.strictObject({ count: z.literal(0) });
 const ImportedSchema = z.strictObject({ enabled: z.literal(1) });
+const READ_SCHEMA_VERSION_SQL =
+  "SELECT version FROM local_schema WHERE singleton = 1";
 const VersionSchema = z.strictObject({
-  version: z.literal([34, 35, 36, 37, 38, 39, 40, 41, 42]),
+  version: z.literal([34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]),
 });
-const READ_RECEIPT = `SELECT source_digest AS sourceDigest, record_count AS records,
-  source_bytes AS sourceBytes, imported_at AS importedAt FROM sol_operation_import_receipt WHERE singleton = 1`;
 export type SolOperationImportOptions = {
   readonly stateDirectory: string;
 } & (
@@ -58,7 +59,7 @@ interface ImportPort {
     reader: SolOperationLegacyReader,
     expectedDigest: string,
   ): Promise<SolImportReceipt>;
-  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42;
+  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44;
   readReceipt(): SolImportReceipt | undefined;
 }
 
@@ -133,6 +134,11 @@ class SolOperationImportRepository implements ImportPort {
   }
 
   readReceipt(): SolImportReceipt | undefined {
+    const version = queryRequired(
+      { operation: "solImport.schema" },
+      () => this.#database.prepare(READ_SCHEMA_VERSION_SQL).get(),
+      VersionSchema,
+    ).version;
     const marker = queryOptional(
       { operation: "solImport.marker" },
       () =>
@@ -145,7 +151,7 @@ class SolOperationImportRepository implements ImportPort {
     );
     const receipt = queryOptional(
       { operation: "solImport.receipt" },
-      () => this.#database.prepare(READ_RECEIPT).get(),
+      () => this.#database.prepare(solImportReceiptQuery(version)).get(),
       SolImportReceiptSchema,
     );
     if ((marker === undefined) !== (receipt === undefined))
@@ -153,13 +159,10 @@ class SolOperationImportRepository implements ImportPort {
     return receipt;
   }
 
-  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 {
+  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 {
     const { version } = queryRequired(
       { operation: "solImport.schema" },
-      () =>
-        this.#database
-          .prepare("SELECT version FROM local_schema WHERE singleton = 1")
-          .get(),
+      () => this.#database.prepare(READ_SCHEMA_VERSION_SQL).get(),
       VersionSchema,
     );
     queryRequired(
@@ -198,7 +201,7 @@ class SolOperationImportRepository implements ImportPort {
     this.#database.pragma("synchronous = FULL");
     this.#database.exec("BEGIN IMMEDIATE");
     try {
-      this.assertStopped();
+      const version = this.assertStopped();
       const prior = this.readReceipt();
       if (prior !== undefined) throw new Error("SOL_IMPORT_ALREADY_COMMITTED");
       queryRequired(
@@ -223,7 +226,12 @@ class SolOperationImportRepository implements ImportPort {
       });
       this.#database
         .prepare(
-          `INSERT INTO sol_operation_import_receipt VALUES(1, ?, ?, ?, ?)`,
+          version < 44
+            ? `INSERT INTO sol_operation_import_receipt VALUES(1, ?, ?, ?, ?)`
+            : `UPDATE local_schema SET sol_import_source_digest = ?,
+                 sol_import_record_count = ?, sol_import_source_bytes = ?,
+                 sol_imported_at = ? WHERE singleton = 1
+                 AND sol_import_source_digest IS NULL`,
         )
         .run(
           receipt.sourceDigest,
@@ -239,7 +247,7 @@ class SolOperationImportRepository implements ImportPort {
       this.#database.exec("COMMIT");
       return queryRequired(
         { operation: "solImport.readback" },
-        () => this.#database.prepare(READ_RECEIPT).get(),
+        () => this.#database.prepare(solImportReceiptQuery(version)).get(),
         SolImportReceiptSchema,
       );
     } catch (error) {

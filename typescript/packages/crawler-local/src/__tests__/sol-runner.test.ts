@@ -241,7 +241,7 @@ function operationsFor(attemptRoot: string) {
   const db = new Database(path);
   try {
     db.prepare(
-      "INSERT OR IGNORE INTO sol_operation_import_receipt VALUES(1, ?, 0, 0, 0)",
+      "UPDATE local_schema SET sol_import_source_digest = ?, sol_import_record_count = 0, sol_import_source_bytes = 0, sol_imported_at = 0 WHERE singleton = 1 AND sol_import_source_digest IS NULL",
     ).run("a".repeat(64));
     db.exec(
       "INSERT OR IGNORE INTO runtime_control VALUES('sol_operation_import_complete', 1)",
@@ -839,7 +839,7 @@ describe("CodexSolRunner", () => {
             db.exec(
               authority === "marker"
                 ? "DELETE FROM runtime_control WHERE control_key = 'sol_operation_import_complete'"
-                : "DROP TRIGGER sol_operation_import_receipt_reject_delete; DELETE FROM sol_operation_import_receipt",
+                : "DROP TRIGGER local_schema_sol_import_immutable; UPDATE local_schema SET sol_import_source_digest = NULL, sol_import_record_count = NULL, sol_import_source_bytes = NULL, sol_imported_at = NULL WHERE singleton = 1",
             );
           } finally {
             db.close();

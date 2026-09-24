@@ -21,7 +21,7 @@
     "0055_retire_legacy_enrichment_tables.sql",
     "0056_stage_database_identity.sql"
   ],
-  "localVersion": 42,
+  "localVersion": 44,
   "databases": [
     {
       "id": "corpus",
@@ -1769,30 +1769,6 @@
           "foreignKeys": []
         },
         {
-          "name": "ledger_status_clock",
-          "columns": [
-            {
-              "name": "singleton",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "last_success_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "last_failure_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
           "name": "local_schema",
           "columns": [
             {
@@ -1817,6 +1793,30 @@
               "name": "sol_milestone_high_watermark",
               "type": "INTEGER",
               "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sol_import_source_digest",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sol_import_record_count",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sol_import_source_bytes",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sol_imported_at",
+              "type": "INTEGER",
+              "nullable": true,
               "primaryKey": false
             }
           ],
@@ -2317,42 +2317,6 @@
               "to": "claim_epoch"
             }
           ]
-        },
-        {
-          "name": "sol_operation_import_receipt",
-          "columns": [
-            {
-              "name": "singleton",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "source_digest",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "record_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "source_bytes",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "imported_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "sol_paid_usage_budget",

@@ -1608,8 +1608,6 @@ describe("work identity and fenced leases", () => {
       DELETE FROM ledger_profile_availability_count;
       DELETE FROM ledger_profile_error_count;
       DELETE FROM ledger_profile_success_clock;
-      UPDATE ledger_status_clock
-        SET last_success_at = NULL, last_failure_at = NULL;
     `);
     raw.close();
     expect(ledger.status(5)).toMatchObject({ ready: 0, total: 0 });

@@ -526,7 +526,7 @@ test("failed receipt commit rolls back every row and permits restart", async () 
   legacy(root, "known_success");
   const expectedDigest = await digest(root);
   inspect(path, (db) =>
-    db.exec(`CREATE TRIGGER fail_receipt BEFORE INSERT ON sol_operation_import_receipt
+    db.exec(`CREATE TRIGGER fail_receipt BEFORE UPDATE OF sol_import_source_digest ON local_schema
     BEGIN SELECT RAISE(ABORT, 'forced failure'); END`),
   );
   await expect(
