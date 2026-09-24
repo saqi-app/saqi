@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0057_retire_production_deployment_identity.sql");
+    expect(first.at(-1)).toBe("0058_source_revision_writer_cutover.sql");
     expect(
       database
         .prepare(
@@ -198,6 +198,65 @@ describe("production migration compatibility", () => {
         WHERE id = 'pointer-poem';
       `),
     ).toThrow("SOURCE_CURRENT_REVISION_MISMATCH");
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0052_guard_legacy_enrichment_contract.sql",
+      "0053_retire_legacy_sol_translation_column.sql",
+      "0054_retire_legacy_sol_insights_column.sql",
+      "0055_retire_legacy_enrichment_tables.sql",
+      "0056_stage_database_identity.sql",
+      "0057_retire_production_deployment_identity.sql",
+      "0058_source_revision_writer_cutover.sql",
+    ]);
+    database.exec(`
+      UPDATE source_poem_identity
+      SET current_revision_version = 3, current_revision_updated_at = 3
+      WHERE id = 'pointer-poem';
+    `);
+    expect(
+      database
+        .prepare(
+          `SELECT pointer_version AS pointerVersion, updated_at AS updatedAt
+             FROM poem_source_pointer WHERE source_poem_id = 'pointer-poem'`,
+        )
+        .get(),
+    ).toEqual({ pointerVersion: 3, updatedAt: 3 });
+    database.exec(`
+      UPDATE scraper_writer_control
+      SET writer_epoch = 2, writer_id = 'next-writer',
+          updated_at = updated_at + 1
+      WHERE singleton = 1;
+      UPDATE poem_source_pointer
+      SET pointer_version = 4, writer_epoch = 2, updated_at = 4
+      WHERE source_poem_id = 'pointer-poem';
+    `);
+    expect(current()).toEqual({
+      currentRevisionId: "pointer-revision",
+      currentRevisionVersion: 4,
+      currentRevisionWriterEpoch: 2,
+      currentRevisionUpdatedAt: 4,
+    });
+    database.exec(`
+      UPDATE source_poem_identity
+      SET current_revision_version = 5, current_revision_updated_at = 5
+      WHERE id = 'pointer-poem';
+    `);
+    expect(
+      database
+        .prepare(
+          `SELECT pointer_version AS pointerVersion,
+                  writer_epoch AS writerEpoch, updated_at AS updatedAt
+             FROM poem_source_pointer WHERE source_poem_id = 'pointer-poem'`,
+        )
+        .get(),
+    ).toEqual({ pointerVersion: 5, writerEpoch: 2, updatedAt: 5 });
+    expect(() =>
+      database.exec(`
+        UPDATE source_poem_identity
+        SET current_revision_version = 6, current_revision_updated_at = 6,
+            current_revision_writer_epoch = 1
+        WHERE id = 'pointer-poem';
+      `),
+    ).toThrow("SOURCE_CURRENT_REVISION_TRANSITION_INVALID");
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -264,6 +323,7 @@ describe("production migration compatibility", () => {
     database.exec("ROLLBACK TO identity_drift; RELEASE identity_drift");
     expect(applyPending(database, migrationFiles())).toEqual([
       "0057_retire_production_deployment_identity.sql",
+      "0058_source_revision_writer_cutover.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -338,6 +398,7 @@ describe("production migration compatibility", () => {
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
+      "0058_source_revision_writer_cutover.sql",
     ]);
     expect(
       database
@@ -389,6 +450,7 @@ describe("production migration compatibility", () => {
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
+      "0058_source_revision_writer_cutover.sql",
     ]);
     expect(
       database
@@ -576,6 +638,7 @@ describe("production migration compatibility", () => {
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
+      "0058_source_revision_writer_cutover.sql",
     ]);
     for (const name of [
       "enrichment_artifact",

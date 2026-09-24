@@ -20,7 +20,8 @@
     "0054_retire_legacy_sol_insights_column.sql",
     "0055_retire_legacy_enrichment_tables.sql",
     "0056_stage_database_identity.sql",
-    "0057_retire_production_deployment_identity.sql"
+    "0057_retire_production_deployment_identity.sql",
+    "0058_source_revision_writer_cutover.sql"
   ],
   "localVersion": 45,
   "databases": [

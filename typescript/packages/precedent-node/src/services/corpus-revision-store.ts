@@ -1942,38 +1942,41 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
   ): Promise<number> {
     if (item.expectedPointerVersion === null) {
       await this.#db.run(sql`
-        INSERT INTO poem_source_pointer (
-          source_poem_id, revision_id, pointer_version, writer_epoch, updated_at
-        )
-        SELECT ${item.sourcePoemKey}, ${item.revisionId}, 1,
-          ${plan.writerEpoch}, unixepoch()
-        WHERE ${plan.writerEpoch} = (
+        UPDATE source_poem_identity
+        SET current_revision_id = ${item.revisionId},
+            current_revision_version = 1,
+            current_revision_writer_epoch = ${plan.writerEpoch},
+            current_revision_updated_at = unixepoch()
+        WHERE id = ${item.sourcePoemKey}
+          AND current_revision_id IS NULL
+          AND current_revision_version IS NULL
+          AND ${plan.writerEpoch} = (
           SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
         )
-        ON CONFLICT(source_poem_id) DO NOTHING
       `);
     } else if (item.pointerAction === "unchanged") {
       await this.#db.run(sql`
-        UPDATE poem_source_pointer
-        SET pointer_version = pointer_version + 1,
-            writer_epoch = ${plan.writerEpoch}, updated_at = unixepoch()
-        WHERE source_poem_id = ${item.sourcePoemKey}
-          AND revision_id = ${item.revisionId}
-          AND pointer_version = ${item.expectedPointerVersion}
-          AND writer_epoch <> ${plan.writerEpoch}
+        UPDATE source_poem_identity
+        SET current_revision_version = current_revision_version + 1,
+            current_revision_writer_epoch = ${plan.writerEpoch},
+            current_revision_updated_at = unixepoch()
+        WHERE id = ${item.sourcePoemKey}
+          AND current_revision_id = ${item.revisionId}
+          AND current_revision_version = ${item.expectedPointerVersion}
+          AND current_revision_writer_epoch <> ${plan.writerEpoch}
           AND ${plan.writerEpoch} = (
             SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
           )
       `);
     } else {
       await this.#db.run(sql`
-        UPDATE poem_source_pointer
-        SET revision_id = ${item.revisionId},
-            pointer_version = pointer_version + 1,
-            writer_epoch = ${plan.writerEpoch},
-            updated_at = unixepoch()
-        WHERE source_poem_id = ${item.sourcePoemKey}
-          AND pointer_version = ${item.expectedPointerVersion}
+        UPDATE source_poem_identity
+        SET current_revision_id = ${item.revisionId},
+            current_revision_version = current_revision_version + 1,
+            current_revision_writer_epoch = ${plan.writerEpoch},
+            current_revision_updated_at = unixepoch()
+        WHERE id = ${item.sourcePoemKey}
+          AND current_revision_version = ${item.expectedPointerVersion}
           AND ${plan.writerEpoch} = (
             SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
           )
