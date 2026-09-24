@@ -19,7 +19,8 @@
     "0053_retire_legacy_sol_translation_column.sql",
     "0054_retire_legacy_sol_insights_column.sql",
     "0055_retire_legacy_enrichment_tables.sql",
-    "0056_stage_database_identity.sql"
+    "0056_stage_database_identity.sql",
+    "0057_retire_production_deployment_identity.sql"
   ],
   "localVersion": 44,
   "databases": [
@@ -1107,24 +1108,6 @@
               "to": "id"
             }
           ]
-        },
-        {
-          "name": "production_deployment_identity",
-          "columns": [
-            {
-              "name": "scope",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "database_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "scraper_writer_control",

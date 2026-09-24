@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0056_stage_database_identity.sql");
+    expect(first.at(-1)).toBe("0057_retire_production_deployment_identity.sql");
     expect(
       database
         .prepare(
@@ -213,9 +213,12 @@ describe("production migration compatibility", () => {
           updated_at = updated_at + 1
       WHERE singleton = 1;
     `);
-    expect(applyPending(database, migrationFiles())).toEqual([
-      "0056_stage_database_identity.sql",
-    ]);
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0057_"),
+      ),
+    ).toEqual(["0056_stage_database_identity.sql"]);
     expect(
       database
         .prepare(
@@ -235,7 +238,6 @@ describe("production migration compatibility", () => {
           updated_at = updated_at + 1
       WHERE singleton = 1;
     `);
-    expectProductionDeploymentIdentity(database);
     expect(
       database
         .prepare(
@@ -244,6 +246,26 @@ describe("production migration compatibility", () => {
         )
         .get(),
     ).toEqual({ databaseId: SAQI_PRODUCTION_DATABASE_ID });
+    database.exec(`
+      SAVEPOINT identity_drift;
+      DROP TRIGGER production_deployment_identity_update_guard;
+      UPDATE production_deployment_identity
+      SET database_id = '11111111-1111-4111-8111-111111111111'
+      WHERE scope = 'production';
+    `);
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'production_deployment_identity'",
+        )
+        .get(),
+    ).toBeDefined();
+    database.exec("ROLLBACK TO identity_drift; RELEASE identity_drift");
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0057_retire_production_deployment_identity.sql",
+    ]);
+    expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -315,6 +337,7 @@ describe("production migration compatibility", () => {
       "0054_retire_legacy_sol_insights_column.sql",
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
+      "0057_retire_production_deployment_identity.sql",
     ]);
     expect(
       database
@@ -365,6 +388,7 @@ describe("production migration compatibility", () => {
       "0054_retire_legacy_sol_insights_column.sql",
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
+      "0057_retire_production_deployment_identity.sql",
     ]);
     expect(
       database
@@ -551,6 +575,7 @@ describe("production migration compatibility", () => {
       "0054_retire_legacy_sol_insights_column.sql",
       "0055_retire_legacy_enrichment_tables.sql",
       "0056_stage_database_identity.sql",
+      "0057_retire_production_deployment_identity.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1299,22 +1324,13 @@ function expectProductionDeploymentIdentity(database: Database.Database): void {
           WHERE type = 'table' AND name = 'production_deployment_identity'`,
       )
       .get(),
-  ).toBeDefined();
+  ).toBeUndefined();
   expect(() =>
     database
       .prepare(
         `UPDATE scraper_writer_control
             SET database_id = '11111111-1111-4111-8111-111111111111'
           WHERE singleton = 1`,
-      )
-      .run(),
-  ).toThrow();
-  expect(() =>
-    database
-      .prepare(
-        `UPDATE production_deployment_identity
-            SET database_id = '11111111-1111-4111-8111-111111111111'
-          WHERE scope = 'production'`,
       )
       .run(),
   ).toThrow();
