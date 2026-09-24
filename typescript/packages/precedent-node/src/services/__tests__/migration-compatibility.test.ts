@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0060_restore_catalog_publishability.sql");
+    expect(first.at(-1)).toBe("0061_retire_source_lineage_maintenance.sql");
     expect(
       database
         .prepare(
@@ -158,6 +158,124 @@ describe("production migration compatibility", () => {
         .prepare("SELECT 1 FROM catalog_unsafe_control WHERE value = ?")
         .get("x"),
     ).toBeDefined();
+  });
+
+  it("retires observed idle lineage state without changing corpus rows", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    insertProductionRow(database);
+    insertObservedLegacyLineageJob(database);
+    insertObservedLegacyLineageConflicts(database);
+    const poemsBefore = database
+      .prepare("SELECT count(*) FROM poem")
+      .pluck()
+      .get();
+
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0061_retire_source_lineage_maintenance.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_maintenance_job'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_conflict'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(
+      poemsBefore,
+    );
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("keeps the lineage job if its observed state changed", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    insertObservedLegacyLineageJob(database);
+    database.exec(
+      "UPDATE source_lineage_maintenance_job SET updated_at = updated_at + 1",
+    );
+
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_maintenance_job'",
+        )
+        .get(),
+    ).toBeDefined();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM d1_migrations WHERE name = '0061_retire_source_lineage_maintenance.sql'",
+        )
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it("keeps conflict diagnostics if a row changed after the live audit", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    insertProductionRow(database);
+    insertObservedLegacyLineageConflicts(database);
+    database.exec(`
+      UPDATE source_lineage_conflict SET last_seen_at = last_seen_at + 1
+      WHERE poem_id = 'lineage-poem-1';
+    `);
+
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare("SELECT count(*) FROM source_lineage_conflict")
+        .pluck()
+        .get(),
+    ).toBe(2422);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM d1_migrations WHERE name = '0061_retire_source_lineage_maintenance.sql'",
+        )
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it("does not retire lineage tables while a schema object depends on them", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    database.exec(`
+      CREATE VIEW lineage_dependency AS
+      SELECT poem_id FROM source_lineage_conflict;
+    `);
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    database.exec("DROP VIEW lineage_dependency");
+    database.exec(`
+      CREATE TABLE lineage_dependency (
+        poem_id TEXT REFERENCES source_lineage_conflict(poem_id)
+      );
+    `);
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    database.exec("DROP TABLE lineage_dependency");
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0061_retire_source_lineage_maintenance.sql",
+    ]);
   });
 
   it("backfills current revisions and tracks writes from older Workers", () => {
@@ -345,6 +463,7 @@ describe("production migration compatibility", () => {
     expect(applyPending(database, migrationFiles())).toEqual([
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance.sql",
     ]);
     expect(
       database
@@ -435,6 +554,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -512,6 +632,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance.sql",
     ]);
     expect(
       database
@@ -566,6 +687,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance.sql",
     ]);
     expect(
       database
@@ -756,6 +878,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1326,6 +1449,62 @@ function applyPending(
 
 function recordApplied(database: Database.Database, name: string): void {
   database.prepare("INSERT INTO d1_migrations(name) VALUES (?)").run(name);
+}
+
+function insertObservedLegacyLineageJob(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE source_lineage_maintenance_job (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      state TEXT NOT NULL CHECK (state IN ('idle', 'active', 'blocked', 'failed', 'complete')),
+      cursor_poem_id TEXT REFERENCES poem(id) ON DELETE RESTRICT,
+      pass INTEGER NOT NULL DEFAULT 0 CHECK (pass >= 0),
+      lease_owner TEXT,
+      lease_token TEXT,
+      lease_epoch INTEGER NOT NULL DEFAULT 0 CHECK (lease_epoch >= 0),
+      lease_expires_at INTEGER,
+      scanned_total INTEGER NOT NULL DEFAULT 0 CHECK (scanned_total >= 0),
+      adopted_total INTEGER NOT NULL DEFAULT 0 CHECK (adopted_total >= 0),
+      last_error_code TEXT,
+      updated_at INTEGER NOT NULL CHECK (updated_at >= 0)
+    ) STRICT;
+    INSERT INTO source_lineage_maintenance_job (
+      singleton, state, pass, lease_epoch, scanned_total, adopted_total,
+      updated_at
+    ) VALUES (1, 'idle', 0, 3383, 65950, 63521, 1790167946843);
+  `);
+}
+
+function insertObservedLegacyLineageConflicts(
+  database: Database.Database,
+): void {
+  database.exec(`
+    CREATE TABLE source_lineage_conflict (
+      poem_id TEXT PRIMARY KEY REFERENCES poem(id) ON DELETE RESTRICT,
+      error_code TEXT NOT NULL,
+      first_seen_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      attempt_count INTEGER NOT NULL,
+      lease_epoch INTEGER NOT NULL,
+      resolved_at INTEGER
+    ) STRICT;
+  `);
+  const insertPoem = database.prepare(`
+    INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
+    VALUES (?, '00000000-0000-4000-8000-000000000001', ?, 1, 'قصيدة', '{"content":["صدر"]}')
+  `);
+  const insertConflict = database.prepare(`
+    INSERT INTO source_lineage_conflict (
+      poem_id, error_code, first_seen_at, last_seen_at, attempt_count,
+      lease_epoch, resolved_at
+    ) VALUES (?, 'UNRESOLVED_LINEAGE', 1788834715408, 1790167946719, 1, 3383, NULL)
+  `);
+  database.transaction(() => {
+    for (let index = 1; index <= 2422; index += 1) {
+      const poemId = `lineage-poem-${String(index)}`;
+      insertPoem.run(poemId, `lineage-${String(index)}`);
+      insertConflict.run(poemId);
+    }
+  })();
 }
 
 function insertProductionRow(database: Database.Database): void {
