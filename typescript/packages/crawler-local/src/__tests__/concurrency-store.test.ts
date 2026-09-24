@@ -189,12 +189,11 @@ describe("SQLite concurrency authority", () => {
     expect(afterStaleEdit.configDigest).toBe(afterUpdate.configDigest);
   });
 
-  it("preserves operator pauses and budget while changing desired concurrency", () => {
+  it("preserves operator pauses while changing desired concurrency", () => {
     const root = fixture();
     const ledger = Ledger.initialize(join(root, "ledger.sqlite3"));
     ledger.pauseControls.set("global", true);
     ledger.pauseControls.set("paid", true);
-    const before = ledger.armSolPaidUsageBudget(3);
     ConcurrencyStore.withDatabase(root, false, (store) =>
       store.initialize({ concurrency: 8, initialConcurrency: 2 }),
     );
@@ -205,7 +204,6 @@ describe("SQLite concurrency authority", () => {
       paused: true,
       paidWorkPaused: true,
     });
-    expect(ledger.solPaidUsageBudgetStatus()).toEqual(before);
     ledger.close();
   });
 

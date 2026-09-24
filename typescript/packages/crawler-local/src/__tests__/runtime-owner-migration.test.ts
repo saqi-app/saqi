@@ -85,7 +85,7 @@ function fixture(
   }
 }
 
-test("stopped imported schema34 upgrades to empty owner35 without changing controls or paid state", () =>
+test("stopped imported schema34 upgrades to empty owner35 preserving controls and retiring the local Sol cap", () =>
   fixture((database) => {
     database
       .prepare(
@@ -100,12 +100,6 @@ test("stopped imported schema34 upgrades to empty owner35 without changing contr
         "INSERT INTO sol_paid_usage_reservation VALUES('retained-exhausted','retained-attempt',?,3,2)",
       )
       .run("b".repeat(64));
-    const budgets = database
-      .prepare("SELECT * FROM sol_paid_usage_budget")
-      .all();
-    const reservations = database
-      .prepare("SELECT * FROM sol_paid_usage_reservation")
-      .all();
     const controls = database
       .prepare("SELECT * FROM runtime_control ORDER BY control_key")
       .all();
@@ -117,11 +111,12 @@ test("stopped imported schema34 upgrades to empty owner35 without changing contr
         .all(),
     ).toEqual(controls);
     expect(
-      database.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-    ).toEqual(budgets);
-    expect(
-      database.prepare("SELECT * FROM sol_paid_usage_reservation").all(),
-    ).toEqual(reservations);
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE name IN ('sol_paid_usage_budget','sol_paid_usage_reservation')",
+        )
+        .all(),
+    ).toEqual([]);
   }));
 
 test.each([

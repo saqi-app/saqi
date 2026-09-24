@@ -16,10 +16,6 @@ import {
 import { CollectorRecoveryController } from "./collection/collector-recovery.js";
 import { parseCatalogInventory } from "./collection/inventory-reconciliation.js";
 import { readSourceRequestTelemetryStatus } from "./collection/source-request-telemetry.js";
-import {
-  CompletionPlanInputSchema,
-  planEnrichmentCompletion,
-} from "./enrichment/completion-plan.js";
 import { SolEnrichmentCoordinator } from "./enrichment/sol-coordinator.js";
 import {
   CodexSolRunner,
@@ -118,10 +114,8 @@ Inspect and recover:
   health [--config FILE | --state-dir DIR] [--format json] [--fail-on-blocked]
   doctor [--config FILE | --state-dir DIR] [--deep-integrity]
     Read-only diagnosis with live scrape counts, prioritized findings, and exact repair commands.
-  completion-plan --input FILE
-    Offline quality-preserving operation/ETA scenarios; never authorizes paid work.
   verify [--config FILE | --state-dir DIR]
-  pause | resume | pause-paid | resume-paid --maximum-sol-operations N [--rearm]
+  pause | resume | pause-paid | resume-paid
   clear-source-stop --confirm | clear-source-failures --confirm
   collector-recovery --action <status|arm> [--config FILE | --state-dir DIR]
   verify-source --author URL [--executable FILE] [--config FILE | --state-dir DIR]
@@ -168,16 +162,6 @@ async function main(commandArguments: readonly string[]): Promise<void> {
     );
   if (command === "--help" || command === "-h" || command === "help") {
     process.stdout.write(`${HELP}\n`);
-    return;
-  }
-  if (command === "completion-plan") {
-    const inputPath = option(commandArguments, "--input");
-    if (!inputPath) throw new Error("completion-plan requires --input FILE");
-    const inputStat = await lstat(inputPath);
-    if (!inputStat.isFile() || inputStat.size > 1024 * 1024)
-      throw new Error("Completion-plan input must be a regular file <= 1 MiB");
-    const input = CompletionPlanInputSchema.parse(await readJson(inputPath));
-    print({ command, plan: planEnrichmentCompletion(input) });
     return;
   }
   if (serviceMode) {
@@ -913,29 +897,10 @@ async function main(commandArguments: readonly string[]): Promise<void> {
   }
 
   if (command === "resume-paid") {
-    const maximumRaw = option(commandArguments, "--maximum-sol-operations");
-    const maximumOperations = Number(maximumRaw);
-    if (
-      maximumRaw === null ||
-      !Number.isSafeInteger(maximumOperations) ||
-      maximumOperations <= 0 ||
-      maximumOperations % 3 !== 0
-    ) {
-      throw new Error(
-        "resume-paid requires --maximum-sol-operations as a positive multiple of 3",
-      );
-    }
-    const ledger = await openExisting(paths.database);
-    try {
-      const paidUsageBudget = ledger.armSolPaidUsageBudget(
-        maximumOperations,
-        commandArguments.includes("--rearm"),
-      );
-      ledger.pauseControls.set("paid", false);
-      print({ command, paidUsageBudget, paidWorkPaused: false, paths });
-    } finally {
-      ledger.close();
-    }
+    const state = PauseControls.withExisting(paths.root, (controls) =>
+      controls.set("paid", false),
+    );
+    print({ command, ...state, paths });
     return;
   }
 
@@ -1108,7 +1073,6 @@ async function main(commandArguments: readonly string[]): Promise<void> {
       activeLedger.recoverExpired();
       const coordinator = new SolEnrichmentCoordinator({
         artifacts: new ArtifactStore(paths.artifacts),
-        enforcePaidUsageBudget: true,
         ledger: activeLedger,
         runner: new CodexSolRunner({
           operations: activeLedger.solOperations,
@@ -1234,7 +1198,6 @@ async function main(commandArguments: readonly string[]): Promise<void> {
         root: paths.root,
         runLock: owner.lock,
         runtimeOwnerIssue: owner.issue,
-        solBudget: ledger.solPaidUsageBudgetStatus(),
         stateInventory,
       });
       print({ command, diagnosis, paths, report, stateInventory });

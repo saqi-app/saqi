@@ -31,13 +31,6 @@ function input(
     enabled: true,
     gates: {
       authentication: { errorCode: null, retryAt: null, state: "ready" },
-      budget: {
-        budgetId: "00000000-0000-4000-8000-000000000001",
-        maximumOperations: 12,
-        remainingOperations: 9,
-        reservedOperations: 3,
-        state: "active",
-      },
       operator: { globalPaused: false, paidWorkPaused: false },
       provider: { errorCode: null, retryAt: null, state: "ready" },
       quota: {
@@ -103,37 +96,6 @@ describe("provider execution health", () => {
         gates: {
           ...value.gates,
           operator: { globalPaused: false, paidWorkPaused: true },
-        },
-      }),
-    ],
-    [
-      "budget_unarmed",
-      (value: ProviderExecutionHealthEntryInput) => ({
-        ...value,
-        gates: {
-          ...value.gates,
-          budget: {
-            budgetId: null,
-            maximumOperations: 0,
-            remainingOperations: 0,
-            reservedOperations: 0,
-            state: "unarmed" as const,
-          },
-        },
-      }),
-    ],
-    [
-      "budget_exhausted",
-      (value: ProviderExecutionHealthEntryInput) => ({
-        ...value,
-        gates: {
-          ...value.gates,
-          budget: {
-            ...value.gates.budget,
-            remainingOperations: 0,
-            reservedOperations: 12,
-            state: "exhausted" as const,
-          },
         },
       }),
     ],
@@ -256,38 +218,6 @@ describe("provider execution health", () => {
     ).toBe(reason);
   });
 
-  it("keeps active progress visible when future admission is budget-fenced", () => {
-    const value = input();
-    const entry = buildProviderExecutionHealthEntry({
-      ...value,
-      gates: {
-        ...value.gates,
-        budget: {
-          ...value.gates.budget,
-          remainingOperations: 0,
-          reservedOperations: 12,
-          state: "exhausted",
-        },
-        scheduler: {
-          ...value.gates.scheduler,
-          activeInvocations: 1,
-          state: "at_capacity",
-        },
-      },
-      progress: { ...value.progress, activeInvocations: 1, state: "active" },
-      sessions: {
-        activeCurrentAccountEpoch: 1,
-        activePreviousAccountEpoch: 0,
-        activeUnattributed: 0,
-      },
-    });
-    expect(entry.progress.state).toBe("active");
-    expect(entry.admission).toMatchObject({
-      primaryReason: "budget_exhausted",
-      state: "closed",
-    });
-  });
-
   it("keeps historical terminal debt out of admission classification", () => {
     expect(
       buildProviderExecutionHealthEntry({
@@ -299,24 +229,6 @@ describe("provider execution health", () => {
         },
       }).admission,
     ).toMatchObject({ primaryReason: "ready", state: "open" });
-  });
-
-  it("rejects inconsistent budget and activity", () => {
-    expect(() =>
-      buildProviderExecutionHealthEntry({
-        ...input(),
-        gates: {
-          ...input().gates,
-          budget: { ...input().gates.budget, remainingOperations: 8 },
-        },
-      }),
-    ).toThrow();
-    expect(() =>
-      buildProviderExecutionHealthEntry({
-        ...input(),
-        progress: { ...input().progress, activeInvocations: 1 },
-      }),
-    ).toThrow();
   });
 
   it.each([NOW - 1, NOW, NOW + 1])(
@@ -443,18 +355,6 @@ describe("provider execution health", () => {
               operator: { globalPaused: true, paidWorkPaused: true },
             },
             "operator_paused",
-          ],
-          [
-            {
-              ...provider.gates,
-              budget: {
-                ...provider.gates.budget,
-                remainingOperations: 0,
-                reservedOperations: 12,
-                state: "exhausted" as const,
-              },
-            },
-            "budget_exhausted",
           ],
         ] as const) {
           const fenced = buildProviderExecutionHealth({

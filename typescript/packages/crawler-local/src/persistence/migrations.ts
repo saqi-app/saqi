@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 45;
+export const CURRENT_SCHEMA_VERSION = 46;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1847,6 +1847,13 @@ export const MIGRATIONS: readonly Migration[] = [
           ON CONFLICT(kind, implementation_version, schema_version, available_at)
           DO UPDATE SET item_count = item_count + 1;
       END;
+    `,
+  },
+  {
+    version: 46,
+    statements: `
+      DROP TABLE sol_paid_usage_reservation;
+      DROP TABLE sol_paid_usage_budget;
     `,
   },
 ];

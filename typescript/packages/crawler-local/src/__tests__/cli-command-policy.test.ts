@@ -40,55 +40,8 @@ function runFailingCli(commandArguments: readonly string[]): unknown {
 }
 
 describe("crawler CLI command policy", () => {
-  it("completion planning is offline and never creates runtime authority", () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-completion-cli-"));
-    const inputPath = join(root, "plan.json");
-    writeFileSync(
-      inputPath,
-      JSON.stringify({
-        totalUniquePoems: 100,
-        acceptedCurrentPoems: 1,
-        reusableAcceptedPoems: 0,
-        generatedWithOnePassingReview: 0,
-        generatedWithoutReviews: 0,
-        authorizedRemainingOperations: 0,
-        scenarios: [
-          {
-            name: "illustrative-not-measured",
-            invocationConcurrency: 2,
-            meanOperationSeconds: 60,
-            operationRateCapPerHour: 100,
-          },
-        ],
-      }),
-    );
-    expect(
-      runCli(["completion-plan", "--input", inputPath, "--state-dir", root]),
-    ).toMatchObject({
-      command: "completion-plan",
-      plan: {
-        minimumOperations: 297,
-        additionalAuthorizationRequired: 297,
-        monetaryCost: null,
-        qualityPolicy: { passingReviewsRequired: 2 },
-        scenarios: [{ executableCompletionHours: null }],
-      },
-    });
-    expect(existsSync(join(root, "ledger.sqlite3"))).toBe(false);
-    expect(existsSync(join(root, "sol-attempts"))).toBe(false);
-  });
-
-  it("completion planning rejects invalid input rather than emitting an ETA", () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-completion-invalid-"));
-    const inputPath = join(root, "plan.json");
-    writeFileSync(inputPath, JSON.stringify({ totalUniquePoems: -1 }));
-    expect(() => runCli(["completion-plan", "--input", inputPath])).toThrow();
-    expect(() => runCli(["completion-plan"])).toThrow();
-    expect(existsSync(join(root, "ledger.sqlite3"))).toBe(false);
-  });
-
   it.each(["pause", "resume", "pause-paid"])(
-    "%s changes existing controls without source identity, migration, or budget changes",
+    "%s changes existing controls without source identity or migration",
     (command) => {
       const root = mkdtempSync(join(tmpdir(), "saqi-pause-cli-"));
       const path = join(root, "ledger.sqlite3");
@@ -101,29 +54,18 @@ describe("crawler CLI command policy", () => {
         const ledger = Ledger.initialize(path);
         ledger.pauseControls.set("global", true);
         ledger.pauseControls.set("paid", false);
-        ledger.armSolPaidUsageBudget(3);
         ledger.close();
       } finally {
         configureSource(originalSource);
       }
       const db = new Database(path);
       try {
-        const budgets = db.prepare("SELECT * FROM sol_paid_usage_budget").all();
-        const reservations = db
-          .prepare("SELECT * FROM sol_paid_usage_reservation")
-          .all();
         const schema = db.prepare("SELECT version FROM local_schema").get();
         expect(runCli([command, "--state-dir", root])).toMatchObject({
           command,
           paused: command !== "resume",
           paidWorkPaused: command === "pause-paid",
         });
-        expect(db.prepare("SELECT * FROM sol_paid_usage_budget").all()).toEqual(
-          budgets,
-        );
-        expect(
-          db.prepare("SELECT * FROM sol_paid_usage_reservation").all(),
-        ).toEqual(reservations);
         expect(db.prepare("SELECT version FROM local_schema").get()).toEqual(
           schema,
         );
@@ -368,152 +310,15 @@ describe("crawler CLI command policy", () => {
     });
   }, 15_000);
 
-  it("requires and durably arms an explicit paid Sol operation ceiling", () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-paid-budget-cli-"));
-    Ledger.initialize(join(root, "ledger.sqlite3")).close();
-    writeFileSync(join(root, "PAID_WORK_PAUSED"), "test fence\n");
-
-    expect(() => runCli(["resume-paid", "--state-dir", root])).toThrow(
-      "resume-paid requires --maximum-sol-operations",
-    );
-    expect(
-      runCli([
-        "resume-paid",
-        "--state-dir",
-        root,
-        "--maximum-sol-operations",
-        "6",
-      ]),
-    ).toMatchObject({
-      paidUsageBudget: {
-        maximumOperations: 6,
-        remainingOperations: 6,
-        state: "active",
-      },
+  it("resumes Sol work without creating an extra operation cap", () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-sol-resume-cli-"));
+    const ledger = Ledger.initialize(join(root, "ledger.sqlite3"));
+    ledger.pauseControls.set("paid", true);
+    ledger.close();
+    expect(runCli(["resume-paid", "--state-dir", root])).toMatchObject({
       paidWorkPaused: false,
     });
-    expect(
-      runCli([
-        "resume-paid",
-        "--state-dir",
-        root,
-        "--maximum-sol-operations",
-        "6",
-      ]),
-    ).toMatchObject({
-      paidUsageBudget: { remainingOperations: 6, state: "active" },
-    });
-    expect(
-      runCli([
-        "resume-paid",
-        "--state-dir",
-        root,
-        "--maximum-sol-operations",
-        "9",
-      ]),
-    ).toMatchObject({
-      paidUsageBudget: {
-        maximumOperations: 9,
-        remainingOperations: 9,
-        state: "active",
-      },
-    });
-    expect(() =>
-      runCli([
-        "resume-paid",
-        "--state-dir",
-        root,
-        "--maximum-sol-operations",
-        "6",
-      ]),
-    ).toThrow("SOL_PAID_USAGE_BUDGET_CANNOT_DECREASE");
-  }, 30_000);
-
-  it("requires explicit confirmation before clearing a source stop", () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-source-stop-cli-"));
-    Ledger.initialize(join(root, "ledger.sqlite3")).close();
-
-    expect(() => runCli(["clear-source-stop", "--state-dir", root])).toThrow(
-      "clear-source-stop requires --confirm",
-    );
   });
-
-  it.each([
-    ["clear-source-stop", true],
-    ["clear-source-failures", false],
-  ] as const)(
-    "%s adopts persisted source identity and clears only an inactive gate",
-    (command, stopped) => {
-      const root = mkdtempSync(join(tmpdir(), "saqi-source-gate-cli-"));
-      const path = join(root, "ledger.sqlite3");
-      const originalSource = currentSource();
-      configureSource({
-        name: "fixture-archive",
-        origin: "https://archive.example",
-      });
-      try {
-        const ledger = Ledger.initialize(path);
-        const claimed = ledger.claimOrigin(
-          "https://archive.example",
-          1_000,
-          10_000,
-        );
-        if (claimed.state !== "claimed")
-          throw new Error("TEST_ORIGIN_LEASE_MISSING");
-        ledger.failOrigin(claimed.lease, 2_000, 0, {
-          circuitBreakerAfter: 1,
-          circuitBreakerCooldownMs: 60_000,
-          retryAt: 62_000,
-          ...(stopped ? { stopReason: "SOURCE_RATE_LIMITED" } : {}),
-        });
-        ledger.close();
-      } finally {
-        configureSource(originalSource);
-      }
-
-      expect(runCli([command, "--state-dir", root, "--confirm"])).toMatchObject(
-        {
-          cleared: true,
-          command,
-          origin: "https://archive.example",
-          status: {
-            origins: [
-              {
-                consecutiveFailures: 0,
-                cooldownUntil: 0,
-                stopReason: null,
-              },
-            ],
-          },
-        },
-      );
-    },
-  );
-
-  it("exposes browser-free durable recovery status and explicit arming", () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-recovery-cli-"));
-    const configPath = join(root, "config.json");
-    Ledger.initialize(join(root, "ledger.sqlite3")).close();
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        collector: { recovery: { enabled: true } },
-        schemaVersion: 1,
-        sol: { enabled: false },
-        stateDirectory: root,
-      }),
-    );
-
-    expect(
-      runCli(["collector-recovery", "--action", "status", "--state-dir", root]),
-    ).toMatchObject({ action: "status", state: { phase: "disarmed" } });
-    expect(
-      runCli(["collector-recovery", "--action", "arm", "--config", configPath]),
-    ).toMatchObject({ action: "arm", state: { phase: "ready" } });
-    expect(
-      runCli(["collector-recovery", "--action", "status", "--state-dir", root]),
-    ).toMatchObject({ action: "status", state: { phase: "ready" } });
-  }, 15_000);
 });
 
 function schedulerState(): string {

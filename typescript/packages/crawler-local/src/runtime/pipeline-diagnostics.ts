@@ -33,7 +33,6 @@ const LaneStateSchema = z.enum([
   "fenced",
 ]);
 const SolDispositionSchema = z.enum([
-  "budget_exhausted",
   "idle",
   "healthy",
   "network_wait",

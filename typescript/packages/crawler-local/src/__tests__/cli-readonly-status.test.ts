@@ -54,14 +54,14 @@ function fixture(version: number) {
     )
     .run(source.name, source.origin);
   database.exec(
-    "INSERT INTO runtime_control VALUES('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1); INSERT INTO sol_paid_usage_budget VALUES('fixture-exhausted',3,3,'exhausted',1,1)",
+    "INSERT INTO runtime_control VALUES('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1)",
   );
   database.close();
   return { root, path };
 }
 
 it.each([30, 33, CURRENT_SCHEMA_VERSION])(
-  "status inspects schema%s without migration, budget or control changes",
+  "status inspects schema%s without migration or control changes",
   (version) => {
     const f = fixture(version);
     const before = readFileSync(f.path);
@@ -83,13 +83,6 @@ it.each([30, 33, CURRENT_SCHEMA_VERSION])(
       expect(
         database.prepare("SELECT version FROM local_schema").get(),
       ).toEqual({ version });
-      expect(
-        database
-          .prepare(
-            "SELECT state,reserved_operations FROM sol_paid_usage_budget",
-          )
-          .get(),
-      ).toEqual({ state: "exhausted", reserved_operations: 3 });
     } finally {
       database.close();
     }

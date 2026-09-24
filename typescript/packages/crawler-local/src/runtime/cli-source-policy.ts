@@ -31,7 +31,6 @@ const SOURCE_INDEPENDENT_COMMANDS: ReadonlySet<string> = new Set([
   "health",
   "install-cdp-browser-service",
   "doctor",
-  "completion-plan",
   "clear-source-failures",
   "clear-source-stop",
   "fetch-resolution",

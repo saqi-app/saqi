@@ -365,18 +365,14 @@ describe("CodexSolRunner", () => {
           artifacts,
           ledger,
           runner,
-          enforcePaidUsageBudget: true,
         });
         const seeded = coordinator.seed(BOUND_INPUT);
-        ledger.armSolPaidUsageBudget(3);
         await coordinator.run(undefined, { maximum: 1 });
         const beforeWork = ledger.get(seeded.workKey);
-        const beforeBudget = ledger.solPaidUsageBudgetStatus();
         const beforeCalls = readRecords(fixture.recordPath);
         expect(beforeWork?.lastErrorCode).not.toBe(
           "CODEX_OPERATION_OUTCOME_UNKNOWN",
         );
-        expect(beforeBudget.remainingOperations).toBe(0);
         await expect(
           coordinator.run(undefined, {
             artifactReconciliationOnly: true,
@@ -385,7 +381,6 @@ describe("CodexSolRunner", () => {
           }),
         ).resolves.toMatchObject({ claimed: 0, succeeded: 0 });
         expect(ledger.get(seeded.workKey)).toEqual(beforeWork);
-        expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
         expect(readRecords(fixture.recordPath)).toEqual(beforeCalls);
       } finally {
         put.mockRestore();
@@ -420,10 +415,8 @@ describe("CodexSolRunner", () => {
         artifacts,
         ledger,
         runner,
-        enforcePaidUsageBudget: true,
       });
       const seeded = coordinator.seed(BOUND_INPUT);
-      ledger.armSolPaidUsageBudget(3);
       const now = Date.now();
       const paid = fault.startsWith("paid-");
       const stop = new AbortController();
@@ -441,7 +434,6 @@ describe("CodexSolRunner", () => {
         ? null
         : ledger.claim("crashed", now, 1, [SOL_ENRICHMENT_WORK_KIND]);
       if (!paid && !crashed) throw new Error("Expected claim");
-      if (crashed) ledger.reserveSolPaidClaim(crashed, now);
       const originalPut = artifacts.put.bind(artifacts);
       const originalComplete =
         ledger.completeApprovedAndSeedPublication.bind(ledger);
@@ -494,30 +486,6 @@ describe("CodexSolRunner", () => {
           retried: fault === "paid-sqlite-busy-abort" ? 0 : 1,
         });
         const calls = readRecords(fixture.recordPath);
-        const budget = ledger.solPaidUsageBudgetStatus();
-        const budgetRows = () => {
-          const db = new Database(join(root, "ledger.sqlite3"), {
-            readonly: true,
-          });
-          try {
-            return canonicalJson({
-              budgets: db
-                .prepare(
-                  "SELECT * FROM sol_paid_usage_budget ORDER BY budget_id",
-                )
-                .all(),
-              reservations: db
-                .prepare(
-                  "SELECT * FROM sol_paid_usage_reservation ORDER BY budget_id, attempt_id",
-                )
-                .all(),
-            });
-          } finally {
-            db.close();
-          }
-        };
-        const beforeBudgetRows = budgetRows();
-        expect(budget).toMatchObject({ remainingOperations: 0 });
         expect(ledger.get(seeded.workKey)).toMatchObject({
           state: fault === "paid-sqlite-busy-abort" ? "pending" : "retry_wait",
           lastErrorCode: "CODEX_OPERATION_OUTCOME_UNKNOWN",
@@ -556,8 +524,6 @@ describe("CodexSolRunner", () => {
               ({ kind }) => kind === DIRECT_ENRICHMENT_PUBLICATION_KIND,
             ),
         ).toMatchObject({ byState: { pending: 1 } });
-        expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
-        expect(budgetRows()).toBe(beforeBudgetRows);
         await expect(
           coordinator.run(undefined, {
             artifactReconciliationOnly: true,
@@ -600,17 +566,14 @@ describe("CodexSolRunner", () => {
         artifacts: testArtifactStore(root),
         ledger,
         runner,
-        enforcePaidUsageBudget: true,
       });
       const seeded = coordinator.seed(BOUND_INPUT);
-      ledger.armSolPaidUsageBudget(3);
       ledger.pauseControls.read();
       const claimAt = Date.now();
       const crashed = ledger.claim("crashed", claimAt, 1, [
         SOL_ENRICHMENT_WORK_KIND,
       ]);
       if (!crashed) throw new Error("Expected crashed paid claim");
-      expect(ledger.reserveSolPaidClaim(crashed, claimAt)).toBe(true);
       try {
         await runner.generate(BOUND_INPUT);
         if (mode !== "missing-review")
@@ -618,32 +581,6 @@ describe("CodexSolRunner", () => {
         if (mode === "complete" || mode === "ordinary-complete")
           await runner.review(BOUND_INPUT, OUTPUT, 2);
         const calls = readRecords(fixture.recordPath);
-        const reserve = vi.spyOn(ledger, "reserveSolPaidClaim");
-        const budgetHash = () => {
-          const db = new Database(join(root, "ledger.sqlite3"), {
-            readonly: true,
-          });
-          try {
-            return sha256(
-              canonicalJson({
-                budgets: db
-                  .prepare(
-                    "SELECT * FROM sol_paid_usage_budget ORDER BY budget_id",
-                  )
-                  .all(),
-                reservations: db
-                  .prepare(
-                    "SELECT * FROM sol_paid_usage_reservation ORDER BY budget_id, attempt_id",
-                  )
-                  .all(),
-              }),
-            );
-          } finally {
-            db.close();
-          }
-        };
-        const beforeBudgetHash = budgetHash();
-        const beforeBudget = ledger.solPaidUsageBudgetStatus();
         const beforePauses = ledger.pauseControls.read();
         const expiredAt = Date.now() + 10;
         expect(ledger.recoverExpired(expiredAt)).toBe(1);
@@ -656,10 +593,6 @@ describe("CodexSolRunner", () => {
           now: () => recoverAt,
         });
         expect(result.claimed).toBe(1);
-        expect(reserve).not.toHaveBeenCalled();
-        expect(budgetHash()).toBe(beforeBudgetHash);
-        reserve.mockRestore();
-        expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
         expect(ledger.pauseControls.read()).toEqual(beforePauses);
         expect(readRecords(fixture.recordPath)).toEqual(calls);
         const publication = ledger
@@ -693,16 +626,6 @@ describe("CodexSolRunner", () => {
               ? /^CODEX_OPERATION_ARTIFACT_RECONCILED$/
               : /^SOL_REVIEW_REJECTED/,
           );
-          if (mode === "missing-review")
-            await expect(
-              coordinator.run(undefined, {
-                maximum: 1,
-                now: () => recoverAt + 1,
-              }),
-            ).resolves.toMatchObject({
-              claimed: 0,
-              schedulerOutcome: "budget_exhausted",
-            });
         }
         expect(readRecords(fixture.recordPath)).toEqual(calls);
       } finally {
@@ -720,20 +643,16 @@ describe("CodexSolRunner", () => {
       artifacts: testArtifactStore(root),
       ledger,
       runner,
-      enforcePaidUsageBudget: true,
     });
     const seeded = coordinator.seed(BOUND_INPUT);
-    ledger.armSolPaidUsageBudget(3);
     const now = Date.now();
     const crashed = ledger.claim("crashed", now, 1, [SOL_ENRICHMENT_WORK_KIND]);
     if (!crashed) throw new Error("Expected claim");
-    expect(ledger.reserveSolPaidClaim(crashed, now)).toBe(true);
     try {
       await expect(runner.generate(BOUND_INPUT)).resolves.toMatchObject({
         errorCode: "CODEX_OPERATION_OUTCOME_UNKNOWN",
       });
       const calls = readRecords(fixture.recordPath);
-      const budget = ledger.solPaidUsageBudgetStatus();
       const expiredAt = Date.now() + 10;
       ledger.recoverExpired(expiredAt);
       await expect(
@@ -751,7 +670,6 @@ describe("CodexSolRunner", () => {
         state: "dead_letter",
         lastErrorCode: "CODEX_OPERATION_OUTCOME_UNKNOWN",
       });
-      expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
       expect(readRecords(fixture.recordPath)).toEqual(calls);
     } finally {
       ledger.close();
@@ -781,18 +699,14 @@ describe("CodexSolRunner", () => {
           if (mode === "abort") controller.abort();
         });
       const claim = vi.spyOn(ledger, "claim");
-      const reserve = vi.spyOn(ledger, "reserveSolPaidClaim");
       try {
         const coordinator = new SolEnrichmentCoordinator({
           artifacts: testArtifactStore(fixture.root),
           ledger,
           runner,
-          enforcePaidUsageBudget: true,
         });
         const seeded = coordinator.seed(BOUND_INPUT);
-        ledger.armSolPaidUsageBudget(3);
         const beforeWork = ledger.get(seeded.workKey);
-        const beforeBudget = ledger.solPaidUsageBudgetStatus();
         const beforePauses = ledger.pauseControls.read();
         const summary = await coordinator.run(controller.signal, {
           maximum: 1,
@@ -802,13 +716,10 @@ describe("CodexSolRunner", () => {
         if (mode === "elapsed") {
           expect(summary.succeeded).toBe(1);
           expect(claim.mock.calls[0]?.[1]).toBe(timestamp);
-          expect(reserve.mock.calls[0]?.[1]).toBe(timestamp);
         } else {
           expect(summary.claimed).toBe(0);
           expect(claim).not.toHaveBeenCalled();
-          expect(reserve).not.toHaveBeenCalled();
           expect(ledger.get(seeded.workKey)).toEqual(beforeWork);
-          expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
           expect(
             readRecords(fixture.recordPath).map(({ command }) => command),
           ).toEqual(["login"]);
@@ -817,14 +728,13 @@ describe("CodexSolRunner", () => {
       } finally {
         verification.mockRestore();
         claim.mockRestore();
-        reserve.mockRestore();
         ledger.close();
       }
     },
   );
 
   it.each(["marker", "receipt"])(
-    "rejects import %s loss after successful auth before claiming work or budget",
+    "rejects import %s loss after successful auth before claiming work ",
     async (authority) => {
       const fixture = fakeCodex({ generation: OUTPUT });
       const ledger = Ledger.open(join(fixture.root, "ledger.sqlite3"));
@@ -846,21 +756,17 @@ describe("CodexSolRunner", () => {
           }
         });
       try {
-        ledger.armSolPaidUsageBudget(3);
         const coordinator = new SolEnrichmentCoordinator({
           artifacts: testArtifactStore(fixture.root),
           ledger,
-          enforcePaidUsageBudget: true,
           runner,
         });
         const seeded = coordinator.seed(INPUT);
         const beforeWork = ledger.get(seeded.workKey);
-        const beforeBudget = ledger.solPaidUsageBudgetStatus();
         await expect(
           coordinator.run(undefined, { maximum: 1 }),
         ).rejects.toThrow();
         expect(ledger.get(seeded.workKey)).toEqual(beforeWork);
-        expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
         expect(
           readRecords(fixture.recordPath).map(({ command }) => command),
         ).toEqual(["login"]);
@@ -871,21 +777,18 @@ describe("CodexSolRunner", () => {
     },
   );
 
-  it("rejects late import-marker loss before work claim or paid budget reservation", async () => {
+  it("rejects late import-marker loss before work claim", async () => {
     const fixture = fakeCodex({ generation: OUTPUT });
     const ledger = Ledger.open(join(fixture.root, "ledger.sqlite3"));
     try {
-      ledger.armSolPaidUsageBudget(3);
       const runner = createRunner(fixture);
       const coordinator = new SolEnrichmentCoordinator({
         artifacts: testArtifactStore(fixture.root),
         ledger,
-        enforcePaidUsageBudget: true,
         runner,
       });
       const seeded = coordinator.seed(INPUT);
       const beforeWork = ledger.get(seeded.workKey);
-      const beforeBudget = ledger.solPaidUsageBudgetStatus();
       const db = new Database(`${join(fixture.root, "attempts")}.sqlite3`);
       try {
         db.exec(
@@ -898,7 +801,6 @@ describe("CodexSolRunner", () => {
         coordinator.run(undefined, { maximum: 1 }),
       ).rejects.toThrow();
       expect(ledger.get(seeded.workKey)).toEqual(beforeWork);
-      expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
       expect(existsSync(fixture.recordPath)).toBe(false);
     } finally {
       ledger.close();
@@ -1009,7 +911,6 @@ describe("CodexSolRunner", () => {
       ).toThrow();
       expect(existsSync(fixture.recordPath)).toBe(false);
       expect(existsSync(join(fixture.root, "unimported-attempts"))).toBe(false);
-      expect(ledger.solPaidUsageBudgetStatus().state).toBe("unarmed");
     } finally {
       ledger.close();
     }
@@ -2572,54 +2473,10 @@ if (process.argv[2] === "login") {
     }
   });
 
-  it.each(["unarmed", "exhausted"] as const)(
-    "does not authenticate or claim when the durable paid usage budget is %s",
-    async (budgetState) => {
-      const root = mkdtempSync(join(tmpdir(), "saqi-sol-budget-unarmed-"));
-      const fixture = fakeCodex({ generation: OUTPUT });
-      const ledger = Ledger.open(join(root, "ledger.sqlite3"));
-      const coordinator = new SolEnrichmentCoordinator({
-        artifacts: testArtifactStore(root),
-        enforcePaidUsageBudget: true,
-        ledger,
-        runner: createRunner(fixture, root),
-      });
-      const seeded = coordinator.seed(BOUND_INPUT);
-      const now = Date.now() + 1;
-      if (budgetState === "exhausted") {
-        ledger.armSolPaidUsageBudget(3);
-        const reserved = ledger.claim("budget-fixture", now, 1_000, [
-          SOL_ENRICHMENT_WORK_KIND,
-        ]);
-        if (!reserved) throw new Error("Reservation fixture claim missing");
-        expect(ledger.reserveSolPaidClaim(reserved, now)).toBe(true);
-        ledger.operatorRelease(reserved, "OPERATOR_RELEASED", now);
-      }
-      const before = ledger.get(seeded.workKey);
-      const eventsBefore = ledger.eventCount(seeded.workKey);
-      try {
-        await expect(
-          coordinator.run(undefined, { maximum: 1, now: () => now }),
-        ).resolves.toMatchObject({
-          claimed: 0,
-          quotaWait: 0,
-          retryAt: now + 60_000,
-          schedulerOutcome: "budget_exhausted",
-        });
-        expect(existsSync(fixture.recordPath)).toBe(false);
-        expect(ledger.get(seeded.workKey)).toEqual(before);
-        expect(ledger.eventCount(seeded.workKey)).toBe(eventsBefore);
-      } finally {
-        ledger.close();
-      }
-    },
-  );
-
-  it("does not reserve paid budget while a shared material operation is pending", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-sol-shared-budget-"));
+  it("waits while a shared material operation is pending", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-sol-shared-operation-"));
     const fixture = fakeCodex({ delayMs: 2_000, generation: OUTPUT });
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
-    ledger.armSolPaidUsageBudget(3);
     const runner = createRunner(fixture, root);
     await runner.verifyChatGptLogin();
     const owner = runner.generate(BOUND_INPUT);
@@ -2633,7 +2490,6 @@ if (process.argv[2] === "login") {
       });
       const coordinator = new SolEnrichmentCoordinator({
         artifacts: testArtifactStore(root),
-        enforcePaidUsageBudget: true,
         ledger,
         runner,
       });
@@ -2642,10 +2498,6 @@ if (process.argv[2] === "login") {
       await expect(
         coordinator.run(undefined, { maximum: 1, now: () => now }),
       ).resolves.toMatchObject({ claimed: 1, retried: 1 });
-      expect(ledger.solPaidUsageBudgetStatus()).toMatchObject({
-        remainingOperations: 3,
-        reservedOperations: 0,
-      });
       expect(ledger.get(seeded.workKey)).toMatchObject({
         state: "pending",
         attemptCount: 0,
@@ -2654,45 +2506,6 @@ if (process.argv[2] === "login") {
       });
     } finally {
       await owner;
-      ledger.close();
-    }
-  });
-
-  it("retains the atomic reservation fence when budget eligibility changes after preflight", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-sol-budget-race-"));
-    const fixture = fakeCodex({ generation: OUTPUT });
-    const ledger = Ledger.open(join(root, "ledger.sqlite3"));
-    ledger.armSolPaidUsageBudget(3);
-    const coordinator = new SolEnrichmentCoordinator({
-      artifacts: testArtifactStore(root),
-      enforcePaidUsageBudget: true,
-      ledger,
-      runner: createRunner(fixture, root),
-    });
-    const seeded = coordinator.seed(BOUND_INPUT);
-    const reserve = vi
-      .spyOn(ledger, "reserveSolPaidClaim")
-      .mockReturnValue(false);
-    try {
-      await expect(
-        coordinator.run(undefined, { maximum: 1 }),
-      ).resolves.toMatchObject({
-        claimed: 1,
-        schedulerOutcome: "budget_exhausted",
-      });
-      expect(reserve).toHaveBeenCalledOnce();
-      expect(
-        readRecords(fixture.recordPath).filter(
-          ({ command }) => command === "exec",
-        ),
-      ).toHaveLength(0);
-      expect(ledger.get(seeded.workKey)).toMatchObject({
-        attemptCount: 0,
-        state: "pending",
-        lastErrorCode: "SOL_PAID_USAGE_BUDGET_EXHAUSTED",
-      });
-    } finally {
-      reserve.mockRestore();
       ledger.close();
     }
   });
@@ -3409,18 +3222,16 @@ describe("SolEnrichmentCoordinator", () => {
     ledger.close();
   });
 
-  it("charges one claim's three-call worst case before invoking Codex", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-sol-paid-budget-"));
+  it("runs generation and two reviews for one claim", async () => {
+    const root = mkdtempSync(join(tmpdir(), "saqi-sol-three-calls-"));
     const fixture = fakeCodex({
       generation: OUTPUT,
       review1: PASS_REVIEW,
       review2: PASS_REVIEW,
     });
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
-    ledger.armSolPaidUsageBudget(3);
     const coordinator = new SolEnrichmentCoordinator({
       artifacts: testArtifactStore(root),
-      enforcePaidUsageBudget: true,
       ledger,
       runner: createRunner(fixture, root),
     });
@@ -3434,11 +3245,6 @@ describe("SolEnrichmentCoordinator", () => {
           ({ command }) => command === "exec",
         ),
       ).toHaveLength(3);
-      expect(ledger.solPaidUsageBudgetStatus()).toMatchObject({
-        remainingOperations: 0,
-        reservedOperations: 3,
-        state: "exhausted",
-      });
     } finally {
       ledger.close();
     }

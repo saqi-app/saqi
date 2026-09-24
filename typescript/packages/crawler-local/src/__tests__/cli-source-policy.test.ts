@@ -84,8 +84,6 @@ syncBuiltinESMExports();
               "resume-paid",
               "--config",
               config,
-              "--maximum-sol-operations",
-              "3",
             ],
             {
               encoding: "utf8",
@@ -94,7 +92,7 @@ syncBuiltinESMExports();
               timeout: 20_000,
             },
           ),
-        ).toContain('"remainingOperations": 3');
+        ).toContain('"paidWorkPaused": false');
         // The persisted identity must match managed authority, not poisoned env.
         expect(
           execFileSync(
@@ -167,7 +165,6 @@ syncBuiltinESMExports();
     "help",
     "health",
     "doctor",
-    "completion-plan",
     "clear-source-failures",
     "clear-source-stop",
     "fetch-resolution",

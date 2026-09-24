@@ -31,7 +31,7 @@ const ImportedSchema = z.strictObject({ enabled: z.literal(1) });
 const READ_SCHEMA_VERSION_SQL =
   "SELECT version FROM local_schema WHERE singleton = 1";
 const VersionSchema = z.strictObject({
-  version: z.literal([34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]),
+  version: z.literal([34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]),
 });
 export type SolOperationImportOptions = {
   readonly stateDirectory: string;
@@ -59,7 +59,8 @@ interface ImportPort {
     reader: SolOperationLegacyReader,
     expectedDigest: string,
   ): Promise<SolImportReceipt>;
-  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45;
+  assertStopped():
+    34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46;
   readReceipt(): SolImportReceipt | undefined;
 }
 
@@ -159,7 +160,8 @@ class SolOperationImportRepository implements ImportPort {
     return receipt;
   }
 
-  assertStopped(): 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 {
+  assertStopped():
+    34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 {
     const { version } = queryRequired(
       { operation: "solImport.schema" },
       () => this.#database.prepare(READ_SCHEMA_VERSION_SQL).get(),

@@ -36,7 +36,6 @@ export interface DoctorReportInput {
   readonly root: string;
   readonly runLock: null | RunLockRecord;
   readonly runtimeOwnerIssue: null | string;
-  readonly solBudget: ReturnType<Ledger["solPaidUsageBudgetStatus"]>;
   readonly stateInventory: StateInventory;
 }
 
@@ -352,21 +351,10 @@ export function buildDoctorReport(input: DoctorReportInput): DoctorReport {
         "warning",
         "Translation work is paused",
         "The paid-work safety control is active.",
-        "Resume only with an explicit Sol operation ceiling (a positive multiple of 3).",
+        "Resume translation work when ready.",
         input.configPath
-          ? `saqi-crawler resume-paid --config ${shellQuote(input.configPath)} --maximum-sol-operations 3`
-          : `saqi-crawler resume-paid --state-dir ${shellQuote(input.root)} --maximum-sol-operations 3`,
-      ),
-    );
-  if (input.config?.sol.enabled && input.solBudget.state !== "active")
-    findings.push(
-      finding(
-        "SOL_PAID_USAGE_BUDGET_INACTIVE",
-        "error",
-        "Local translation operation cap blocks admission",
-        `The rig's durable local Sol operation cap is ${input.solBudget.state}: ${String(input.solBudget.reservedOperations)} of ${String(input.solBudget.maximumOperations)} operations reserved, with ${String(input.solBudget.remainingOperations)} remaining. This is not a measurement of provider quota or account balance.`,
-        "Choose an authorized positive multiple-of-3 local ceiling, then run resume-paid with that explicit ceiling; add --rearm only for a closed or exhausted prior cap.",
-        null,
+          ? `saqi-crawler resume-paid --config ${shellQuote(input.configPath)}`
+          : `saqi-crawler resume-paid --state-dir ${shellQuote(input.root)}`,
       ),
     );
 

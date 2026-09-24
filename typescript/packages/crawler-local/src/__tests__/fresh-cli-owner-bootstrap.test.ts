@@ -74,9 +74,6 @@ test("fresh CLI initializes controls, explicitly imports empty history, and star
         )
         .all(),
     ).toEqual([]);
-    expect(
-      database.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-    ).toEqual([]);
     await command(root, "pause");
     await command(root, "pause-paid");
     const controls = database
@@ -118,12 +115,6 @@ test("fresh CLI initializes controls, explicitly imports empty history, and star
     expect(database.prepare("SELECT held FROM runtime_owner").get()).toEqual({
       held: 0,
     });
-    expect(
-      database.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-    ).toEqual([]);
-    expect(
-      database.prepare("SELECT * FROM sol_paid_usage_reservation").all(),
-    ).toEqual([]);
     expect(
       database
         .prepare(

@@ -605,7 +605,6 @@ export class CodexSolRunner {
     rawInput: SupportedPoemEnrichmentInput,
     signal?: AbortSignal,
     rawRepairContext?: SolRepairContext,
-    beforeNewOperation?: () => void,
   ): Promise<SolGenerationResult> {
     const input = SupportedPoemEnrichmentInputSchema.parse(rawInput);
     const repairContext = rawRepairContext
@@ -634,7 +633,6 @@ export class CodexSolRunner {
       operationKey,
     );
     if (unresolved) return unresolved;
-    beforeNewOperation?.();
     const attempt = this.#createAttempt(
       "generation",
       attemptInput,
@@ -845,7 +843,6 @@ export class CodexSolRunner {
     rawOutput: SolPoemEnrichmentOutput,
     reviewAttempt: 1 | 2,
     signal?: AbortSignal,
-    beforeNewOperation?: () => void,
   ): Promise<SolReviewResult> {
     const input = SupportedPoemEnrichmentInputSchema.parse(rawInput);
     const output = solOutputSchema(this.#pipelineVersion).parse(rawOutput);
@@ -875,7 +872,6 @@ export class CodexSolRunner {
       operationKey,
     );
     if (unresolved) return unresolved;
-    beforeNewOperation?.();
     const attempt = this.#createAttempt(kind, attemptInput, operationKey);
     if (!this.#saveOperationIntent(kind, attempt)) {
       const concurrent =

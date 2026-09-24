@@ -8,7 +8,6 @@ import { EnrichmentProviderSchema } from "../ports/provider-contract.js";
 
 const ErrorCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{1,127}$/);
 const TimestampSchema = z.int().nonnegative();
-const BudgetStateSchema = z.enum(["unarmed", "active", "exhausted", "closed"]);
 const RetryStateSchema = z.enum(["ready", "waiting"]);
 const ProviderStateSchema = z.enum([
   "ready",
@@ -44,8 +43,6 @@ const OperatorActionSchema = z.enum([
   "none",
   "resume_all",
   "resume_paid",
-  "arm_budget",
-  "rearm_budget",
   "restore_auth",
   "enable_provider",
   "inspect_provider",
@@ -63,56 +60,6 @@ const AdmissionStateSchema = z.enum([
   "closed",
   "disabled",
 ]);
-
-const BudgetGateSchema = z
-  .strictObject({
-    budgetId: z.uuid().nullable(),
-    maximumOperations: z.int().nonnegative(),
-    remainingOperations: z.int().nonnegative(),
-    reservedOperations: z.int().nonnegative(),
-    state: BudgetStateSchema,
-  })
-  .superRefine((budget, context) => {
-    if (budget.state === "unarmed") {
-      if (
-        budget.budgetId !== null ||
-        budget.maximumOperations !== 0 ||
-        budget.reservedOperations !== 0 ||
-        budget.remainingOperations !== 0
-      )
-        context.addIssue({
-          code: "custom",
-          message: "An unarmed budget cannot contain an allocation",
-        });
-      return;
-    }
-    if (budget.budgetId === null)
-      context.addIssue({
-        code: "custom",
-        message: "An allocated budget requires a budget id",
-      });
-    if (
-      budget.maximumOperations <= 0 ||
-      budget.maximumOperations % 3 !== 0 ||
-      budget.reservedOperations % 3 !== 0 ||
-      budget.remainingOperations !==
-        budget.maximumOperations - budget.reservedOperations
-    )
-      context.addIssue({
-        code: "custom",
-        message: "Paid-operation budget counts are inconsistent",
-      });
-    if (budget.state === "active" && budget.remainingOperations < 3)
-      context.addIssue({
-        code: "custom",
-        message: "An active budget must admit one complete claim",
-      });
-    if (budget.state === "exhausted" && budget.remainingOperations >= 3)
-      context.addIssue({
-        code: "custom",
-        message: "An exhausted budget cannot admit a complete claim",
-      });
-  });
 
 const RetryGateSchema = z.strictObject({
   errorCode: ErrorCodeSchema.nullable(),
@@ -136,7 +83,6 @@ const ResourceReasonSchema = z.enum([
 
 const ProviderExecutionGatesSchema = z.strictObject({
   authentication: RetryGateSchema,
-  budget: BudgetGateSchema,
   operator: z.strictObject({
     globalPaused: z.boolean(),
     paidWorkPaused: z.boolean(),
@@ -307,8 +253,6 @@ const ProviderExecutionAdmissionReasonSchema = z.enum([
   "error_dampener",
   "operator_paused",
   "paid_work_paused",
-  "budget_unarmed",
-  "budget_exhausted",
   "resource_wait",
   "auth_wait",
   "codex_quota_wait",
@@ -561,8 +505,7 @@ export async function readProviderExecutionHealth(
 function classifyAdmission(
   input: ProviderExecutionHealthEntryInput,
 ): ProviderExecutionHealthEntry["admission"] {
-  const { authentication, budget, operator, provider, quota, resources } =
-    input.gates;
+  const { authentication, operator, provider, quota, resources } = input.gates;
   const scheduler = input.gates.scheduler;
   if (!input.enabled)
     return admission(
@@ -575,10 +518,6 @@ function classifyAdmission(
     return admission("closed", "operator_paused", "operator", "resume_all");
   if (operator.paidWorkPaused)
     return admission("closed", "paid_work_paused", "operator", "resume_paid");
-  if (budget.state === "unarmed")
-    return admission("closed", "budget_unarmed", "operator", "arm_budget");
-  if (budget.state === "exhausted" || budget.state === "closed")
-    return admission("closed", "budget_exhausted", "operator", "rearm_budget");
   if (resources.state === "waiting")
     return admission(
       "closed",
