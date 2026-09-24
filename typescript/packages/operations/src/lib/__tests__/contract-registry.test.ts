@@ -45,6 +45,7 @@ describe("contract registry", () => {
     expect(HTTP_CONTRACTS.map(({ id }) => id)).toEqual([
       "public.author-index",
       "public.collection-insights",
+      "public.database-schema",
       "public.legacy-author-page",
       "public.author",
       "public.author-page",

@@ -1,0 +1,3545 @@
+{
+  "migrationNames": [
+    "0037_retire_legacy_translation_tasks.sql",
+    "0038_readable_sol_medium_profile.sql",
+    "0039_publish_complete_sol_enrichment.sql",
+    "0040_insights_rollups.sql",
+    "0041_monthly_collection_insights.sql",
+    "0042_retire_daily_insight_rollups.sql",
+    "0043_retire_unused_schema.sql"
+  ],
+  "localVersion": 35,
+  "databases": [
+    {
+      "id": "corpus",
+      "label": "Public corpus · Cloudflare D1",
+      "tables": [
+        {
+          "name": "ai_model",
+          "columns": [
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "vendor_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "family_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "version_label",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "vendor_key",
+              "table": "ai_vendor",
+              "to": "vendor_key"
+            }
+          ]
+        },
+        {
+          "name": "ai_vendor",
+          "columns": [
+            {
+              "name": "vendor_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "author",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "slug",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "gemini_translation_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "hidden",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "public_poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sort_name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "crawl_import_bundle",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "manifest_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "root_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "plan_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "promotion_plan",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "expected_record_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sealed_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "promoted_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "crawl_import_receipt",
+          "columns": [
+            {
+              "name": "bundle_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "plan_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "inserted_revisions",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reused_revisions",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "advanced_pointers",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "unchanged_pointers",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "bundle_id",
+              "table": "crawl_import_bundle",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "crawl_import_record",
+          "columns": [
+            {
+              "name": "bundle_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "ordinal",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "record_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_author_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_author_url",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "author_name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_author_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_poem_url",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_poem_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "title_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "content_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "content_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "canonical_poem_id",
+              "table": "poem",
+              "to": "id"
+            },
+            {
+              "from": "canonical_author_id",
+              "table": "author",
+              "to": "id"
+            },
+            {
+              "from": "bundle_id",
+              "table": "crawl_import_bundle",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "enrichment_artifact",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "task_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "variant",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reasoning_effort",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "enrichment_profile",
+          "columns": [
+            {
+              "name": "profile_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "public_track_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "backend_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "runtime_model_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reasoning_effort",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "input_schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "output_schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "backend_key",
+              "table": "inference_backend",
+              "to": "backend_key"
+            },
+            {
+              "from": "model_key",
+              "table": "ai_model",
+              "to": "model_key"
+            }
+          ]
+        },
+        {
+          "name": "enrichment_validation",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "outcome",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "highest_severity",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "artifact_id",
+              "table": "enrichment_artifact",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "inference_backend",
+          "columns": [
+            {
+              "name": "backend_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "insights_collection_month",
+          "columns": [
+            {
+              "name": "month",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "insights_model_count",
+          "columns": [
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "insights_rollup",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "author_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_poem_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "legacy_model_attribution",
+          "columns": [
+            {
+              "name": "attribution_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "vendor_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "family_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "minimum_version",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "maximum_version",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "certainty",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "rationale",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "vendor_key",
+              "table": "ai_vendor",
+              "to": "vendor_key"
+            }
+          ]
+        },
+        {
+          "name": "model_enrichment_artifact",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "task_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "variant",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reasoning_effort",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "model_enrichment_artifact_profile",
+          "columns": [
+            {
+              "name": "artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "profile_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "bound_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "profile_key",
+              "table": "enrichment_profile",
+              "to": "profile_key"
+            },
+            {
+              "from": "artifact_id",
+              "table": "model_enrichment_artifact",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "model_enrichment_validation",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "outcome",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "highest_severity",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "artifact_id",
+              "table": "model_enrichment_artifact",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "model_publication_receipt",
+          "columns": [
+            {
+              "name": "intent_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "action_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "expected_pointer_version",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "pointer_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "outcome",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "committed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "enrichment_artifact_id",
+              "table": "model_enrichment_artifact",
+              "to": "id"
+            },
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "author_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "slug",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "verses",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "name_english",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "translation",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "translation_gemini",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "insights",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "english_name_original_translation",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_title_first_line",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "hidden",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "publishable",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sort_name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "has_english",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "has_insights",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sitemap_shard",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "active_source_revision_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "active_enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "translation_sol",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "insights_sol",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "active_enrichment_artifact_id",
+              "table": "enrichment_artifact",
+              "to": "id"
+            },
+            {
+              "from": "active_source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "author_id",
+              "table": "author",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_legacy_payload_attribution",
+          "columns": [
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "legacy_field",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_payload_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "hash_algorithm",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attribution_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attributed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "attribution_key",
+              "table": "legacy_model_attribution",
+              "to": "attribution_key"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_model_publication_pointer",
+          "columns": [
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "pointer_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "enrichment_artifact_id",
+              "table": "model_enrichment_artifact",
+              "to": "id"
+            },
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_publication_pointer",
+          "columns": [
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "pointer_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "enrichment_artifact_id",
+              "table": "enrichment_artifact",
+              "to": "id"
+            },
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_source_pointer",
+          "columns": [
+            {
+              "name": "source_poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "pointer_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "source_poem_id",
+              "table": "source_poem_identity",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_source_revision",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "content_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "title_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "content_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "import_bundle_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "import_ordinal",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "import_bundle_id",
+              "table": "crawl_import_record",
+              "to": "bundle_id"
+            },
+            {
+              "from": "import_ordinal",
+              "table": "crawl_import_record",
+              "to": "ordinal"
+            },
+            {
+              "from": "import_bundle_id",
+              "table": "crawl_import_bundle",
+              "to": "id"
+            },
+            {
+              "from": "source_poem_id",
+              "table": "source_poem_identity",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "production_deployment_identity",
+          "columns": [
+            {
+              "name": "scope",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "database_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "scraper_writer_control",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "source_admission_clock",
+          "columns": [
+            {
+              "name": "admission_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "issued_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "source_author_identity",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "external_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_url",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_author_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "first_observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "last_observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "canonical_author_id",
+              "table": "author",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "source_poem_identity",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "external_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_author_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_url",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "canonical_poem_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "first_observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "last_observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "tombstoned_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "canonical_poem_id",
+              "table": "poem",
+              "to": "id"
+            },
+            {
+              "from": "source_author_id",
+              "table": "source_author_identity",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "source_revision_fingerprint",
+          "columns": [
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "line_nfc_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_material_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "algorithm",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "task",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "type",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "author_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "result",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "error_message",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "started_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "completed_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "queue_state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "queue_attempt_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "queue_last_attempt_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "claim_token",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_expires_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "author_id",
+              "table": "author",
+              "to": "id"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rig",
+      "label": "Local rig · SQLite",
+      "tables": [
+        {
+          "name": "canonical_translation_binding",
+          "columns": [
+            {
+              "name": "translation_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "binding_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "binding_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "line_nfc_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_material_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "translation_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "checkpoint",
+          "columns": [
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "checkpoint_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "artifact_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "checkpoint_attempt_reference",
+          "columns": [
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "checkpoint_sequence",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "checkpoint_sequence",
+              "table": "checkpoint",
+              "to": "sequence"
+            },
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "fanout_detail_material",
+          "columns": [
+            {
+              "name": "detail_fanout_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_material_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "line_nfc_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "source_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            },
+            {
+              "from": "detail_fanout_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "fanout_priority_hint",
+          "columns": [
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "available_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "fanout_reusable_enrichment",
+          "columns": [
+            {
+              "name": "translation_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "fanout_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_material_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "output_artifact_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "fanout_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            },
+            {
+              "from": "translation_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "ledger_error_count",
+          "columns": [
+            {
+              "name": "error_code",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_kind_error_count",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "error_code",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_kind_state_count",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_kind_success_clock",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "last_success_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_profile_availability_count",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "available_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_profile_error_count",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "error_code",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_profile_state_count",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_profile_success_clock",
+          "columns": [
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "last_success_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_state_count",
+          "columns": [
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "ledger_status_clock",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "last_success_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "last_failure_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "local_schema",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "local_source_identity",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_origin",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "monitor_progress_history",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "payload",
+              "type": "BLOB",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "origin_gate",
+          "columns": [
+            {
+              "name": "origin",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "active_token",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_expires_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "next_allowed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "last_completed_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "cooldown_until",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "consecutive_failures",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "stop_reason",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "paid_operation_reconciliation",
+          "columns": [
+            {
+              "name": "operation_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "next_reconcile_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reconciliation_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "first_observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "last_reconciled_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "paid_operation_state_count",
+          "columns": [
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "item_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "poem_identity",
+          "columns": [
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "poem_href",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "author_href",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "first_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "publication_derivation",
+          "columns": [
+            {
+              "name": "translation_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "binding_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "approved_artifact_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "translation_work_key",
+              "table": "canonical_translation_binding",
+              "to": "translation_work_key"
+            },
+            {
+              "from": "binding_id",
+              "table": "canonical_translation_binding",
+              "to": "binding_id"
+            },
+            {
+              "from": "publication_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "retired_scheduler_state",
+          "columns": [
+            {
+              "name": "state_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "state_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state_digest",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "retired_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "authority_state_digest",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "runtime_control",
+          "columns": [
+            {
+              "name": "control_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "enabled",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "runtime_owner",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "held",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "owner_kind",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "pid",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "run_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "config_digest",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "started_at",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "runtime_provider_concurrency",
+          "columns": [
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "target",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "initial",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "revision",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "scheduler_state",
+          "columns": [
+            {
+              "name": "state_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "state_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state_digest",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "sol_invocation_attempt",
+          "columns": [
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "operation_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "claim_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "input_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "exit_code",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "signal",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "finished_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "turn_started_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "session_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "session_observed_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "observations_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "operation_key",
+              "table": "sol_operation",
+              "to": "operation_key"
+            }
+          ]
+        },
+        {
+          "name": "sol_operation",
+          "columns": [
+            {
+              "name": "operation_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "pipeline_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reasoning_effort",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "current_attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "current_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "operation_key",
+              "table": "sol_invocation_attempt",
+              "to": "operation_key"
+            },
+            {
+              "from": "current_attempt_id",
+              "table": "sol_invocation_attempt",
+              "to": "attempt_id"
+            },
+            {
+              "from": "current_epoch",
+              "table": "sol_invocation_attempt",
+              "to": "claim_epoch"
+            }
+          ]
+        },
+        {
+          "name": "sol_operation_import_receipt",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_digest",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "record_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_bytes",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "imported_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "sol_paid_usage_budget",
+          "columns": [
+            {
+              "name": "budget_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "maximum_operations",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reserved_operations",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "sol_paid_usage_reservation",
+          "columns": [
+            {
+              "name": "budget_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reserved_operations",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            },
+            {
+              "from": "budget_id",
+              "table": "sol_paid_usage_budget",
+              "to": "budget_id"
+            }
+          ]
+        },
+        {
+          "name": "sol_poem_milestone",
+          "columns": [
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "milestone",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "completed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "sol_poem_milestone_backfill",
+          "columns": [
+            {
+              "name": "event_type",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "cursor_sequence",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "high_watermark",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "completed_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "source_author_metadata",
+          "columns": [
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "author_href",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "author_name_arabic",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "refresh_generation",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "observed_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "source_author_metadata_revision",
+          "columns": [
+            {
+              "name": "singleton",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "revision",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "work_event",
+          "columns": [
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "event_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_epoch",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "event_type",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "work_key",
+              "table": "work_item",
+              "to": "work_key"
+            }
+          ]
+        },
+        {
+          "name": "work_item",
+          "columns": [
+            {
+              "name": "work_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "kind",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "input_json",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "input_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "implementation_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "priority",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "available_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt_count",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_owner",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_token",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "lease_expires_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "output_artifact_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "last_error_code",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        }
+      ]
+    }
+  ]
+}

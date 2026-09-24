@@ -5,8 +5,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "astro build",
-    "check": "astro check",
+    "build": "yarn schema:generate && astro build",
+    "check": "yarn schema:check && astro check",
+    "schema:generate": "yarn workspace @saqi/precedent-iso build && node --import tsx scripts/generate-database-schema.mjs",
+    "schema:check": "yarn workspace @saqi/precedent-iso build && node --import tsx scripts/generate-database-schema.mjs --check",
     "deploy:preview": "yarn build && yarn deploy:artifact",
     "deploy:artifact": "wrangler deploy --config dist/server/wrangler.json",
     "deploy:production": "SAQI_WRANGLER_CONFIG=wrangler.production.jsonc yarn build && yarn deploy:artifact",
@@ -18,14 +20,20 @@
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",
+    "@astrojs/react": "6.0.5",
     "@saqi/precedent-iso": "workspace:^",
+    "@xyflow/react": "12.11.6",
     "astro": "7.3.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@cloudflare/workers-types": "5.20260923.1",
     "@types/better-sqlite3": "^9.6.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "better-sqlite3": "^13.0.3",
     "tsx": "4.23.15",
     "typescript": "6.0.3",

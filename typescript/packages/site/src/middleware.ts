@@ -2,7 +2,10 @@ import { defineMiddleware } from "astro:middleware";
 
 import { canonicalRedirectUrl, isReadMethod } from "./lib/canonical-request";
 import { PURGE_PATH } from "./lib/public-cache-purge";
-import { withResponseHeaders } from "./lib/with-response-headers";
+import {
+  allowDocumentInlineScripts,
+  withResponseHeaders,
+} from "./lib/with-response-headers";
 
 const CANONICAL_HOST = "saqi.app";
 
@@ -38,10 +41,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   }
 
-  return withResponseHeaders(
+  const response = withResponseHeaders(
     await next(),
     context.request.method,
     production,
     url.pathname,
   );
+  return url.pathname === "/docs"
+    ? allowDocumentInlineScripts(response)
+    : response;
 });

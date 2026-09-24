@@ -64,3 +64,44 @@ export function withResponseHeaders(
   }
   return result;
 }
+
+export async function allowDocumentInlineScripts(
+  response: Response,
+): Promise<Response> {
+  if (!response.headers.get("Content-Type")?.includes("text/html"))
+    return response;
+  const html = await response.clone().text();
+  const scripts: string[] = [];
+  for (const match of html.matchAll(
+    /<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/giu,
+  )) {
+    if (match[1]) scripts.push(match[1]);
+  }
+  if (scripts.length === 0) return response;
+  const hashes = await Promise.all(
+    scripts.map(async (script) => {
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(script),
+      );
+      return `'sha256-${btoa(String.fromCodePoint(...new Uint8Array(digest)))}'`;
+    }),
+  );
+  const policy = response.headers.get("Content-Security-Policy");
+  if (!policy) throw new Error("DOCS_CSP_MISSING");
+  const directives = policy.split("; ");
+  const scriptDirective = "script-src 'self'";
+  if (!directives.includes(scriptDirective))
+    throw new Error("DOCS_CSP_SCRIPT_MISSING");
+  response.headers.set(
+    "Content-Security-Policy",
+    directives
+      .map((directive) =>
+        directive === scriptDirective
+          ? `${scriptDirective} ${hashes.join(" ")}`
+          : directive,
+      )
+      .join("; "),
+  );
+  return response;
+}

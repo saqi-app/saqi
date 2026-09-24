@@ -24,7 +24,9 @@ function asD1(database: Database.Database): D1Database {
     withSession: () => ({
       prepare: (query: string) => ({ query }),
       batch: async (statements: { query: string }[]) =>
-        statements.map(({ query }) => ({ results: database.prepare(query).all() })),
+        statements.map(({ query }) => ({
+          results: database.prepare(query).all(),
+        })),
     }),
   } as unknown as D1Database;
 }
@@ -74,12 +76,35 @@ void test("monthly insight rollups track writes and replay without double counti
       collectionMonths: [{ month: "2026-05-01", poemCount: 2 }],
     });
 
-    sqlite.exec(readFileSync(new URL("0042_retire_daily_insight_rollups.sql", MIGRATIONS), "utf8"));
+    sqlite.exec(
+      readFileSync(
+        new URL("0042_retire_daily_insight_rollups.sql", MIGRATIONS),
+        "utf8",
+      ),
+    );
+    assert.deepEqual(await loadCollectionInsights(asD1(sqlite)), expected);
+    const retiredSchema = readFileSync(
+      new URL("0043_retire_unused_schema.sql", MIGRATIONS),
+      "utf8",
+    );
+    sqlite.exec(retiredSchema);
+    sqlite.exec(retiredSchema);
     assert.deepEqual(await loadCollectionInsights(asD1(sqlite)), expected);
     assert.deepEqual(
-      sqlite.prepare(`SELECT name FROM sqlite_master WHERE name IN (
-        'insights_collection_day', 'insights_author_progress'
-      )`).all(),
+      sqlite
+        .prepare("PRAGMA table_info(insights_rollup)")
+        .all()
+        .map((column) => (column as { name: string }).name),
+      ["singleton", "author_count", "poem_count", "source_poem_count"],
+    );
+    assert.deepEqual(
+      sqlite
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE name IN (
+        'insights_collection_day', 'insights_author_progress', 'source_author_alias'
+      )`,
+        )
+        .all(),
       [],
     );
 
@@ -103,7 +128,9 @@ void test("monthly insight rollups track writes and replay without double counti
     const updated = await loadCollectionInsights(asD1(sqlite));
     assert.equal(updated.authorCount, 2);
 
-    sqlite.exec("UPDATE poem SET author_id = 'author-1' WHERE id = 'unknown-1'");
+    sqlite.exec(
+      "UPDATE poem SET author_id = 'author-1' WHERE id = 'unknown-1'",
+    );
     const reparented = await loadCollectionInsights(asD1(sqlite));
     assert.equal(reparented.poemCount, 11);
     sqlite.exec("DELETE FROM poem WHERE id = 'unknown-1'");

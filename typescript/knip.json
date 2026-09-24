@@ -45,7 +45,7 @@
         "src/pages/**/*.{astro,ts}"
       ],
       "project": [
-        "src/**/*.{astro,ts}",
+        "src/**/*.{astro,ts,tsx}",
         "tests/*.{mjs,ts}"
       ]
     }
