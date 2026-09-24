@@ -190,14 +190,11 @@ describe("production resolution store", () => {
     );
     const sourceInsert = fixture.database.prepare(
       `INSERT INTO source_poem_identity VALUES (
-        ?, 'source', ?, 'source-author-1', ?, ?, 1, 1, NULL
+        ?, 'source', ?, 'source-author-1', ?, ?, 1, 1, NULL, ?, 1, 7, 1
       )`,
     );
     const revisionInsert = fixture.database.prepare(
       "INSERT INTO poem_source_revision VALUES (?, ?, ?)",
-    );
-    const pointerInsert = fixture.database.prepare(
-      "INSERT INTO poem_source_pointer VALUES (?, ?, ?)",
     );
     const insert = fixture.database.transaction(() => {
       for (let index = 1; index <= 25_000; index += 1) {
@@ -209,13 +206,13 @@ describe("production resolution store", () => {
           numericId,
           `https://source.invalid/poem${numericId}.html`,
           canonicalPoemId,
+          revisionId(index),
         );
         revisionInsert.run(
           revisionId(index),
           `source-poem-${numericId}`,
           canonicalJson({ content: ["صدر", "عجز"] }),
         );
-        pointerInsert.run(`source-poem-${numericId}`, revisionId(index), 1);
       }
     });
     insert();
@@ -294,7 +291,8 @@ describe("production resolution store", () => {
       INSERT INTO poem VALUES ('wrong-poem', 'author-2', 'poem77');
       INSERT INTO source_poem_identity VALUES (
         'source-poem-77', 'source', '77', 'source-author-1',
-        'https://source.invalid/poem77.html', 'wrong-poem', 1, 1, NULL
+        'https://source.invalid/poem77.html', 'wrong-poem', 1, 1, NULL,
+        NULL, NULL, NULL, NULL
       );
     `);
     fixture.database.close();
@@ -331,7 +329,9 @@ describe("production resolution store", () => {
     const fixture = createFixture();
     insertPoem(fixture.database, 42);
     fixture.database
-      .prepare("DELETE FROM poem_source_pointer WHERE source_poem_id = ?")
+      .prepare(
+        "UPDATE source_poem_identity SET current_revision_id = NULL, current_revision_version = NULL WHERE id = ?",
+      )
       .run("source-poem-42");
     fixture.database.close();
 
@@ -468,17 +468,16 @@ function createFixture() {
       canonical_poem_id TEXT REFERENCES poem(id),
       first_observed_at INTEGER NOT NULL,
       last_observed_at INTEGER NOT NULL,
-      tombstoned_at INTEGER
+      tombstoned_at INTEGER,
+      current_revision_id TEXT,
+      current_revision_version INTEGER,
+      current_revision_writer_epoch INTEGER,
+      current_revision_updated_at INTEGER
     );
     CREATE TABLE poem_source_revision (
       id TEXT PRIMARY KEY,
       source_poem_id TEXT NOT NULL REFERENCES source_poem_identity(id),
       content_arabic TEXT NOT NULL
-    );
-    CREATE TABLE poem_source_pointer (
-      source_poem_id TEXT PRIMARY KEY REFERENCES source_poem_identity(id),
-      revision_id TEXT NOT NULL REFERENCES poem_source_revision(id),
-      pointer_version INTEGER NOT NULL
     );
     CREATE INDEX source_author_canonical
       ON source_author_identity(canonical_author_id);
@@ -507,7 +506,7 @@ function insertPoem(
   database
     .prepare(
       `INSERT INTO source_poem_identity VALUES (
-          ?, 'source', ?, 'source-author-1', ?, ?, 1, 1, NULL
+          ?, 'source', ?, 'source-author-1', ?, ?, 1, 1, NULL, ?, 1, 7, 1
         )`,
     )
     .run(
@@ -515,6 +514,7 @@ function insertPoem(
       String(numericId),
       `https://source.invalid/poem${String(numericId)}.html`,
       poemId(numericId),
+      revisionId(numericId),
     );
   database
     .prepare("INSERT INTO poem_source_revision VALUES (?, ?, ?)")
@@ -523,9 +523,6 @@ function insertPoem(
       `source-poem-${String(numericId)}`,
       canonicalJson({ content: ["صدر", "عجز"] }),
     );
-  database
-    .prepare("INSERT INTO poem_source_pointer VALUES (?, ?, ?)")
-    .run(`source-poem-${String(numericId)}`, revisionId(numericId), 1);
 }
 
 function revisionId(numericId: number): string {

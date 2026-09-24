@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0058_source_revision_writer_cutover.sql");
+    expect(first.at(-1)).toBe("0059_retire_source_revision_pointer.sql");
     expect(
       database
         .prepare(
@@ -198,7 +198,12 @@ describe("production migration compatibility", () => {
         WHERE id = 'pointer-poem';
       `),
     ).toThrow("SOURCE_CURRENT_REVISION_MISMATCH");
-    expect(applyPending(database, migrationFiles())).toEqual([
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0059_"),
+      ),
+    ).toEqual([
       "0052_guard_legacy_enrichment_contract.sql",
       "0053_retire_legacy_sol_translation_column.sql",
       "0054_retire_legacy_sol_insights_column.sql",
@@ -257,6 +262,47 @@ describe("production migration compatibility", () => {
         WHERE id = 'pointer-poem';
       `),
     ).toThrow("SOURCE_CURRENT_REVISION_TRANSITION_INVALID");
+    database.exec(`
+      SAVEPOINT source_pointer_drift;
+      DROP TRIGGER poem_source_pointer_sync_update;
+      UPDATE poem_source_pointer
+      SET pointer_version = 6, updated_at = 6
+      WHERE source_poem_id = 'pointer-poem';
+    `);
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'poem_source_pointer'",
+        )
+        .get(),
+    ).toBeDefined();
+    database.exec(
+      "ROLLBACK TO source_pointer_drift; RELEASE source_pointer_drift",
+    );
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0059_retire_source_revision_pointer.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'poem_source_pointer'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE sql LIKE '%poem_source_pointer%'",
+        )
+        .all(),
+    ).toEqual([]);
+    database.exec(`
+      UPDATE source_poem_identity
+      SET current_revision_version = 6, current_revision_updated_at = 6
+      WHERE id = 'pointer-poem';
+    `);
+    expect(current()).toMatchObject({ currentRevisionVersion: 6 });
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -324,6 +370,7 @@ describe("production migration compatibility", () => {
     expect(applyPending(database, migrationFiles())).toEqual([
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
+      "0059_retire_source_revision_pointer.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -399,6 +446,7 @@ describe("production migration compatibility", () => {
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
+      "0059_retire_source_revision_pointer.sql",
     ]);
     expect(
       database
@@ -451,6 +499,7 @@ describe("production migration compatibility", () => {
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
+      "0059_retire_source_revision_pointer.sql",
     ]);
     expect(
       database
@@ -639,6 +688,7 @@ describe("production migration compatibility", () => {
       "0056_stage_database_identity.sql",
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
+      "0059_retire_source_revision_pointer.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1246,7 +1296,6 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
       "model_enrichment_validation",
       "model_publication_receipt",
       "poem_model_publication_pointer",
-      "poem_source_pointer",
       "poem_source_revision",
       "scraper_writer_control",
       "source_author_identity",
@@ -1258,6 +1307,7 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     "enrichment_artifact",
     "enrichment_validation",
     "poem_publication_pointer",
+    "poem_source_pointer",
   ])
     expect(tables).not.toContain(retired);
   const poemColumns = database.prepare("PRAGMA table_info(poem)").all() as {
@@ -1332,17 +1382,13 @@ function expectSourcePointerGuards(database: Database.Database): void {
     .prepare(
       `SELECT name FROM sqlite_schema
        WHERE type = 'trigger'
-         AND tbl_name = 'poem_source_pointer'
+         AND tbl_name = 'source_poem_identity'
        ORDER BY name`,
     )
     .pluck()
     .all() as string[];
   expect(triggerNames).toEqual(
-    expect.arrayContaining([
-      "poem_source_pointer_delete_forbidden",
-      "poem_source_pointer_insert_guard",
-      "poem_source_pointer_update_guard",
-    ]),
+    expect.arrayContaining(["source_poem_current_revision_transition_guard"]),
   );
 }
 

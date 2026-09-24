@@ -537,8 +537,7 @@ class ProductionSourceDatabase {
                JOIN poem ON poem.id = source_poem.canonical_poem_id
                 AND poem.author_id = source_author.canonical_author_id
                JOIN author ON author.id = source_author.canonical_author_id
-               JOIN poem_source_pointer AS source_pointer
-                 ON source_pointer.source_poem_id = source_poem.id
+              WHERE source_poem.current_revision_id IS NOT NULL
               ORDER BY model_pointer.poem_id, model_pointer.model_key`,
           )
           .iterate(currentSource().name, currentSource().name),
@@ -558,8 +557,8 @@ class ProductionSourceDatabase {
                 source_author.canonical_url AS source_author_url,
                 source_poem.external_id AS source_poem_id,
                 source_poem.canonical_url AS source_poem_url,
-                source_pointer.revision_id AS current_revision_id,
-                source_pointer.pointer_version AS source_pointer_version,
+                source_poem.current_revision_id,
+                source_poem.current_revision_version AS source_pointer_version,
                 source_revision.content_arabic AS content_arabic,
                 NULL AS expected_pointer_version
            FROM source_poem_identity AS source_poem
@@ -567,10 +566,8 @@ class ProductionSourceDatabase {
              ON source_author.id = source_poem.source_author_id
             AND source_author.source_name = ?
            JOIN poem ON poem.id = source_poem.canonical_poem_id
-           JOIN poem_source_pointer AS source_pointer
-             ON source_pointer.source_poem_id = source_poem.id
            JOIN poem_source_revision AS source_revision
-             ON source_revision.id = source_pointer.revision_id
+             ON source_revision.id = source_poem.current_revision_id
             AND source_revision.source_poem_id = source_poem.id
            JOIN author ON author.id = source_author.canonical_author_id
             AND author.id = poem.author_id
@@ -640,11 +637,8 @@ class ProductionSourceDatabase {
       "source_author_id",
       "source_name",
       "tombstoned_at",
-    ]);
-    this.#validateColumns("poem_source_pointer", [
-      "pointer_version",
-      "revision_id",
-      "source_poem_id",
+      "current_revision_id",
+      "current_revision_version",
     ]);
     this.#validateColumns("poem_source_revision", [
       "content_arabic",
@@ -669,10 +663,8 @@ class ProductionSourceDatabase {
            LEFT JOIN author
              ON author.id = source_author.canonical_author_id
            LEFT JOIN poem ON poem.id = source_poem.canonical_poem_id
-           LEFT JOIN poem_source_pointer AS source_pointer
-             ON source_pointer.source_poem_id = source_poem.id
            LEFT JOIN poem_source_revision AS source_revision
-             ON source_revision.id = source_pointer.revision_id
+             ON source_revision.id = source_poem.current_revision_id
             AND source_revision.source_poem_id = source_poem.id
           WHERE source_poem.source_name = ?
             AND source_poem.tombstoned_at IS NULL
@@ -681,7 +673,8 @@ class ProductionSourceDatabase {
               OR author.id IS NULL
               OR poem.id IS NULL
               OR poem.author_id <> source_author.canonical_author_id
-              OR source_pointer.source_poem_id IS NULL
+              OR source_poem.current_revision_id IS NULL
+              OR source_poem.current_revision_version IS NULL
               OR source_revision.id IS NULL
             )
           LIMIT 1`,

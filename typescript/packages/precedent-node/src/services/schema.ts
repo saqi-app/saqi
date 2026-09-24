@@ -284,18 +284,6 @@ export const SOURCE_ADMISSION_CLOCK_TABLE = sqliteTable(
   },
 );
 
-export const POEM_SOURCE_POINTER_TABLE = sqliteTable("poem_source_pointer", {
-  sourcePoemId: text("source_poem_id")
-    .primaryKey()
-    .references(() => SOURCE_POEM_IDENTITY_TABLE.id),
-  revisionId: text("revision_id")
-    .notNull()
-    .references(() => POEM_SOURCE_REVISION_TABLE.id),
-  pointerVersion: integer("pointer_version").notNull(),
-  writerEpoch: integer("writer_epoch").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
 export const ENRICHMENT_PROFILE_TABLE = sqliteTable(
   "enrichment_profile",
   {
