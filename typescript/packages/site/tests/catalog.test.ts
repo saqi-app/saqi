@@ -453,16 +453,6 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       modelEnrichment.wordGlosses?.lines[0]?.segments[0]?.surface,
       "سطر",
     );
-    sqlite.exec("DROP TABLE enrichment_profile");
-    const preRegistryFallback = await database.getPoemPage(
-      "good-poet",
-      "p-valid",
-    );
-    assert.equal(
-      preRegistryFallback?.poem.modelEnrichments?.[0]?.modelKey,
-      "sol-5.6",
-      "current normalized tracks remain readable before registry migration",
-    );
     sqlite
       .prepare(
         `INSERT INTO model_enrichment_validation VALUES

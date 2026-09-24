@@ -34,36 +34,9 @@ afterEach(() => {
 });
 
 describe("production resolution store", () => {
-  it("keeps legacy v2 full snapshots readable during rolling replacement", async () => {
-    const fixture = createFixture();
-    fixture.database.close();
-    createLegacyV2Snapshot(fixture.output, 42);
-
-    const store = await openProductionResolutionStore(fixture.output);
-    await expect(store.report()).resolves.toMatchObject({
-      poemCount: 1,
-      schemaVersion: 2,
-    });
-    await expect(store.resolve(sourceWork(42), detail(42))).resolves.toEqual({
-      mapping: {
-        authorId: "author-1",
-        authorNameArabic: "شاعر",
-        poemId: poemId(42),
-        sourceAuthorSlug: "poet",
-        sourcePoemId: "42",
-      },
-      observedAt: OBSERVED_AT,
-      writerEpoch: 7,
-    });
-    store.close();
-  });
-
   it("exports indexed identity and independent model pointers, then replays exactly", async () => {
     const fixture = createFixture();
     insertPoem(fixture.database, 42);
-    fixture.database
-      .prepare("INSERT INTO poem_publication_pointer VALUES (?, ?)")
-      .run(poemId(42), 3);
     fixture.database
       .prepare("INSERT INTO poem_model_publication_pointer VALUES (?, ?, ?)")
       .run(poemId(42), "historical-model", 4);
@@ -113,7 +86,7 @@ describe("production resolution store", () => {
     await expect(
       store.resolvePublication(poemId(42), "sol-5.6", true),
     ).resolves.toEqual({
-      expectedPointerVersion: 3,
+      expectedPointerVersion: null,
       writerEpoch: 7,
     });
     await expect(
@@ -473,10 +446,6 @@ function createFixture() {
       singleton INTEGER PRIMARY KEY,
       writer_epoch INTEGER NOT NULL
     );
-    CREATE TABLE poem_publication_pointer (
-      poem_id TEXT PRIMARY KEY REFERENCES poem(id),
-      pointer_version INTEGER NOT NULL
-    );
     CREATE TABLE poem_model_publication_pointer (
       poem_id TEXT NOT NULL REFERENCES poem(id),
       model_key TEXT NOT NULL,
@@ -525,61 +494,6 @@ function createFixture() {
     INSERT INTO scraper_writer_control VALUES (1, 7);
   `);
   return { database, output: join(root, "resolution.sqlite"), root, source };
-}
-
-function createLegacyV2Snapshot(output: string, numericId: number): void {
-  const database = new Database(output);
-  const row = {
-    authorId: "author-1",
-    authorNameArabic: "شاعر",
-    currentRevisionId: revisionId(numericId),
-    expectedPointerVersion: null,
-    poemId: poemId(numericId),
-    sourceAuthorSlug: "poet",
-    sourcePoemId: String(numericId),
-  };
-  const manifest = sha256(`${canonicalJson({ kind: "poem", ...row })}\n`);
-  database.exec(`
-    CREATE TABLE resolution_meta (
-      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-      schema_id TEXT NOT NULL,
-      schema_version INTEGER NOT NULL CHECK (schema_version = 2),
-      observed_at TEXT NOT NULL,
-      writer_epoch INTEGER NOT NULL CHECK (writer_epoch >= 1),
-      poem_count INTEGER NOT NULL CHECK (poem_count >= 0),
-      model_pointer_count INTEGER NOT NULL CHECK (model_pointer_count >= 0),
-      manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64)
-    ) STRICT;
-    CREATE TABLE poem_resolution (
-      source_poem_id TEXT PRIMARY KEY,
-      poem_id TEXT NOT NULL UNIQUE,
-      author_id TEXT NOT NULL,
-      author_name_arabic TEXT NOT NULL,
-      source_author_slug TEXT NOT NULL,
-      current_revision_id TEXT NOT NULL,
-      expected_pointer_version INTEGER CHECK (expected_pointer_version >= 1)
-    ) STRICT, WITHOUT ROWID;
-    CREATE TABLE model_pointer (
-      poem_id TEXT NOT NULL REFERENCES poem_resolution(poem_id),
-      model_key TEXT NOT NULL,
-      pointer_version INTEGER NOT NULL CHECK (pointer_version >= 1),
-      PRIMARY KEY (poem_id, model_key)
-    ) STRICT, WITHOUT ROWID;
-  `);
-  database
-    .prepare(`INSERT INTO poem_resolution VALUES (?, ?, ?, ?, ?, ?, NULL)`)
-    .run(
-      row.sourcePoemId,
-      row.poemId,
-      row.authorId,
-      row.authorNameArabic,
-      row.sourceAuthorSlug,
-      row.currentRevisionId,
-    );
-  database
-    .prepare(`INSERT INTO resolution_meta VALUES (1, ?, 2, ?, 7, 1, 0, ?)`)
-    .run("saqi.production-resolution-store", OBSERVED_AT, manifest);
-  database.close();
 }
 
 function insertPoem(

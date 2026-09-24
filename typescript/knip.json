@@ -23,9 +23,6 @@
       }
     },
     "packages/crawler-local": {
-      "entry": [
-        "src/offline-scale-benchmark.ts"
-      ],
       "project": [
         "src/**/*.ts"
       ]

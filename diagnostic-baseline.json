@@ -1561,41 +1561,6 @@
       "count": 2
     },
     {
-      "fingerprint": "078c3efadd43b78acd17e89ba402d093b1328b12c757559ee45c28874afdddba",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "54af301b0e72b0ce02368a10a421ddab862501dbad36ee53c540e9b3a6c08713",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
-      "count": 2
-    },
-    {
-      "fingerprint": "784cf92532f24d4447c0fbcd831a7bdff2c13d0b590d44853c03b481ac54ecbf",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "bc17d13ab9754715f8f26c0c8feac82e0daedcd73021bc0e1e34596e721094b6",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "eb4d44c6d1e7f13f63372e8248bee03af5d94c284edb79e12d549934bbe83fe6",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/offline-scale-benchmark.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "1790cf26146edc29a12d8a3d14ccbab062e0aa736bb9aaf4ea11cccb6b6da921",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",

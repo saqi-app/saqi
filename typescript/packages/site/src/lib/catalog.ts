@@ -637,8 +637,7 @@ function poemFromRow(
   const insights =
     (primaryModelEnrichment && "insights" in primaryModelEnrichment
       ? primaryModelEnrichment.insights
-      : undefined) ??
-    optionalInsights(row.insights);
+      : undefined) ?? optionalInsights(row.insights);
   const parsedPoem = SnapshotPoemSchema.safeParse({
     id: row.id,
     slug: row.slug,
@@ -776,20 +775,6 @@ const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
   CASE WHEN ${validInsightsSql("p.insights")} = 1
     OR (${VALIDATED_MODEL_PUBLICATION})
     THEN 1 ELSE 0 END AS hasInsights`;
-
-const MISSING_SCHEMA_PATTERN =
-  /(?:no such (?:table|column)|has no column named)/iu;
-
-function isMissingSchemaError(error: unknown): boolean {
-  if (typeof error === "string") return MISSING_SCHEMA_PATTERN.test(error);
-  if (!(error instanceof Error)) return false;
-  if (MISSING_SCHEMA_PATTERN.test(error.message)) return true;
-  const { cause } = error;
-  return (
-    (typeof cause === "string" && MISSING_SCHEMA_PATTERN.test(cause)) ||
-    (cause instanceof Error && MISSING_SCHEMA_PATTERN.test(cause.message))
-  );
-}
 
 async function sha256Utf8Exact(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -937,7 +922,7 @@ export class CatalogRepository implements CatalogReader {
     const parsedRow = PoemRowSchema.safeParse(row);
     if (!parsedRow.success) return undefined;
     const [dynamicModelEnrichments, legacyAttribution] = await Promise.all([
-      this.#loadDynamicModelEnrichments(poemId),
+      this.#loadRegistryModelEnrichments(poemId),
       this.#loadLegacyModelAttribution(
         parsedRow.data.translation,
         parsedRow.data.legacyTranslationAttributions,
@@ -991,53 +976,10 @@ export class CatalogRepository implements CatalogReader {
     }
   }
 
-  async #loadDynamicModelEnrichments(poemId: string): Promise<string[]> {
-    const registryRows = await this.#loadRegistryModelEnrichments(poemId);
-    if (registryRows) return registryRows;
-    try {
-      const result = await this.#database
-        .prepare(
-          `SELECT json_object(
-                  'model', artifact.model,
-                  'modelKey', artifact.model_key,
-                  'reasoningEffort', artifact.reasoning_effort,
-                  'payload', json(artifact.payload)
-                ) AS enrichment
-           FROM poem_model_publication_pointer publication
-           JOIN model_enrichment_artifact artifact
-             ON artifact.id = publication.enrichment_artifact_id
-           JOIN poem p ON p.id = publication.poem_id
-          WHERE publication.poem_id = ?1
-            AND p.active_source_revision_id IS NOT NULL
-            AND publication.source_revision_id = p.active_source_revision_id
-            AND artifact.source_revision_id = p.active_source_revision_id
-            AND publication.model_key = artifact.model_key
-            AND (${VALIDATED_MODEL_ARTIFACT})
-          ORDER BY CASE artifact.model_key
-              ${MODEL_DISPLAY_ORDER_SQL}
-              ELSE 2147483647
-            END,
-            artifact.model_key
-          LIMIT ${String(MAX_PUBLIC_MODEL_TRACKS)}`,
-        )
-        .bind(poemId)
-        .all();
-      return ModelEnrichmentRowSchema.array()
-        .parse(result.results)
-        .map(({ enrichment }) => enrichment);
-    } catch (error) {
-      if (isMissingSchemaError(error)) return [];
-      throw error;
-    }
-  }
-
-  async #loadRegistryModelEnrichments(
-    poemId: string,
-  ): Promise<null | string[]> {
-    try {
-      const result = await this.#database
-        .prepare(
-          `SELECT json_object(
+  async #loadRegistryModelEnrichments(poemId: string): Promise<string[]> {
+    const result = await this.#database
+      .prepare(
+        `SELECT json_object(
                   'backendKey', profile.backend_key,
                   'backendName', profile.backend_display_name,
                   'displayName', profile.model_display_name,
@@ -1082,15 +1024,11 @@ export class CatalogRepository implements CatalogReader {
             END,
             profile.public_track_key
           LIMIT ${String(MAX_PUBLIC_MODEL_TRACKS)}`,
-        )
-        .bind(poemId)
-        .all();
-      return ModelEnrichmentRowSchema.array()
-        .parse(result.results)
-        .map(({ enrichment }) => enrichment);
-    } catch (error) {
-      if (isMissingSchemaError(error)) return null;
-      throw error;
-    }
+      )
+      .bind(poemId)
+      .all();
+    return ModelEnrichmentRowSchema.array()
+      .parse(result.results)
+      .map(({ enrichment }) => enrichment);
   }
 }
