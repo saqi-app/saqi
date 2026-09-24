@@ -39,7 +39,6 @@ import {
   POEM_TABLE as poem,
   SCRAPER_WRITER_CONTROL_TABLE as writerControl,
   SOURCE_ADMISSION_CLOCK_TABLE as admissionClock,
-  SOURCE_REVISION_FINGERPRINT_TABLE as sourceFingerprint,
 } from "./schema.js";
 
 const SINGLETON = 1;
@@ -654,9 +653,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
          AND source_author.source_name = ${this.#sourceName}
          AND source_author.canonical_author_id = poem.author_id
         JOIN author ON author.id = poem.author_id
-        LEFT JOIN source_revision_fingerprint fingerprint
-          ON fingerprint.source_revision_id = revision.id
-        WHERE fingerprint.source_revision_id IS NULL
+        WHERE revision.line_nfc_hash IS NULL
           AND (
             revision.created_at > ${cursor.createdAt}
             OR (
@@ -687,26 +684,27 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       );
       // eslint-disable-next-line no-await-in-loop -- Insert and verify each row before advancing the durable cursor.
       const created = await this.#db
-        .insert(sourceFingerprint)
-        .values({
-          algorithm: "sha256-canonical-nfc-v1",
-          createdAt: sql`(unixepoch())`,
+        .update(revision)
+        .set({
+          fingerprintAlgorithm: "sha256-canonical-nfc-v1",
+          fingerprintCreatedAt: sql`(unixepoch())`,
           lineNfcHash,
           promptMaterialHash,
-          sourceRevisionId: row.sourceRevisionId,
         })
-        .onConflictDoNothing()
-        .returning({ sourceRevisionId: sourceFingerprint.sourceRevisionId });
+        .where(
+          sql`${revision.id} = ${row.sourceRevisionId} AND ${revision.lineNfcHash} IS NULL`,
+        )
+        .returning({ sourceRevisionId: revision.id });
       if (created.length === 1) inserted += 1;
       else existing += 1;
       // eslint-disable-next-line no-await-in-loop -- Read back this insert before advancing the durable cursor.
       const [stored] = await this.#db
         .select()
-        .from(sourceFingerprint)
-        .where(eq(sourceFingerprint.sourceRevisionId, row.sourceRevisionId))
+        .from(revision)
+        .where(eq(revision.id, row.sourceRevisionId))
         .limit(1);
       if (
-        stored?.algorithm !== "sha256-canonical-nfc-v1" ||
+        stored?.fingerprintAlgorithm !== "sha256-canonical-nfc-v1" ||
         stored.lineNfcHash !== lineNfcHash ||
         stored.promptMaterialHash !== promptMaterialHash
       ) {
@@ -728,6 +726,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     };
   }
 
+  // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing source-admission transaction remains intact; fingerprint storage changes only its persistence reads and writes.
   async admitSource(
     input: SourceAdmission,
     canonicalPoemId: null | string = null,
@@ -794,11 +793,11 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
         SELECT source.canonical_poem_id, source.canonical_url,
           pointer.revision_id AS current_revision_id, source.source_author_id,
           source.tombstoned_at, pointer.pointer_version,
-          fingerprint.line_nfc_hash, fingerprint.prompt_material_hash
+          current_revision.line_nfc_hash, current_revision.prompt_material_hash
         FROM source_poem_identity source
         LEFT JOIN poem_source_pointer pointer ON pointer.source_poem_id = source.id
-        LEFT JOIN source_revision_fingerprint fingerprint
-          ON fingerprint.source_revision_id = pointer.revision_id
+        LEFT JOIN poem_source_revision current_revision
+          ON current_revision.id = pointer.revision_id
         WHERE source.source_name = ${input.sourceName}
           AND source.external_id = ${input.externalPoemId}
       `),
@@ -1335,22 +1334,23 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       }),
     );
     await this.#db
-      .insert(sourceFingerprint)
-      .values({
-        algorithm: "sha256-canonical-nfc-v1",
-        createdAt: sql`(unixepoch())`,
+      .update(revision)
+      .set({
+        fingerprintAlgorithm: "sha256-canonical-nfc-v1",
+        fingerprintCreatedAt: sql`(unixepoch())`,
         lineNfcHash,
         promptMaterialHash,
-        sourceRevisionId: item.revisionId,
       })
-      .onConflictDoNothing();
+      .where(
+        sql`${revision.id} = ${item.revisionId} AND ${revision.lineNfcHash} IS NULL`,
+      );
     const [storedFingerprint] = await this.#db
       .select()
-      .from(sourceFingerprint)
-      .where(eq(sourceFingerprint.sourceRevisionId, item.revisionId))
+      .from(revision)
+      .where(eq(revision.id, item.revisionId))
       .limit(1);
     if (
-      storedFingerprint?.algorithm !== "sha256-canonical-nfc-v1" ||
+      storedFingerprint?.fingerprintAlgorithm !== "sha256-canonical-nfc-v1" ||
       storedFingerprint.lineNfcHash !== lineNfcHash ||
       storedFingerprint.promptMaterialHash !== promptMaterialHash
     ) {
@@ -1748,10 +1748,10 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       await this.#db.all<Record<string, unknown>>(sql`
         SELECT poem.author_id,
         source.external_id,
-        fingerprint.line_nfc_hash,
+        revision.line_nfc_hash,
         artifact.model_key,
         poem.id AS poem_id,
-        fingerprint.prompt_material_hash,
+        revision.prompt_material_hash,
         source.source_name,
         source_pointer.pointer_version AS source_pointer_version,
         revision.id AS source_revision_id,
@@ -1762,8 +1762,6 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       JOIN poem_source_pointer source_pointer
         ON source_pointer.source_poem_id = source.id
         AND source_pointer.revision_id = revision.id
-      JOIN source_revision_fingerprint fingerprint
-        ON fingerprint.source_revision_id = revision.id
       JOIN model_enrichment_artifact artifact
         ON artifact.id = ${input.artifact.id}
         AND artifact.source_revision_id = revision.id

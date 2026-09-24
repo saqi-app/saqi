@@ -113,7 +113,7 @@ extension ModelsTests {
     func testDiagnosticRefreshReportsSuccessOnlyForCoherentReadback() async {
         let store = presentationStore(entry: presentationEntry(), now: Date())
         XCTAssertEqual(store.refreshDiagnosticsTitle, "Refresh")
-        store.diagnosticError = "Progress history persistence unavailable"
+        store.diagnosticError = "Runtime status unavailable"
         XCTAssertEqual(store.refreshDiagnosticsTitle, "Retry")
         store.diagnosticError = nil
         await store.refreshDiagnostics {}
@@ -134,9 +134,7 @@ extension ModelsTests {
             XCTAssertFalse(store.canRefreshDiagnostics)
             XCTAssertEqual(store.refreshDiagnosticsTitle, "Refreshing…")
             store.diagnosticError = "Runtime status unavailable"
-            store.nextHistoryImportAttempt = .distantFuture
             await store.refreshDiagnostics { XCTFail("Overlapping refresh must not run") }
-            XCTAssertEqual(store.nextHistoryImportAttempt, .distantFuture)
         }
         XCTAssertEqual(store.refreshOutcome, "Runtime status unavailable")
         XCTAssertTrue(store.paused)

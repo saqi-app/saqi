@@ -299,6 +299,9 @@
     block-size: 55dvh;
     min-block-size: 22rem;
   }
+  .schema-canvas .react-flow__minimap {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .schema-explorer * {

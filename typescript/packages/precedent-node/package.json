@@ -1,6 +1,6 @@
 {
   "name": "@saqi/precedent-node",
-  "description": "Cloudflare-compatible persistence and task services for Saqi",
+  "description": "Cloudflare-compatible corpus persistence for Saqi",
   "version": "0.0.0",
   "type": "module",
   "main": "dist/index.js",

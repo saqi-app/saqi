@@ -4995,21 +4995,12 @@ export class Ledger {
   rebuildStatusCounters(): void {
     this.#immediate(() => {
       this.#database.exec(`
-        DELETE FROM ledger_state_count;
-        DELETE FROM ledger_kind_state_count;
         DELETE FROM ledger_profile_state_count;
         DELETE FROM ledger_profile_availability_count;
-        DELETE FROM ledger_error_count;
-        DELETE FROM ledger_kind_error_count;
         DELETE FROM ledger_profile_error_count;
-        DELETE FROM ledger_kind_success_clock;
         DELETE FROM ledger_profile_success_clock;
         DELETE FROM paid_operation_state_count;
 
-        INSERT INTO ledger_state_count(state, item_count)
-          SELECT state, COUNT(*) FROM work_item GROUP BY state;
-        INSERT INTO ledger_kind_state_count(kind, state, item_count)
-          SELECT kind, state, COUNT(*) FROM work_item GROUP BY kind, state;
         INSERT INTO ledger_profile_state_count(
           kind, implementation_version, schema_version, state, item_count
         )
@@ -5023,12 +5014,6 @@ export class Ledger {
           FROM work_item
           WHERE state IN ('pending','retry_wait','quota_wait')
           GROUP BY kind, implementation_version, schema_version, available_at;
-        INSERT INTO ledger_error_count(error_code, item_count)
-          SELECT last_error_code, COUNT(*) FROM work_item
-          WHERE last_error_code IS NOT NULL GROUP BY last_error_code;
-        INSERT INTO ledger_kind_error_count(kind, error_code, item_count)
-          SELECT kind, last_error_code, COUNT(*) FROM work_item
-          WHERE last_error_code IS NOT NULL GROUP BY kind, last_error_code;
         INSERT INTO ledger_profile_error_count(
           kind, implementation_version, schema_version, error_code, item_count
         )
@@ -5048,12 +5033,6 @@ export class Ledger {
             ORDER BY sequence DESC LIMIT 1
           )
         WHERE singleton = 1;
-        INSERT INTO ledger_kind_success_clock(kind, last_success_at)
-          SELECT work_item.kind, MAX(work_event.created_at)
-          FROM work_event
-          INNER JOIN work_item ON work_item.work_key = work_event.work_key
-          WHERE work_event.event_type IN ('succeeded','imported')
-          GROUP BY work_item.kind;
         INSERT INTO ledger_profile_success_clock(
           kind, implementation_version, schema_version, last_success_at
         )
@@ -5074,7 +5053,8 @@ export class Ledger {
     const byState = emptyWorkStateCounts();
     const rows = this.#database
       .prepare<[], { count: number; state: string }>(
-        "SELECT state, item_count AS count FROM ledger_state_count ORDER BY state",
+        `SELECT state, SUM(item_count) AS count
+         FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
       )
       .all();
     for (const row of rows)
@@ -5098,15 +5078,16 @@ export class Ledger {
       .get();
     const errorRows = this.#database
       .prepare<[], { code: string; count: number }>(
-        `SELECT error_code AS code, item_count AS count FROM ledger_error_count
-         ORDER BY item_count DESC, error_code LIMIT 50`,
+        `SELECT error_code AS code, SUM(item_count) AS count
+         FROM ledger_profile_error_count GROUP BY error_code
+         ORDER BY count DESC, error_code LIMIT 50`,
       )
       .all();
     const kindErrorRows = this.#database
       .prepare<[], { code: string; count: number; kind: string }>(
-        `SELECT kind, error_code AS code, item_count AS count
-         FROM ledger_kind_error_count
-         ORDER BY kind, item_count DESC, error_code LIMIT 5001`,
+        `SELECT kind, error_code AS code, SUM(item_count) AS count
+         FROM ledger_profile_error_count GROUP BY kind, error_code
+         ORDER BY kind, count DESC, error_code LIMIT 5001`,
       )
       .all();
     const failureEventRows = this.#database
@@ -5125,17 +5106,18 @@ export class Ledger {
       .all();
     const kindRows = this.#database
       .prepare<[], { count: number; kind: string; state: string }>(
-        `SELECT kind, state, item_count AS count
-         FROM ledger_kind_state_count
+        `SELECT kind, state, SUM(item_count) AS count
+         FROM ledger_profile_state_count
          WHERE kind IN (
-           SELECT DISTINCT kind FROM ledger_kind_state_count ORDER BY kind LIMIT 101
+           SELECT DISTINCT kind FROM ledger_profile_state_count ORDER BY kind LIMIT 101
          )
-         ORDER BY kind, state`,
+         GROUP BY kind, state ORDER BY kind, state`,
       )
       .all();
     const kindSuccessRows = this.#database
       .prepare<[], { kind: string; last_success_at: number }>(
-        `SELECT kind, last_success_at FROM ledger_kind_success_clock
+        `SELECT kind, MAX(last_success_at) AS last_success_at
+         FROM ledger_profile_success_clock GROUP BY kind
          ORDER BY kind LIMIT 101`,
       )
       .all();
@@ -5590,6 +5572,7 @@ export class Ledger {
     });
     if (prepared.length === 0) return { conflicts: [], results: [] };
 
+    // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing transactional seed and conflict handling is unchanged by the counter migration; splitting it requires a separate behavior-preserving refactor.
     return this.#immediate(() => {
       const latestInventoryByAuthor = new Map<
         string,

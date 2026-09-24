@@ -57,11 +57,8 @@ try {
     inspect(corpus, "corpus", "Public corpus · Cloudflare D1"),
     inspect(rig, "rig", "Local rig · SQLite"),
   ];
-  if (version !== CURRENT_SCHEMA_VERSION || databases[1].tables.length !== 40) {
+  if (version !== CURRENT_SCHEMA_VERSION) {
     throw new Error("LOCAL_SCHEMA_UNEXPECTED");
-  }
-  if (databases[0].tables.length < 30 || databases[0].tables.length > 32) {
-    throw new Error("CORPUS_SCHEMA_UNEXPECTED");
   }
   const output = `${JSON.stringify({ migrationNames, localVersion: version, databases }, null, 2)}\n`;
   if (process.argv.includes("--check")) {

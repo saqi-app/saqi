@@ -12,12 +12,121 @@ import {
 } from "../persistence/migrations.js";
 import { currentSource } from "../source-adapter/index.js";
 import { migrateHistoricalFixture } from "./support/historical-migration-engine.js";
+import { initializeLegacyLedgerSchema } from "./support/legacy-ledger-schema.js";
 import { trackedMkdtempSync as mkdtempSync } from "./support/tracked-test-root.js";
 
 const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("schema 38 retires obsolete scheduler archive without touching active state", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 37);
+      database
+        .prepare(
+          `INSERT INTO retired_scheduler_state(
+            state_key, state_json, state_digest, updated_at, retired_at,
+            authority_state_digest
+          ) VALUES(?, '{}', ?, 1, 2, ?)`,
+        )
+        .run("provider:agy", "a".repeat(64), "b".repeat(64));
+      database
+        .prepare(
+          "INSERT INTO monitor_progress_history(singleton, payload, updated_at) VALUES(1, ?, 1)",
+        )
+        .run(Buffer.from('{"schemaVersion":1,"samples":[]}'));
+      database
+        .prepare(
+          `INSERT INTO scheduler_state(
+            state_key, state_json, state_digest, updated_at
+          ) VALUES('provider-v10:sol', '{}', ?, 3)`,
+        )
+        .run("c".repeat(64));
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'retired_scheduler_state'",
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'monitor_progress_history'",
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(
+        database.prepare("SELECT state_key FROM scheduler_state").all(),
+      ).toEqual([{ state_key: "provider-v10:sol" }]);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("schema 37 removes redundant counters and retains work state accounting", () => {
+    const database = new Database(":memory:");
+    try {
+      database.exec(`CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT; INSERT INTO local_schema VALUES(1, 0);`);
+      for (const migration of MIGRATIONS) {
+        if (migration.version > 36) continue;
+        database.exec(migration.statements);
+        database
+          .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+          .run(migration.version);
+      }
+      const configured = currentSource();
+      database
+        .prepare(
+          "INSERT INTO local_source_identity(singleton, source_name, source_origin) VALUES(1, ?, ?)",
+        )
+        .run(configured.name, configured.origin);
+      const insert = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, created_at, updated_at
+      ) VALUES(?, ?, '{}', ?, 'input@1', 'crawler@1', ?, 1, 1, 1)`);
+      insert.run("a".repeat(64), "kind-a", "b".repeat(64), "pending");
+      insert.run("c".repeat(64), "kind-b", "d".repeat(64), "pending");
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            `SELECT name FROM sqlite_schema WHERE type = 'table'
+             AND name IN ('ledger_state_count','ledger_kind_state_count',
+                          'ledger_error_count','ledger_kind_error_count',
+                          'ledger_kind_success_clock')`,
+          )
+          .all(),
+      ).toEqual([]);
+      const counts = () =>
+        database
+          .prepare(
+            `SELECT state, SUM(item_count) AS item_count
+             FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
+          )
+          .all();
+      expect(counts()).toEqual([{ item_count: 2, state: "pending" }]);
+      insert.run("e".repeat(64), "kind-a", "f".repeat(64), "pending");
+      database
+        .prepare("UPDATE work_item SET state = 'succeeded' WHERE work_key = ?")
+        .run("c".repeat(64));
+      expect(counts()).toEqual([
+        { item_count: 2, state: "pending" },
+        { item_count: 1, state: "succeeded" },
+      ]);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
   test("reconciliation due lookup uses the unknown-state time index", () => {
     const database = new Database(":memory:");
     try {
@@ -256,33 +365,11 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          `SELECT state_key, state_json, state_digest, updated_at,
-                  authority_state_digest
-             FROM retired_scheduler_state ORDER BY state_key`,
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'table' AND name = 'retired_scheduler_state'`,
         )
-        .all(),
-    ).toEqual(
-      [
-        "provider-v10:agy",
-        "provider-v10:claude",
-        "provider:agy",
-        "provider:claude",
-      ].map((stateKey) => ({
-        authority_state_digest: authorityDigest,
-        state_digest: obsoleteDigest,
-        state_json: obsolete,
-        state_key: stateKey,
-        updated_at: 5,
-      })),
-    );
-    expect(() =>
-      database
-        .prepare(
-          `DELETE FROM retired_scheduler_state
-           WHERE state_key = 'provider:agy'`,
-        )
-        .run(),
-    ).toThrow("RETIRED_SCHEDULER_STATE_IMMUTABLE");
+        .get(),
+    ).toBeUndefined();
     expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
     database.close();
   });
@@ -318,9 +405,12 @@ describe("ledger schema migrations", () => {
     ).toEqual({ count: 2 });
     expect(
       database
-        .prepare("SELECT COUNT(*) AS count FROM retired_scheduler_state")
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'table' AND name = 'retired_scheduler_state'`,
+        )
         .get(),
-    ).toEqual({ count: 0 });
+    ).toBeUndefined();
     database.close();
   });
 
@@ -537,7 +627,8 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          `SELECT state, item_count FROM ledger_state_count ORDER BY state`,
+          `SELECT state, SUM(item_count) AS item_count
+           FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
         )
         .all(),
     ).toEqual([
@@ -572,9 +663,9 @@ describe("ledger schema migrations", () => {
          WHERE operation_key = ?`,
       )
       .run("e".repeat(64));
-    expect(database.prepare(`SELECT * FROM ledger_error_count`).all()).toEqual(
-      [],
-    );
+    expect(
+      database.prepare(`SELECT * FROM ledger_profile_error_count`).all(),
+    ).toEqual([]);
     expect(
       database.prepare(`SELECT * FROM ledger_profile_availability_count`).all(),
     ).toEqual([]);

@@ -28,9 +28,6 @@ extension RigStore {
         guard canRefreshDiagnostics else { return }
         refreshingDiagnostics = true
         refreshOutcome = "Refreshing diagnostics…"
-        // Explicit observation retries may retry local history persistence now.
-        // Automatic refresh retains its backoff; no runtime control is changed.
-        nextHistoryImportAttempt = .distantPast
         defer { refreshingDiagnostics = false }
         await read()
         await retryStartupPreferenceObservation()
@@ -108,32 +105,6 @@ extension RigStore {
         paused = provider.gates.operator.globalPaused
     }
 
-    func persistSamples(now: Date = Date()) {
-        guard historyPersistenceEnabled else { return }
-        if pendingHistoryImport != nil || historyPersistenceFailed {
-            guard now >= nextHistoryImportAttempt else { return }
-        }
-        do {
-            if let defaults = pendingHistoryImport {
-                nextHistoryImportAttempt = now.addingTimeInterval(30)
-                let imported = try progressStore.load(legacyDefaults: defaults)
-                samples = samples.reduce(into: imported) { history, sample in
-                    history = ProgressEstimator.recording(sample, in: history, now: now)
-                }
-                pendingHistoryImport = nil
-            }
-            try progressStore.save(samples)
-            historyPersistenceFailed = false
-            if diagnosticError == "Progress history persistence unavailable" {
-                diagnosticError = startupPreferenceError
-            }
-        } catch {
-            historyPersistenceFailed = true
-            nextHistoryImportAttempt = now.addingTimeInterval(30)
-            diagnosticError = "Progress history persistence unavailable"
-        }
-    }
-
     private func serviceRefreshResult(force: Bool) async -> (Result<ServiceSnapshot, Error>, Bool) {
         if !force, let service, let lastServiceRefresh,
            Date().timeIntervalSince(lastServiceRefresh) < 10
@@ -169,8 +140,7 @@ extension RigStore {
         case let (.success(snapshot), .success(serviceSnapshot)):
             health = snapshot
             service = serviceSnapshot
-            diagnosticError = historyPersistenceFailed
-                ? "Progress history persistence unavailable" : startupPreferenceError
+            diagnosticError = startupPreferenceError
             refreshedAt = Date()
             healthRefreshFailed = false
             serviceRefreshFailed = false
@@ -178,9 +148,6 @@ extension RigStore {
                 lastServiceRefresh = Date()
             }
             recordProgressIfCurrent(snapshot: snapshot, service: serviceSnapshot)
-            if pendingHistoryImport != nil || historyPersistenceFailed {
-                persistSamples()
-            }
         case let (.failure(error), .success(serviceSnapshot)):
             service = serviceSnapshot
             healthRefreshFailed = true
@@ -238,7 +205,6 @@ extension RigStore {
         let updated = ProgressEstimator.recording(sample, in: samples, now: Date())
         if updated != samples {
             samples = updated
-            persistSamples()
         }
     }
 }

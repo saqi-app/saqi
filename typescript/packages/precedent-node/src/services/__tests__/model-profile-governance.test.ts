@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +17,7 @@ const MIGRATIONS = readdirSync(MIGRATIONS_DIRECTORY)
   .toSorted();
 const HASH = "a".repeat(64);
 
-describe("model profile and legacy attribution governance", () => {
+describe("model profile governance", () => {
   const databases: Database.Database[] = [];
 
   afterEach(() => {
@@ -26,10 +25,11 @@ describe("model profile and legacy attribution governance", () => {
     databases.length = 0;
   });
 
-  const open = (): Database.Database => {
+  const open = (beforeProfileFold = false): Database.Database => {
     const database = new Database(":memory:");
     database.pragma("foreign_keys = ON");
     for (const migration of MIGRATIONS) {
+      if (beforeProfileFold && migration.startsWith("0047_")) continue;
       database.exec(
         readFileSync(join(MIGRATIONS_DIRECTORY, migration), "utf8"),
       );
@@ -37,6 +37,70 @@ describe("model profile and legacy attribution governance", () => {
     databases.push(database);
     return database;
   };
+
+  it("derives existing artifact profiles before dropping stored bindings", () => {
+    const database = open(true);
+    const revisionId = insertRevisionFixture(database);
+    const profile = database
+      .prepare(
+        `SELECT profile_key, public_track_key, model_key, backend_key,
+           runtime_model_id, prompt_version, reasoning_effort,
+           input_schema_version, output_schema_version, created_at
+         FROM enrichment_profile
+         WHERE input_schema_version = 2 AND output_schema_version = 1
+         ORDER BY profile_key LIMIT 1`,
+      )
+      .get() as ProfileRow;
+    insertArtifact(
+      database,
+      revisionId,
+      "folded-artifact",
+      "folded-task",
+      profile,
+    );
+    expect(
+      database
+        .prepare(
+          "SELECT profile_key FROM model_enrichment_artifact_profile WHERE artifact_id = ?",
+        )
+        .pluck()
+        .get("folded-artifact"),
+    ).toBe(profile.profile_key);
+
+    database.transaction(() =>
+      database.exec(
+        readFileSync(
+          join(MIGRATIONS_DIRECTORY, "0047_derive_artifact_profiles.sql"),
+          "utf8",
+        ),
+      ),
+    )();
+    expect(
+      database
+        .prepare(
+          `SELECT profile.profile_key FROM model_enrichment_artifact artifact
+           JOIN poem_source_revision revision ON revision.id = artifact.source_revision_id
+           JOIN enrichment_profile profile
+             ON profile.public_track_key = artifact.model_key
+            AND profile.runtime_model_id = artifact.model
+            AND profile.prompt_version = artifact.prompt_version
+            AND profile.reasoning_effort = artifact.reasoning_effort
+            AND profile.input_schema_version = revision.schema_version
+            AND profile.output_schema_version = artifact.schema_version
+           WHERE artifact.id = 'folded-artifact'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe(profile.profile_key);
+    expect(
+      database
+        .prepare(
+          "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'model_enrichment_artifact_profile'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
 
   it("adds the medium recipe without rewriting historical Sol provenance", () => {
     const database = open();
@@ -121,8 +185,17 @@ describe("model profile and legacy attribution governance", () => {
     expect(
       database
         .prepare(
-          `SELECT profile_key FROM model_enrichment_artifact_profile
-           WHERE artifact_id = 'artifact-v3'`,
+          `SELECT profile.profile_key FROM model_enrichment_artifact artifact
+           JOIN poem_source_revision revision
+             ON revision.id = artifact.source_revision_id
+           JOIN enrichment_profile profile
+             ON profile.public_track_key = artifact.model_key
+            AND profile.runtime_model_id = artifact.model
+            AND profile.prompt_version = artifact.prompt_version
+            AND profile.reasoning_effort = artifact.reasoning_effort
+            AND profile.input_schema_version = revision.schema_version
+            AND profile.output_schema_version = artifact.schema_version
+           WHERE artifact.id = 'artifact-v3'`,
         )
         .pluck()
         .get(),
@@ -303,8 +376,6 @@ describe("model profile and legacy attribution governance", () => {
         .prepare(
           `SELECT count(DISTINCT artifact.model_key)
            FROM model_enrichment_artifact artifact
-           JOIN model_enrichment_artifact_profile binding
-             ON binding.artifact_id = artifact.id
            WHERE artifact.source_revision_id = ?`,
         )
         .pluck()
@@ -313,78 +384,16 @@ describe("model profile and legacy attribution governance", () => {
     expect(() =>
       database
         .prepare(
-          `UPDATE model_enrichment_artifact_profile
-           SET profile_key = profile_key WHERE artifact_id = 'artifact-sol'`,
+          `UPDATE model_enrichment_artifact
+           SET prompt_version = prompt_version WHERE id = 'artifact-sol'`,
         )
         .run(),
     ).toThrow();
     expect(() =>
       database
         .prepare(
-          `DELETE FROM model_enrichment_artifact_profile
-           WHERE artifact_id = 'artifact-sol'`,
-        )
-        .run(),
-    ).toThrow();
-  });
-
-  it("invalidates legacy attribution by exact payload hash without deleting history", () => {
-    const database = open();
-    const original = JSON.stringify({ content: ["Legacy translation"] });
-    const changed = JSON.stringify({ content: ["Changed translation"] });
-    const originalHash = sha256(original);
-    const changedHash = sha256(changed);
-    const attributionKey = database
-      .prepare(
-        `SELECT attribution_key FROM legacy_model_attribution
-         WHERE certainty = 'inferred_range' ORDER BY attribution_key LIMIT 1`,
-      )
-      .pluck()
-      .get() as string;
-    expect(attributionKey).toBeTruthy();
-
-    database
-      .prepare(
-        `INSERT INTO author(id, slug, name_arabic)
-         VALUES ('legacy-author', 'legacy-author', 'شاعر')`,
-      )
-      .run();
-    database
-      .prepare(
-        `INSERT INTO poem(
-           id, author_id, slug, verses, name_arabic, content_arabic, translation
-         ) VALUES (
-           'legacy-poem', 'legacy-author', 'legacy-poem', 1, 'قصيدة',
-           '{"content":["بيت"]}', ?
-         )`,
-      )
-      .run(original);
-    database
-      .prepare(
-        `INSERT INTO poem_legacy_payload_attribution (
-           poem_id, legacy_field, source_payload_hash, attribution_key,
-           attributed_at
-         ) VALUES ('legacy-poem', 'translation', ?, ?, 1)`,
-      )
-      .run(originalHash, attributionKey);
-
-    const lookup = database.prepare(
-      `SELECT attribution_key FROM poem_legacy_payload_attribution
-       WHERE poem_id = 'legacy-poem' AND legacy_field = 'translation'
-         AND source_payload_hash = ?`,
-    );
-    expect(lookup.pluck().get(originalHash)).toBe(attributionKey);
-    database
-      .prepare("UPDATE poem SET translation = ? WHERE id = 'legacy-poem'")
-      .run(changed);
-    expect(lookup.pluck().get(changedHash)).toBeUndefined();
-    expect(lookup.pluck().get(originalHash)).toBe(attributionKey);
-
-    expect(() =>
-      database
-        .prepare(
-          `UPDATE poem_legacy_payload_attribution SET attributed_at = 2
-           WHERE poem_id = 'legacy-poem'`,
+          `DELETE FROM model_enrichment_artifact
+           WHERE id = 'artifact-sol'`,
         )
         .run(),
     ).toThrow();
@@ -524,8 +533,4 @@ function insertArtifact(
       HASH,
       payload,
     );
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
 }

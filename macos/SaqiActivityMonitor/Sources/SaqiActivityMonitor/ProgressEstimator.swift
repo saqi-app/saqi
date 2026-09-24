@@ -75,11 +75,6 @@ internal enum ModelEligibility: Hashable {
     }
 }
 
-internal struct ProgressHistory: Codable {
-    let schemaVersion: Int
-    let samples: [ProgressSample]
-}
-
 internal enum ProgressEstimator {
     static let minimumAccepted = 2
     static let minimumInterval: TimeInterval = 10 * 60

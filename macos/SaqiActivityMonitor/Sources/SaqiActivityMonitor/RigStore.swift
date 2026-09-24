@@ -43,23 +43,15 @@ internal final class RigStore: ObservableObject {
     let healthFileReader = DiagnosticFileReader<PipelineHealth>()
     let runtimeFileReader = DiagnosticFileReader<RuntimeStatus>()
     let startupPreferenceReader = DiagnosticFileReader<Bool>()
-    let progressStore: MonitorProgressStore
-    let historyPersistenceEnabled: Bool
-    var pendingHistoryImport: UserDefaults?
-    var nextHistoryImportAttempt = Date.distantPast
-    var historyPersistenceFailed = false
     let startupPreference: MonitorStartupPreference
 
     init(
         configuration: MonitorConfiguration = .current(),
-        userDefaults: UserDefaults = .standard,
+        userDefaults _: UserDefaults = .standard,
         monitorContinuously: Bool = true,
         startupPreference: MonitorStartupPreference? = nil,
     ) {
         self.configuration = configuration
-        historyPersistenceEnabled = monitorContinuously
-        progressStore = MonitorProgressStore(stateDirectory: configuration.stateDirectory)
-        pendingHistoryImport = monitorContinuously ? userDefaults : nil
         self.startupPreference = startupPreference ?? MonitorStartupPreference(
             stateDirectory: configuration.stateDirectory,
         )
@@ -72,15 +64,6 @@ internal final class RigStore: ObservableObject {
             }
         } else {
             startsAtLogin = self.startupPreference.isEnabled
-        }
-        do {
-            samples = try progressStore.load(legacyDefaults: monitorContinuously ? userDefaults : nil)
-            pendingHistoryImport = nil
-        } catch {
-            if monitorContinuously {
-                historyPersistenceFailed = true
-                diagnosticError = diagnosticError ?? "Progress history persistence unavailable"
-            }
         }
         if monitorContinuously {
             monitorTask = Task { [weak self] in

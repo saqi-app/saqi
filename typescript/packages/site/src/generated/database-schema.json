@@ -7,9 +7,12 @@
     "0041_monthly_collection_insights.sql",
     "0042_retire_daily_insight_rollups.sql",
     "0043_retire_unused_schema.sql",
-    "0044_remove_duplicate_legacy_attribution_index.sql"
+    "0044_remove_duplicate_legacy_attribution_index.sql",
+    "0045_fold_legacy_attribution_and_retire_task.sql",
+    "0046_fold_source_revision_fingerprint.sql",
+    "0047_derive_artifact_profiles.sql"
   ],
-  "localVersion": 36,
+  "localVersion": 38,
   "databases": [
     {
       "id": "corpus",
@@ -721,72 +724,6 @@
           "foreignKeys": []
         },
         {
-          "name": "legacy_model_attribution",
-          "columns": [
-            {
-              "name": "attribution_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "vendor_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "family_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "minimum_version",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "maximum_version",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "certainty",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "display_name",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "rationale",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "vendor_key",
-              "table": "ai_vendor",
-              "to": "vendor_key"
-            }
-          ]
-        },
-        {
           "name": "model_enrichment_artifact",
           "columns": [
             {
@@ -866,41 +803,6 @@
             {
               "from": "source_revision_id",
               "table": "poem_source_revision",
-              "to": "id"
-            }
-          ]
-        },
-        {
-          "name": "model_enrichment_artifact_profile",
-          "columns": [
-            {
-              "name": "artifact_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "profile_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "bound_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "profile_key",
-              "table": "enrichment_profile",
-              "to": "profile_key"
-            },
-            {
-              "from": "artifact_id",
-              "table": "model_enrichment_artifact",
               "to": "id"
             }
           ]
@@ -1205,6 +1107,12 @@
               "type": "TEXT",
               "nullable": true,
               "primaryKey": false
+            },
+            {
+              "name": "legacy_translation_attributions",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
             }
           ],
           "foreignKeys": [
@@ -1221,59 +1129,6 @@
             {
               "from": "author_id",
               "table": "author",
-              "to": "id"
-            }
-          ]
-        },
-        {
-          "name": "poem_legacy_payload_attribution",
-          "columns": [
-            {
-              "name": "poem_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "legacy_field",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "source_payload_hash",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "hash_algorithm",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "attribution_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "attributed_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "attribution_key",
-              "table": "legacy_model_attribution",
-              "to": "attribution_key"
-            },
-            {
-              "from": "poem_id",
-              "table": "poem",
               "to": "id"
             }
           ]
@@ -1509,6 +1364,30 @@
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
+            },
+            {
+              "name": "fingerprint_algorithm",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "fingerprint_created_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "line_nfc_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_material_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
             }
           ],
           "foreignKeys": [
@@ -1727,167 +1606,6 @@
             {
               "from": "source_author_id",
               "table": "source_author_identity",
-              "to": "id"
-            }
-          ]
-        },
-        {
-          "name": "source_revision_fingerprint",
-          "columns": [
-            {
-              "name": "source_revision_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "line_nfc_hash",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "prompt_material_hash",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "algorithm",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "source_revision_id",
-              "table": "poem_source_revision",
-              "to": "id"
-            }
-          ]
-        },
-        {
-          "name": "task",
-          "columns": [
-            {
-              "name": "id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "type",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "status",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "poem_id",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "author_id",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "result",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "error_message",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "started_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "completed_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "work_key",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "queue_state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "queue_attempt_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "queue_last_attempt_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "claim_token",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "lease_expires_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "attempt_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "author_id",
-              "table": "author",
-              "to": "id"
-            },
-            {
-              "from": "poem_id",
-              "table": "poem",
               "to": "id"
             }
           ]
@@ -2208,90 +1926,6 @@
           ]
         },
         {
-          "name": "ledger_error_count",
-          "columns": [
-            {
-              "name": "error_code",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "ledger_kind_error_count",
-          "columns": [
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "error_code",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "ledger_kind_state_count",
-          "columns": [
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "ledger_kind_success_clock",
-          "columns": [
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "last_success_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
           "name": "ledger_profile_availability_count",
           "columns": [
             {
@@ -2430,24 +2064,6 @@
           "foreignKeys": []
         },
         {
-          "name": "ledger_state_count",
-          "columns": [
-            {
-              "name": "state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
           "name": "ledger_status_clock",
           "columns": [
             {
@@ -2507,30 +2123,6 @@
             {
               "name": "source_origin",
               "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "monitor_progress_history",
-          "columns": [
-            {
-              "name": "singleton",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "payload",
-              "type": "BLOB",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "updated_at",
-              "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
             }
@@ -2774,48 +2366,6 @@
               "to": "work_key"
             }
           ]
-        },
-        {
-          "name": "retired_scheduler_state",
-          "columns": [
-            {
-              "name": "state_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "state_json",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "state_digest",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "updated_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "retired_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "authority_state_digest",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "runtime_control",
