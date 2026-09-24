@@ -8,8 +8,8 @@ import Database from "better-sqlite3";
 import { ModuleKind, transpileModule } from "typescript";
 import { expect, test } from "vitest";
 
-import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
 import { CURRENT_SCHEMA_VERSION } from "../persistence/migrations.js";
+import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
 import { RuntimeOwnerStore } from "../persistence/runtime-owner-store.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 

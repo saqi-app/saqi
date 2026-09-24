@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import { expect, test, vi } from "vitest";
 
-import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
 import { CURRENT_SCHEMA_VERSION } from "../persistence/migrations.js";
+import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
 import {
   RuntimeOwnerBusyError,
   RuntimeOwnerStore,
