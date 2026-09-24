@@ -208,6 +208,12 @@ export const SOURCE_POEM_IDENTITY_TABLE = sqliteTable(
       mode: "timestamp",
     }).notNull(),
     tombstonedAt: integer("tombstoned_at", { mode: "timestamp" }),
+    currentRevisionId: text("current_revision_id"),
+    currentRevisionVersion: integer("current_revision_version"),
+    currentRevisionWriterEpoch: integer("current_revision_writer_epoch"),
+    currentRevisionUpdatedAt: integer("current_revision_updated_at", {
+      mode: "timestamp",
+    }),
   },
   (table) => [
     uniqueIndex("source_poem_identity_external_unique").on(

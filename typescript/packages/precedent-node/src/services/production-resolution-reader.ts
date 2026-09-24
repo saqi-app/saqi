@@ -205,8 +205,8 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
                  resolved.identity_author_slug) AS source_author_slug,
         resolved.source_identity_id,
         resolved.source_identity_tombstoned_at,
-        source_pointer.revision_id AS source_pointer_revision_id,
-        source_pointer.pointer_version AS source_pointer_version,
+        source_identity.current_revision_id AS source_pointer_revision_id,
+        source_identity.current_revision_version AS source_pointer_version,
         COALESCE(resolved.source_poem_id,
                  source_identity.external_id) AS source_poem_id,
         source_revision.source_poem_id AS source_revision_source_poem_id,
@@ -230,12 +230,10 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
       CROSS JOIN scraper_writer_control writer
       LEFT JOIN poem ON poem.id = resolved.poem_id
       LEFT JOIN author ON author.id = poem.author_id
-      LEFT JOIN poem_source_pointer source_pointer
-        ON source_pointer.source_poem_id = resolved.source_identity_id
       LEFT JOIN source_poem_identity source_identity
         ON source_identity.id = resolved.source_identity_id
       LEFT JOIN poem_source_revision source_revision
-        ON source_revision.id = source_pointer.revision_id
+        ON source_revision.id = source_identity.current_revision_id
       WHERE writer.singleton = 1
       ORDER BY resolved.ordinal
     `);
@@ -406,7 +404,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
           author.id AS author_id, author.name_arabic AS author_name_arabic,
           source_author.external_id AS source_author_slug,
           source_poem.external_id AS source_poem_id,
-          source_pointer.pointer_version AS source_pointer_version,
+          source_poem.current_revision_version AS source_pointer_version,
           COUNT(*) OVER (PARTITION BY matched.ordinal) AS active_candidate_count,
           ROW_NUMBER() OVER (
             PARTITION BY matched.ordinal ORDER BY matched.source_revision_id
@@ -421,9 +419,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
         JOIN poem
           ON poem.id = source_poem.canonical_poem_id
          AND poem.active_source_revision_id = revision.id
-        JOIN poem_source_pointer source_pointer
-          ON source_pointer.source_poem_id = source_poem.id
-         AND source_pointer.revision_id = revision.id
+         AND source_poem.current_revision_id = revision.id
         JOIN source_author_identity source_author
           ON source_author.id = source_poem.source_author_id
          AND source_author.source_name = ${this.#sourceName}

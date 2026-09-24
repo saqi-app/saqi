@@ -167,6 +167,18 @@ describe("D1CorpusRevisionStore", () => {
     );
     expect(
       database
+        .prepare(
+          `SELECT current_revision_id AS currentRevisionId,
+                  current_revision_version AS currentRevisionVersion
+             FROM source_poem_identity WHERE id = ?`,
+        )
+        .get(firstPlan.items[0]?.sourcePoemKey),
+    ).toMatchObject({
+      currentRevisionId: firstPlan.items[0]?.revisionId,
+      currentRevisionVersion: 1,
+    });
+    expect(
+      database
         .prepare("SELECT content_arabic FROM poem WHERE id = 'poem-1'")
         .pluck()
         .get(),

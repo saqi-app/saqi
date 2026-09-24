@@ -211,7 +211,10 @@ describe("D1ProductionResolutionStore", () => {
     adoptPoem(database);
     database
       .prepare(
-        `INSERT INTO source_poem_identity VALUES (
+        `INSERT INTO source_poem_identity (
+          id, source_name, external_id, source_author_id, canonical_url,
+          canonical_poem_id, first_observed_at, last_observed_at, tombstoned_at
+        ) VALUES (
           'source-poem-other', 'primary-source', '99999', 'source-author',
           'https://source.invalid/poem99999.html', ?, 1, 1, NULL
         )`,
@@ -370,7 +373,10 @@ function adoptPoem(
     .run(ids.authorId);
   database
     .prepare(
-      `INSERT INTO source_poem_identity VALUES (
+      `INSERT INTO source_poem_identity (
+         id, source_name, external_id, source_author_id, canonical_url,
+         canonical_poem_id, first_observed_at, last_observed_at, tombstoned_at
+       ) VALUES (
          'source-poem', 'primary-source', '82737', 'source-author',
          'https://source.invalid/poem82737.html', ?, 1, 1, NULL
        )`,

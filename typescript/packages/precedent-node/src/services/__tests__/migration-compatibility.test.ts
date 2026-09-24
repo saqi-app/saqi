@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0050_copy_legacy_enrichment.sql");
+    expect(first.at(-1)).toBe("0051_expand_source_revision_pointer.sql");
     expect(
       database
         .prepare(
@@ -96,6 +96,106 @@ describe("production migration compatibility", () => {
     const before = schemaSnapshot(database);
     expect(applyPending(database, migrationFiles())).toEqual([]);
     expect(schemaSnapshot(database)).toEqual(before);
+  });
+
+  it("backfills current revisions and tracks writes from older Workers", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0051_"),
+    );
+    insertProductionRow(database);
+    const hash = "a".repeat(64);
+    database
+      .prepare(
+        `INSERT INTO crawl_import_bundle (
+           id, schema_version, manifest_hash, expected_record_count, status,
+           writer_epoch, created_at
+         ) VALUES ('pointer-bundle', 1, ?, 1, 'open', 1, 1)`,
+      )
+      .run(hash);
+    database
+      .prepare(
+        `INSERT INTO crawl_import_record (
+           bundle_id, ordinal, record_hash, source_name, source_author_id,
+           source_author_url, author_name_arabic, canonical_author_id,
+           source_poem_id, source_poem_url, canonical_poem_id, title_arabic,
+           content_arabic, content_hash, observed_at
+         ) VALUES ('pointer-bundle', 0, ?, 'source', 'author',
+           'https://example.test/author', 'شاعر', ?, 'poem-42',
+           'https://example.test/poem', ?, 'قصيدة',
+           '{"content":["صدر","عجز"]}', ?, 1)`,
+      )
+      .run(
+        hash,
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        hash,
+      );
+    database.exec(`
+      INSERT INTO source_author_identity VALUES (
+        'pointer-author', 'source', 'author',
+        'https://example.test/author', 'شاعر',
+        '00000000-0000-4000-8000-000000000001', 1, 1
+      );
+      INSERT INTO source_poem_identity VALUES (
+        'pointer-poem', 'source', 'poem-42', 'pointer-author',
+        'https://example.test/poem',
+        '00000000-0000-4000-8000-000000000002', 1, 1, NULL
+      );
+    `);
+    database
+      .prepare(
+        `INSERT INTO poem_source_revision (
+           id, source_poem_id, schema_version, content_hash, title_arabic,
+           content_arabic, observed_at, created_at, import_bundle_id,
+           import_ordinal
+         ) VALUES ('pointer-revision', 'pointer-poem', 1, ?, 'قصيدة',
+           '{"content":["صدر","عجز"]}', 1, 1, 'pointer-bundle', 0)`,
+      )
+      .run(hash);
+    database.exec(`
+      INSERT INTO poem_source_pointer VALUES (
+        'pointer-poem', 'pointer-revision', 1, 1, 1
+      );
+    `);
+
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0051_expand_source_revision_pointer.sql",
+    ]);
+    const current = () =>
+      database
+        .prepare(
+          `SELECT current_revision_id AS currentRevisionId,
+                  current_revision_version AS currentRevisionVersion,
+                  current_revision_writer_epoch AS currentRevisionWriterEpoch,
+                  current_revision_updated_at AS currentRevisionUpdatedAt
+             FROM source_poem_identity WHERE id = 'pointer-poem'`,
+        )
+        .get();
+    expect(current()).toEqual({
+      currentRevisionId: "pointer-revision",
+      currentRevisionVersion: 1,
+      currentRevisionWriterEpoch: 1,
+      currentRevisionUpdatedAt: 1,
+    });
+    database.exec(`
+      UPDATE poem_source_pointer SET pointer_version = 2, updated_at = 2
+      WHERE source_poem_id = 'pointer-poem';
+    `);
+    expect(current()).toEqual({
+      currentRevisionId: "pointer-revision",
+      currentRevisionVersion: 2,
+      currentRevisionWriterEpoch: 1,
+      currentRevisionUpdatedAt: 2,
+    });
+    expect(() =>
+      database.exec(`
+        UPDATE source_poem_identity SET current_revision_version = 3
+        WHERE id = 'pointer-poem';
+      `),
+    ).toThrow("SOURCE_CURRENT_REVISION_MISMATCH");
+    expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("folds dimension metadata without changing published model labels", () => {
@@ -132,6 +232,7 @@ describe("production migration compatibility", () => {
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
       "0050_copy_legacy_enrichment.sql",
+      "0051_expand_source_revision_pointer.sql",
     ]);
     expect(
       database
@@ -176,6 +277,7 @@ describe("production migration compatibility", () => {
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
       "0050_copy_legacy_enrichment.sql",
+      "0051_expand_source_revision_pointer.sql",
     ]);
     expect(
       database
@@ -301,6 +403,7 @@ describe("production migration compatibility", () => {
 
     expect(applyPending(database, migrationFiles())).toEqual([
       "0050_copy_legacy_enrichment.sql",
+      "0051_expand_source_revision_pointer.sql",
     ]);
     expect(
       database

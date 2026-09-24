@@ -790,13 +790,13 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     const [knownSource] = KnownSourceRowsSchema.parse(
       await this.#db.all<Record<string, unknown>>(sql`
         SELECT source.canonical_poem_id, source.canonical_url,
-          pointer.revision_id AS current_revision_id, source.source_author_id,
-          source.tombstoned_at, pointer.pointer_version,
+          source.current_revision_id, source.source_author_id,
+          source.tombstoned_at,
+          source.current_revision_version AS pointer_version,
           current_revision.line_nfc_hash, current_revision.prompt_material_hash
         FROM source_poem_identity source
-        LEFT JOIN poem_source_pointer pointer ON pointer.source_poem_id = source.id
         LEFT JOIN poem_source_revision current_revision
-          ON current_revision.id = pointer.revision_id
+          ON current_revision.id = source.current_revision_id
         WHERE source.source_name = ${input.sourceName}
           AND source.external_id = ${input.externalPoemId}
       `),
@@ -1131,8 +1131,8 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
           bundles.schema_version,
           staged.content_hash,
           existing.id AS existing_revision_id,
-          pointers.revision_id AS current_revision_id,
-          pointers.pointer_version
+          identities.current_revision_id,
+          identities.current_revision_version AS pointer_version
         FROM crawl_import_record staged
         JOIN crawl_import_bundle bundles ON bundles.id = staged.bundle_id
         LEFT JOIN source_poem_identity identities
@@ -1142,8 +1142,6 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
           ON existing.source_poem_id = identities.id
           AND existing.schema_version = bundles.schema_version
           AND existing.content_hash = staged.content_hash
-        LEFT JOIN poem_source_pointer pointers
-          ON pointers.source_poem_id = identities.id
         WHERE staged.bundle_id = ${bundleId}
         ORDER BY staged.ordinal
       `),
@@ -1765,21 +1763,19 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
         poem.id AS poem_id,
         revision.prompt_material_hash,
         source.source_name,
-        source_pointer.pointer_version AS source_pointer_version,
+        source.current_revision_version AS source_pointer_version,
         revision.id AS source_revision_id,
         writer.writer_epoch
       FROM poem_source_revision revision
       JOIN source_poem_identity source ON source.id = revision.source_poem_id
       JOIN poem ON poem.id = source.canonical_poem_id
-      JOIN poem_source_pointer source_pointer
-        ON source_pointer.source_poem_id = source.id
-        AND source_pointer.revision_id = revision.id
       JOIN model_enrichment_artifact artifact
         ON artifact.id = ${input.artifact.id}
         AND artifact.source_revision_id = revision.id
       JOIN scraper_writer_control writer ON writer.singleton = 1
         WHERE revision.id = ${input.binding.sourceRevisionId}
           AND poem.active_source_revision_id = revision.id
+          AND source.current_revision_id = revision.id
           AND source.tombstoned_at IS NULL
       `),
     );
@@ -1985,9 +1981,11 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     }
     const [pointer] = SourcePointerRowSchema.array().parse(
       await this.#db.all<Record<string, unknown>>(sql`
-        SELECT pointer_version, revision_id, writer_epoch
-        FROM poem_source_pointer
-        WHERE source_poem_id = ${item.sourcePoemKey}
+        SELECT current_revision_version AS pointer_version,
+          current_revision_id AS revision_id,
+          current_revision_writer_epoch AS writer_epoch
+        FROM source_poem_identity
+        WHERE id = ${item.sourcePoemKey}
       `),
     );
     if (
@@ -2017,11 +2015,11 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
           active_source_revision_id = ${revisionId}
       WHERE id = ${canonicalPoemId}
         AND EXISTS (
-          SELECT 1 FROM poem_source_pointer
-          WHERE source_poem_id = ${sourcePoemKey}
-            AND revision_id = ${revisionId}
-            AND pointer_version = ${pointerVersion}
-            AND writer_epoch = ${writerEpoch}
+          SELECT 1 FROM source_poem_identity
+          WHERE id = ${sourcePoemKey}
+            AND current_revision_id = ${revisionId}
+            AND current_revision_version = ${pointerVersion}
+            AND current_revision_writer_epoch = ${writerEpoch}
         )
         AND ${writerEpoch} = (
           SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
