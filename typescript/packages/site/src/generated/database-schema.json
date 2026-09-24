@@ -12,7 +12,7 @@
     "0046_fold_source_revision_fingerprint.sql",
     "0047_derive_artifact_profiles.sql"
   ],
-  "localVersion": 38,
+  "localVersion": 39,
   "databases": [
     {
       "id": "corpus",
@@ -2125,6 +2125,12 @@
               "type": "TEXT",
               "nullable": false,
               "primaryKey": false
+            },
+            {
+              "name": "metadata_revision",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
             }
           ],
           "foreignKeys": []
@@ -2260,24 +2266,6 @@
               "to": "work_key"
             }
           ]
-        },
-        {
-          "name": "paid_operation_state_count",
-          "columns": [
-            {
-              "name": "state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "poem_identity",
@@ -2891,24 +2879,6 @@
             },
             {
               "name": "observed_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "source_author_metadata_revision",
-          "columns": [
-            {
-              "name": "singleton",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "revision",
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
