@@ -29,7 +29,7 @@ describe("model profile governance", () => {
     const database = new Database(":memory:");
     database.pragma("foreign_keys = ON");
     for (const migration of MIGRATIONS) {
-      if (beforeProfileFold && migration.startsWith("0047_")) continue;
+      if (beforeProfileFold && migration >= "0047_") continue;
       database.exec(
         readFileSync(join(MIGRATIONS_DIRECTORY, migration), "utf8"),
       );
@@ -99,6 +99,31 @@ describe("model profile governance", () => {
         )
         .get(),
     ).toBeUndefined();
+    database.transaction(() =>
+      database.exec(
+        readFileSync(
+          join(MIGRATIONS_DIRECTORY, "0049_fold_enrichment_dimensions.sql"),
+          "utf8",
+        ),
+      ),
+    )();
+    expect(
+      database
+        .prepare(
+          `SELECT profile.profile_key FROM model_enrichment_artifact artifact
+           JOIN poem_source_revision revision ON revision.id = artifact.source_revision_id
+           JOIN enrichment_profile profile
+             ON profile.public_track_key = artifact.model_key
+            AND profile.runtime_model_id = artifact.model
+            AND profile.prompt_version = artifact.prompt_version
+            AND profile.reasoning_effort = artifact.reasoning_effort
+            AND profile.input_schema_version = revision.schema_version
+            AND profile.output_schema_version = artifact.schema_version
+           WHERE artifact.id = 'folded-artifact'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe(profile.profile_key);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -343,6 +368,32 @@ describe("model profile governance", () => {
         .prepare("DELETE FROM enrichment_profile WHERE profile_key = ?")
         .run(profile.profile_key),
     ).toThrow();
+  });
+
+  it("keeps shared model labels consistent across future immutable profiles", () => {
+    const database = open();
+    const clone = database.prepare(
+      `INSERT INTO enrichment_profile (
+         profile_key, public_track_key, model_key, backend_key,
+         vendor_key, vendor_display_name, vendor_created_at,
+         model_family_key, model_version_label, model_display_name,
+         model_created_at, backend_display_name, backend_created_at,
+         runtime_model_id, prompt_version, reasoning_effort,
+         input_schema_version, output_schema_version, created_at
+       ) SELECT ?, public_track_key, model_key, backend_key,
+                vendor_key, ?, vendor_created_at,
+                model_family_key, model_version_label, model_display_name,
+                model_created_at, backend_display_name, backend_created_at,
+                runtime_model_id, ?, reasoning_effort,
+                input_schema_version, output_schema_version, created_at
+           FROM enrichment_profile WHERE profile_key = 'sol-5.6/source-v2'`,
+    );
+    expect(() =>
+      clone.run("future-recipe", "OpenAI", "future-prompt"),
+    ).not.toThrow();
+    expect(() =>
+      clone.run("bad-recipe", "Incorrect Vendor", "bad-prompt"),
+    ).toThrow(/ENRICHMENT_PROFILE_DIMENSION_INVALID/u);
   });
 
   it("rejects profile mismatches while allowing independent model tracks", () => {

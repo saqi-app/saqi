@@ -1209,13 +1209,13 @@ export class CatalogRepository implements CatalogReader {
         .prepare(
           `SELECT json_object(
                   'backendKey', profile.backend_key,
-                  'backendName', backend.display_name,
-                  'displayName', model.display_name,
+                  'backendName', profile.backend_display_name,
+                  'displayName', profile.model_display_name,
                   'model', profile.runtime_model_id,
                   'modelKey', profile.public_track_key,
                   'profileKey', profile.profile_key,
                   'reasoningEffort', profile.reasoning_effort,
-                  'vendorKey', CASE vendor.vendor_key
+                  'vendorKey', CASE profile.vendor_key
                     WHEN 'anthropic' THEN 'anthropic'
                     WHEN 'google' THEN 'google'
                     WHEN 'openai' THEN 'openai'
@@ -1235,10 +1235,6 @@ export class CatalogRepository implements CatalogReader {
             AND profile.reasoning_effort = artifact.reasoning_effort
             AND profile.input_schema_version = revision.schema_version
             AND profile.output_schema_version = artifact.schema_version
-           JOIN ai_model model ON model.model_key = profile.model_key
-           JOIN ai_vendor vendor ON vendor.vendor_key = model.vendor_key
-           JOIN inference_backend backend
-             ON backend.backend_key = profile.backend_key
            JOIN poem p ON p.id = publication.poem_id
           WHERE publication.poem_id = ?1
             AND p.active_source_revision_id IS NOT NULL
