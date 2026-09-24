@@ -19,6 +19,137 @@ const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("schema 42 preserves published translation lineage and removes its one-to-one table", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 41);
+      database.pragma("foreign_keys = ON");
+      const translation = "a".repeat(64);
+      const publication = "b".repeat(64);
+      const bindingId = "c".repeat(64);
+      const artifact = "d".repeat(64);
+      const insertWork = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, created_at, updated_at
+      ) VALUES(?, ?, '{}', ?, 'input@1', 'crawler@1', 'succeeded', 1, 1, 1)`);
+      insertWork.run(translation, "poem-enrichment-sol", "e".repeat(64));
+      insertWork.run(
+        publication,
+        "corpus-publication-enrichment-v2",
+        "f".repeat(64),
+      );
+      database
+        .prepare(
+          `INSERT INTO canonical_translation_binding(
+        translation_work_key, binding_id, binding_json, poem_id,
+        source_revision_id, line_nfc_hash, prompt_material_hash, created_at
+      ) VALUES(?, ?, '{}', 'poem-1', 'revision-1', ?, ?, 2)`,
+        )
+        .run(translation, bindingId, "1".repeat(64), "2".repeat(64));
+      database
+        .prepare(
+          `INSERT INTO publication_derivation(
+        translation_work_key, binding_id, publication_work_key,
+        approved_artifact_hash, created_at
+      ) VALUES(?, ?, ?, ?, 3)`,
+        )
+        .run(translation, bindingId, publication, artifact);
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            `SELECT translation_work_key, binding_id,
+        publication_work_key, approved_artifact_hash, publication_created_at
+        FROM canonical_translation_binding`,
+          )
+          .get(),
+      ).toEqual({
+        translation_work_key: translation,
+        binding_id: bindingId,
+        publication_work_key: publication,
+        approved_artifact_hash: artifact,
+        publication_created_at: 3,
+      });
+      expect(
+        database
+          .prepare(
+            `SELECT name FROM sqlite_schema
+        WHERE type = 'table' AND name = 'publication_derivation'`,
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(database.pragma("foreign_key_check")).toEqual([]);
+      expect(() =>
+        database
+          .prepare(
+            `UPDATE canonical_translation_binding
+        SET approved_artifact_hash = ? WHERE translation_work_key = ?`,
+          )
+          .run("3".repeat(64), translation),
+      ).toThrow("CANONICAL_TRANSLATION_BINDING_IMMUTABLE");
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("schema 41 preserves populated fanout priority order and removes its table", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 40);
+      const insertWork = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, created_at, updated_at
+      ) VALUES(?, 'fanout-succeeded-sol', '{}', ?, 'input@1',
+        'crawler@1', 'pending', 5, 1, 1)`);
+      const first = "a".repeat(64);
+      const second = "b".repeat(64);
+      insertWork.run(first, "c".repeat(64));
+      insertWork.run(second, "d".repeat(64));
+      database
+        .prepare(
+          `INSERT INTO fanout_priority_hint(
+          work_key, kind, state, available_at, created_at, updated_at
+        ) VALUES(?, 'fanout-succeeded-sol', 'pending', 5, ?, ?)`,
+        )
+        .run(first, 2, 3);
+      database
+        .prepare(
+          `INSERT INTO fanout_priority_hint(
+          work_key, kind, state, available_at, created_at, updated_at
+        ) VALUES(?, 'fanout-succeeded-sol', 'pending', 5, ?, ?)`,
+        )
+        .run(second, 4, 4);
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            `SELECT work_key, priority_hint_created_at AS created_at,
+                   priority_hint_updated_at AS updated_at
+            FROM work_item WHERE priority_hint_created_at IS NOT NULL
+            ORDER BY priority_hint_created_at, work_key`,
+          )
+          .all(),
+      ).toEqual([
+        { work_key: first, created_at: 2, updated_at: 3 },
+        { work_key: second, created_at: 4, updated_at: 4 },
+      ]);
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name = 'fanout_priority_hint'",
+          )
+          .get(),
+      ).toBeUndefined();
+      expect(database.pragma("foreign_key_check")).toEqual([]);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
   test("schema 38 retires obsolete scheduler archive without touching active state", () => {
     const database = new Database(":memory:");
     try {
@@ -210,7 +341,15 @@ describe("ledger schema migrations", () => {
            WHERE type = 'table' AND name = 'fanout_priority_hint'`,
         )
         .get(),
-    ).toEqual({ name: "fanout_priority_hint" });
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare(
+          `SELECT name FROM sqlite_schema
+           WHERE type = 'index' AND name = 'work_item_fanout_priority_schedule'`,
+        )
+        .get(),
+    ).toEqual({ name: "work_item_fanout_priority_schedule" });
     expect(
       database
         .prepare(
@@ -282,10 +421,7 @@ describe("ledger schema migrations", () => {
            ORDER BY name`,
         )
         .all(),
-    ).toEqual([
-      { name: "canonical_translation_binding" },
-      { name: "publication_derivation" },
-    ]);
+    ).toEqual([{ name: "canonical_translation_binding" }]);
     expect(
       database
         .prepare(

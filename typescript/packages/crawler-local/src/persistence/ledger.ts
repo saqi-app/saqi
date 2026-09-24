@@ -241,11 +241,10 @@ const CANONICAL_TRANSLATION_BINDING_INSERT_SQL = `INSERT INTO canonical_translat
      source_revision_id, line_nfc_hash, prompt_material_hash, created_at
    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
    ON CONFLICT(translation_work_key) DO NOTHING`;
-const PUBLICATION_DERIVATION_INSERT_SQL = `INSERT INTO publication_derivation(
-  translation_work_key, binding_id, publication_work_key,
-  approved_artifact_hash, created_at
-) VALUES(?, ?, ?, ?, ?)
-ON CONFLICT(translation_work_key) DO NOTHING`;
+const PUBLICATION_DERIVATION_INSERT_SQL = `UPDATE canonical_translation_binding
+  SET publication_work_key = ?, approved_artifact_hash = ?, publication_created_at = ?
+  WHERE translation_work_key = ? AND binding_id = ?
+    AND publication_work_key IS NULL`;
 const SUCCEED_LEASED_WORK_SQL = `UPDATE work_item
   SET state = 'succeeded', available_at = ?, output_artifact_hash = ?,
       last_error_code = NULL, lease_owner = NULL, lease_token = NULL,
@@ -273,9 +272,9 @@ const RELEASE_RETRYABLE_ORIGIN_STOP_SQL = `UPDATE origin_gate
   WHERE origin = ? AND stop_reason = ? AND active_token IS NULL
     AND cooldown_until <= ? AND next_allowed_at <= ?`;
 const COUNT_FANOUT_PRIORITY_HINTS_SQL =
-  "SELECT COUNT(*) AS count FROM fanout_priority_hint";
+  "SELECT COUNT(*) AS count FROM work_item WHERE priority_hint_created_at IS NOT NULL";
 const FIND_FANOUT_PRIORITY_HINT_SQL =
-  "SELECT 1 FROM fanout_priority_hint WHERE work_key = ?";
+  "SELECT 1 FROM work_item WHERE work_key = ? AND priority_hint_created_at IS NOT NULL";
 const RETIRED_PROVIDER_PROFILES = [
   [
     "poem-enrichment-agy-claude-opus-4.6-thinking",
@@ -2832,23 +2831,18 @@ export class Ledger {
       }
 
       const existingBinding = this.#database
-        .prepare<string, { binding_id: string; binding_json: string }>(
-          `SELECT binding_id, binding_json
-           FROM canonical_translation_binding
-           WHERE translation_work_key = ?`,
-        )
-        .get(translationKey);
-      const existingDerivation = this.#database
         .prepare<
           string,
           {
-            approved_artifact_hash: string;
+            approved_artifact_hash: null | string;
             binding_id: string;
-            publication_work_key: string;
+            binding_json: string;
+            publication_work_key: null | string;
           }
         >(
-          `SELECT approved_artifact_hash, binding_id, publication_work_key
-           FROM publication_derivation
+          `SELECT binding_id, binding_json, approved_artifact_hash,
+                  publication_work_key
+           FROM canonical_translation_binding
            WHERE translation_work_key = ?`,
         )
         .get(translationKey);
@@ -2858,17 +2852,12 @@ export class Ledger {
            WHERE work_item.work_key = ?`,
         )
         .get(publicationWorkKey);
-      if (
-        existingBinding !== undefined ||
-        existingDerivation !== undefined ||
-        existingPublication !== undefined
-      ) {
+      if (existingBinding !== undefined || existingPublication !== undefined) {
         if (
           existingBinding?.binding_id !== binding.bindingId ||
           existingBinding.binding_json !== bindingJson ||
-          existingDerivation?.approved_artifact_hash !== approvedArtifactHash ||
-          existingDerivation.binding_id !== binding.bindingId ||
-          existingDerivation.publication_work_key !== publicationWorkKey ||
+          existingBinding.approved_artifact_hash !== approvedArtifactHash ||
+          existingBinding.publication_work_key !== publicationWorkKey ||
           existingPublication?.kind !== publicationDefinition.kind ||
           existingPublication.input_json !== publicationInputJson ||
           existingPublication.input_hash !== publicationDefinition.inputHash ||
@@ -2921,11 +2910,11 @@ export class Ledger {
       const derivationInsert = this.#database
         .prepare(PUBLICATION_DERIVATION_INSERT_SQL)
         .run(
-          translationKey,
-          binding.bindingId,
           publicationWorkKey,
           approvedArtifactHash,
           now,
+          translationKey,
+          binding.bindingId,
         );
       if (derivationInsert.changes !== 1) {
         throw new Error("Approved publication derivation was not inserted");
@@ -2958,23 +2947,19 @@ export class Ledger {
           approved_artifact_hash: null | string;
           binding_id: null | string;
           binding_json: null | string;
-          derivation_binding_id: null | string;
           output_artifact_hash: null | string;
           publication_priority: null | number;
         }
       >(
         `SELECT translation.output_artifact_hash,
                 binding.binding_id, binding.binding_json,
-                derivation.binding_id AS derivation_binding_id,
-                derivation.approved_artifact_hash,
+                binding.approved_artifact_hash,
                 publication.priority AS publication_priority
            FROM work_item AS translation
            LEFT JOIN canonical_translation_binding AS binding
              ON binding.translation_work_key = translation.work_key
-           LEFT JOIN publication_derivation AS derivation
-             ON derivation.translation_work_key = translation.work_key
            LEFT JOIN work_item AS publication
-             ON publication.work_key = derivation.publication_work_key
+             ON publication.work_key = binding.publication_work_key
           WHERE translation.work_key = ?`,
       )
       .get(translationKey);
@@ -2987,7 +2972,6 @@ export class Ledger {
       row.output_artifact_hash !== approvedArtifactHash ||
       row.approved_artifact_hash !== approvedArtifactHash ||
       row.binding_id === null ||
-      row.derivation_binding_id !== row.binding_id ||
       row.binding_json === null ||
       row.publication_priority === null
     ) {
@@ -3099,11 +3083,11 @@ export class Ledger {
       const derivationInsert = this.#database
         .prepare(PUBLICATION_DERIVATION_INSERT_SQL)
         .run(
-          claim.work.workKey,
-          binding.bindingId,
           publicationWorkKey,
           approvedArtifactHash,
           now,
+          claim.work.workKey,
+          binding.bindingId,
         );
       if (derivationInsert.changes !== 1) {
         throw new Error("Publication derivation was not inserted");
@@ -3162,18 +3146,18 @@ export class Ledger {
             translation_state: string;
           }
         >(
-          `SELECT derivation.approved_artifact_hash,
+          `SELECT binding.approved_artifact_hash,
                   publication.state AS publication_state,
                   publication.output_artifact_hash AS publication_artifact_hash,
                   translation.state AS translation_state,
                   translation.output_artifact_hash AS translation_artifact_hash
-           FROM publication_derivation AS derivation
+           FROM canonical_translation_binding AS binding
            JOIN work_item AS publication
-             ON publication.work_key = derivation.publication_work_key
+             ON publication.work_key = binding.publication_work_key
            JOIN work_item AS translation
-             ON translation.work_key = derivation.translation_work_key
-           WHERE derivation.publication_work_key = ?
-             AND derivation.translation_work_key = ?`,
+             ON translation.work_key = binding.translation_work_key
+           WHERE binding.publication_work_key = ?
+             AND binding.translation_work_key = ?`,
         )
         .get(claim.work.workKey, translationKey);
       if (
@@ -3357,16 +3341,10 @@ export class Ledger {
            AND available_at > ?`,
       );
       const prioritize = this.#database.prepare(
-        `INSERT INTO fanout_priority_hint(
-           work_key, kind, state, available_at, created_at, updated_at
-         )
-         SELECT work_key, kind, state, available_at, ?, ?
-           FROM work_item WHERE work_key = ?
-         ON CONFLICT(work_key) DO UPDATE SET
-           kind = excluded.kind,
-           state = excluded.state,
-           available_at = excluded.available_at,
-           updated_at = excluded.updated_at`,
+        `UPDATE work_item
+            SET priority_hint_created_at = COALESCE(priority_hint_created_at, ?),
+                priority_hint_updated_at = ?
+          WHERE work_key = ?`,
       );
       let priorityHintCount = CountRowSchema.parse(
         this.#database.prepare(COUNT_FANOUT_PRIORITY_HINTS_SQL).get(),
@@ -3462,17 +3440,11 @@ export class Ledger {
       ).count;
       const exists = this.#database.prepare(FIND_FANOUT_PRIORITY_HINT_SQL);
       const prioritize = this.#database.prepare(
-        `INSERT INTO fanout_priority_hint(
-           work_key, kind, state, available_at, created_at, updated_at
-         )
-         SELECT work_key, kind, state, available_at, ?, ? FROM work_item
+        `UPDATE work_item
+            SET priority_hint_created_at = COALESCE(priority_hint_created_at, ?),
+                priority_hint_updated_at = ?
           WHERE work_key = ? AND kind IN (${placeholders})
-            AND state IN ('pending','retry_wait','quota_wait')
-         ON CONFLICT(work_key) DO UPDATE SET
-           kind = excluded.kind,
-           state = excluded.state,
-           available_at = excluded.available_at,
-           updated_at = excluded.updated_at`,
+            AND state IN ('pending','retry_wait','quota_wait')`,
       );
       let changed = 0;
       for (const key of keys) {
@@ -3525,33 +3497,27 @@ export class Ledger {
              AND work.state IN ('pending','retry_wait','quota_wait')
              AND work.last_error_code = 'FANOUT_RESOLUTION_PENDING'
              AND work.available_at <= ?
-             AND NOT EXISTS(
-               SELECT 1 FROM fanout_priority_hint AS hint
-               WHERE hint.work_key = work.work_key
-             )
+             AND work.priority_hint_created_at IS NULL
            LIMIT 1`,
         )
         .get(...kinds, now);
       if (candidate === undefined) return 0;
       return this.#database
         .prepare<(number | string)[]>(
-          `INSERT INTO fanout_priority_hint(
-             work_key, kind, state, available_at, created_at, updated_at
-           )
-           SELECT work.work_key, work.kind, work.state, work.available_at, ?, ?
-             FROM work_item AS work
-                  INDEXED BY work_item_fanout_resolution_pending
-            WHERE work.kind IN (${kinds.map(() => "?").join(",")})
-              AND work.state IN ('pending','retry_wait','quota_wait')
-              AND work.last_error_code = 'FANOUT_RESOLUTION_PENDING'
-              AND work.available_at <= ?
-              AND NOT EXISTS(
-                SELECT 1 FROM fanout_priority_hint AS hint
-                 WHERE hint.work_key = work.work_key
-              )
-            ORDER BY work.priority DESC, work.available_at,
-                     work.created_at, work.work_key
-            LIMIT ?`,
+          `UPDATE work_item
+              SET priority_hint_created_at = ?, priority_hint_updated_at = ?
+            WHERE work_key IN (
+              SELECT work.work_key FROM work_item AS work
+                   INDEXED BY work_item_fanout_resolution_pending
+               WHERE work.kind IN (${kinds.map(() => "?").join(",")})
+                 AND work.state IN ('pending','retry_wait','quota_wait')
+                 AND work.last_error_code = 'FANOUT_RESOLUTION_PENDING'
+                 AND work.available_at <= ?
+                 AND work.priority_hint_created_at IS NULL
+               ORDER BY work.priority DESC, work.available_at,
+                        work.created_at, work.work_key
+               LIMIT ?
+            )`,
         )
         .run(now, now, ...kinds, now, capacity).changes;
     });
@@ -3646,13 +3612,13 @@ export class Ledger {
       throw new Error("Fanout priority timestamp must be nonnegative");
     return this.#database
       .prepare<(number | string)[], { work_key: string }>(
-        `SELECT hint.work_key
-           FROM fanout_priority_hint AS hint
-                INDEXED BY fanout_priority_hint_schedule
-          WHERE hint.kind IN (${kinds.map(() => "?").join(",")})
-            AND hint.state IN ('pending','retry_wait','quota_wait')
-            AND hint.available_at <= ?
-          ORDER BY hint.created_at, hint.work_key
+        `SELECT work_key
+           FROM work_item INDEXED BY work_item_fanout_priority_schedule
+          WHERE kind IN (${kinds.map(() => "?").join(",")})
+            AND state IN ('pending','retry_wait','quota_wait')
+            AND priority_hint_created_at IS NOT NULL
+            AND available_at <= ?
+          ORDER BY priority_hint_created_at, work_key
           LIMIT ?`,
       )
       .all(...kinds, now, bounded)
@@ -3668,7 +3634,9 @@ export class Ledger {
     if (keys.length === 0) return 0;
     return this.#immediate(() => {
       const remove = this.#database.prepare(
-        "DELETE FROM fanout_priority_hint WHERE work_key = ?",
+        `UPDATE work_item
+            SET priority_hint_created_at = NULL, priority_hint_updated_at = NULL
+          WHERE work_key = ? AND priority_hint_created_at IS NOT NULL`,
       );
       let removed = 0;
       for (const key of keys) removed += remove.run(key).changes;
@@ -3803,9 +3771,10 @@ export class Ledger {
                     WHERE binding.translation_work_key = translation.work_key
                   ) AS has_binding,
                   EXISTS(
-                    SELECT 1 FROM publication_derivation AS derivation
-                    WHERE derivation.translation_work_key = translation.work_key
-                      AND derivation.approved_artifact_hash = translation.output_artifact_hash
+                    SELECT 1 FROM canonical_translation_binding AS binding
+                    WHERE binding.translation_work_key = translation.work_key
+                      AND binding.publication_work_key IS NOT NULL
+                      AND binding.approved_artifact_hash = translation.output_artifact_hash
                   ) AS has_derivation
            FROM work_item AS translation WHERE translation.work_key = ?`,
         )
@@ -3885,9 +3854,10 @@ export class Ledger {
                 WHERE binding.translation_work_key = translation.work_key
               )
               AND EXISTS(
-                SELECT 1 FROM publication_derivation AS derivation
-                WHERE derivation.translation_work_key = translation.work_key
-                  AND derivation.approved_artifact_hash = translation.output_artifact_hash
+                SELECT 1 FROM canonical_translation_binding AS binding
+                WHERE binding.translation_work_key = translation.work_key
+                  AND binding.publication_work_key IS NOT NULL
+                  AND binding.approved_artifact_hash = translation.output_artifact_hash
               )
             )
           )
@@ -3944,9 +3914,10 @@ export class Ledger {
                 WHERE binding.translation_work_key = translation.work_key
               )
               AND EXISTS(
-                SELECT 1 FROM publication_derivation AS derivation
-                WHERE derivation.translation_work_key = translation.work_key
-                  AND derivation.approved_artifact_hash = translation.output_artifact_hash
+                SELECT 1 FROM canonical_translation_binding AS binding
+                WHERE binding.translation_work_key = translation.work_key
+                  AND binding.publication_work_key IS NOT NULL
+                  AND binding.approved_artifact_hash = translation.output_artifact_hash
               )
             )
           )
@@ -4237,8 +4208,9 @@ export class Ledger {
                    WHERE binding.translation_work_key = source.work_key
                 ) AS bound,
                 EXISTS(
-                  SELECT 1 FROM publication_derivation derivation
-                   WHERE derivation.translation_work_key = source.work_key
+                  SELECT 1 FROM canonical_translation_binding binding
+                   WHERE binding.translation_work_key = source.work_key
+                     AND binding.publication_work_key IS NOT NULL
                 ) AS derivation
            FROM work_item fanout
            LEFT JOIN work_item source

@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { expect, test, vi } from "vitest";
 
 import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
+import { CURRENT_SCHEMA_VERSION } from "../persistence/migrations.js";
 import {
   RuntimeOwnerBusyError,
   RuntimeOwnerStore,
@@ -13,7 +14,7 @@ function fixture(run: (database: Database.Database) => void) {
   const database = new Database(":memory:");
   try {
     database.exec(
-      "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,40)",
+      `CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,${String(CURRENT_SCHEMA_VERSION)})`,
     );
     database.exec(RUNTIME_OWNER_MIGRATION_SQL);
     run(database);

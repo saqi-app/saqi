@@ -20,7 +20,7 @@
     "0054_retire_legacy_sol_insights_column.sql",
     "0055_retire_legacy_enrichment_tables.sql"
   ],
-  "localVersion": 40,
+  "localVersion": 42,
   "databases": [
     {
       "id": "corpus",
@@ -1389,9 +1389,32 @@
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
+            },
+            {
+              "name": "publication_work_key",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "approved_artifact_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_created_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
             }
           ],
           "foreignKeys": [
+            {
+              "from": "publication_work_key",
+              "table": "work_item",
+              "to": "work_key"
+            },
             {
               "from": "translation_work_key",
               "table": "work_item",
@@ -1542,54 +1565,6 @@
             },
             {
               "from": "detail_fanout_work_key",
-              "table": "work_item",
-              "to": "work_key"
-            }
-          ]
-        },
-        {
-          "name": "fanout_priority_hint",
-          "columns": [
-            {
-              "name": "work_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "available_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "updated_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "work_key",
               "table": "work_item",
               "to": "work_key"
             }
@@ -2037,58 +2012,6 @@
             }
           ],
           "foreignKeys": []
-        },
-        {
-          "name": "publication_derivation",
-          "columns": [
-            {
-              "name": "translation_work_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "binding_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "publication_work_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "approved_artifact_hash",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "translation_work_key",
-              "table": "canonical_translation_binding",
-              "to": "translation_work_key"
-            },
-            {
-              "from": "binding_id",
-              "table": "canonical_translation_binding",
-              "to": "binding_id"
-            },
-            {
-              "from": "publication_work_key",
-              "table": "work_item",
-              "to": "work_key"
-            }
-          ]
         },
         {
           "name": "runtime_control",
@@ -2760,6 +2683,18 @@
               "name": "updated_at",
               "type": "INTEGER",
               "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "priority_hint_created_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "priority_hint_updated_at",
+              "type": "INTEGER",
+              "nullable": true,
               "primaryKey": false
             }
           ],
