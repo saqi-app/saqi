@@ -22,7 +22,8 @@
     "0056_stage_database_identity.sql",
     "0057_retire_production_deployment_identity.sql",
     "0058_source_revision_writer_cutover.sql",
-    "0059_retire_source_revision_pointer.sql"
+    "0059_retire_source_revision_pointer.sql",
+    "0060_restore_catalog_publishability.sql"
   ],
   "localVersion": 45,
   "databases": [
@@ -92,6 +93,18 @@
               "type": "TEXT",
               "nullable": false,
               "primaryKey": false
+            }
+          ],
+          "foreignKeys": []
+        },
+        {
+          "name": "catalog_unsafe_control",
+          "columns": [
+            {
+              "name": "value",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
             }
           ],
           "foreignKeys": []

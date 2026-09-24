@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0059_retire_source_revision_pointer.sql");
+    expect(first.at(-1)).toBe("0060_restore_catalog_publishability.sql");
     expect(
       database
         .prepare(
@@ -93,9 +93,71 @@ describe("production migration compatibility", () => {
     expectProductionDeploymentIdentity(database);
     expectSlugIndexesReduced(database);
     expectSlugUniqueness(database);
+    expectCatalogPublishability(database);
     const before = schemaSnapshot(database);
     expect(applyPending(database, migrationFiles())).toEqual([]);
     expect(schemaSnapshot(database)).toEqual(before);
+  });
+
+  it("restores deployed catalog controls on populated databases", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0060_"),
+    );
+    insertProductionRow(database);
+    database.exec(
+      "CREATE TABLE catalog_unsafe_control (value TEXT PRIMARY KEY)",
+    );
+    database
+      .prepare("INSERT INTO catalog_unsafe_control (value) VALUES (?)")
+      .run("\u{202a}");
+    const before = database
+      .prepare("SELECT publishable FROM poem WHERE id = ?")
+      .pluck()
+      .get("00000000-0000-4000-8000-000000000002");
+
+    applyPending(database, migrationFiles());
+    expect(
+      database
+        .prepare("SELECT 1 FROM catalog_unsafe_control WHERE value = ?")
+        .get("\u{202a}"),
+    ).toEqual({ 1: 1 });
+    expect(
+      database
+        .prepare("SELECT publishable FROM poem WHERE id = ?")
+        .pluck()
+        .get("00000000-0000-4000-8000-000000000002"),
+    ).toBe(before);
+    expectCatalogPublishability(database);
+  });
+
+  it("rejects unexpected deployed controls without applying the migration", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0060_"),
+    );
+    database.exec(
+      "CREATE TABLE catalog_unsafe_control (value TEXT PRIMARY KEY)",
+    );
+    database
+      .prepare("INSERT INTO catalog_unsafe_control (value) VALUES (?)")
+      .run("x");
+
+    expect(() => applyPending(database, migrationFiles())).toThrow(
+      /CHECK constraint failed/u,
+    );
+    expect(
+      database
+        .prepare("SELECT 1 FROM d1_migrations WHERE name = ?")
+        .get("0060_restore_catalog_publishability.sql"),
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare("SELECT 1 FROM catalog_unsafe_control WHERE value = ?")
+        .get("x"),
+    ).toBeDefined();
   });
 
   it("backfills current revisions and tracks writes from older Workers", () => {
@@ -282,6 +344,7 @@ describe("production migration compatibility", () => {
     );
     expect(applyPending(database, migrationFiles())).toEqual([
       "0059_retire_source_revision_pointer.sql",
+      "0060_restore_catalog_publishability.sql",
     ]);
     expect(
       database
@@ -371,6 +434,7 @@ describe("production migration compatibility", () => {
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
+      "0060_restore_catalog_publishability.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -447,6 +511,7 @@ describe("production migration compatibility", () => {
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
+      "0060_restore_catalog_publishability.sql",
     ]);
     expect(
       database
@@ -500,6 +565,7 @@ describe("production migration compatibility", () => {
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
+      "0060_restore_catalog_publishability.sql",
     ]);
     expect(
       database
@@ -689,6 +755,7 @@ describe("production migration compatibility", () => {
       "0057_retire_production_deployment_identity.sql",
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
+      "0060_restore_catalog_publishability.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1334,6 +1401,41 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
       .pluck()
       .get(),
   ).toBe(1);
+}
+
+function expectCatalogPublishability(database: Database.Database): void {
+  const values = database
+    .prepare("SELECT hex(value) FROM catalog_unsafe_control ORDER BY value")
+    .pluck()
+    .all() as string[];
+  expect(values).toHaveLength(39);
+  expect(values).toContain("00");
+  expect(values).toContain("E280AA");
+  expect(values).toContain("E281A9");
+
+  const poemId = "00000000-0000-4000-8000-000000000002";
+  if (!database.prepare("SELECT 1 FROM poem WHERE id = ?").get(poemId))
+    insertProductionRow(database);
+  const publishable = () =>
+    database
+      .prepare("SELECT publishable FROM poem WHERE id = ?")
+      .pluck()
+      .get(poemId);
+  expect(publishable()).toBe(1);
+  database
+    .prepare("UPDATE poem SET slug = ? WHERE id = ?")
+    .run("poem\u{202a}", poemId);
+  expect(publishable()).toBe(0);
+  database.prepare("UPDATE poem SET slug = 'poem42' WHERE id = ?").run(poemId);
+  expect(publishable()).toBe(1);
+  database
+    .prepare("UPDATE poem SET content_arabic = ? WHERE id = ?")
+    .run(JSON.stringify({ content: ["صدر\u{0000}عجز"] }), poemId);
+  expect(publishable()).toBe(0);
+  database
+    .prepare("UPDATE poem SET content_arabic = ? WHERE id = ?")
+    .run(JSON.stringify({ content: ["ا".repeat(5001)] }), poemId);
+  expect(publishable()).toBe(0);
 }
 
 function expectModelPublicationGuards(database: Database.Database): void {
