@@ -172,9 +172,9 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
         >
           <ReactFlow<SchemaNode>
             defaultViewport={{ x: 24, y: 24, zoom: 0.72 }}
-            key={databaseId}
             edges={edges}
             elementsSelectable
+            key={databaseId}
             maxZoom={1.5}
             minZoom={0.12}
             nodes={nodes}
