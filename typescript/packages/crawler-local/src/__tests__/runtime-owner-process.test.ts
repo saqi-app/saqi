@@ -55,7 +55,7 @@ test("two processes cannot both claim or remove a replacement runtime owner", as
   const database = new Database(path);
   database.pragma("journal_mode=WAL");
   database.exec(
-    "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,36)",
+    "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,37)",
   );
   database.exec(RUNTIME_OWNER_MIGRATION_SQL);
   const base = import.meta.dirname;

@@ -18,6 +18,62 @@ const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("schema 37 removes redundant total counters and retains work state accounting", () => {
+    const database = new Database(":memory:");
+    try {
+      database.exec(`CREATE TABLE local_schema(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        version INTEGER NOT NULL
+      ) STRICT; INSERT INTO local_schema VALUES(1, 0);`);
+      for (const migration of MIGRATIONS) {
+        if (migration.version > 36) continue;
+        database.exec(migration.statements);
+        database
+          .prepare("UPDATE local_schema SET version = ? WHERE singleton = 1")
+          .run(migration.version);
+      }
+      const configured = currentSource();
+      database
+        .prepare(
+          "INSERT INTO local_source_identity(singleton, source_name, source_origin) VALUES(1, ?, ?)",
+        )
+        .run(configured.name, configured.origin);
+      const insert = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, created_at, updated_at
+      ) VALUES(?, ?, '{}', ?, 'input@1', 'crawler@1', ?, 1, 1, 1)`);
+      insert.run("a".repeat(64), "kind-a", "b".repeat(64), "pending");
+      insert.run("c".repeat(64), "kind-b", "d".repeat(64), "pending");
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'ledger_state_count'",
+          )
+          .get(),
+      ).toBeUndefined();
+      const counts = () =>
+        database
+          .prepare(
+            `SELECT state, SUM(item_count) AS item_count
+             FROM ledger_kind_state_count GROUP BY state ORDER BY state`,
+          )
+          .all();
+      expect(counts()).toEqual([{ item_count: 2, state: "pending" }]);
+      insert.run("e".repeat(64), "kind-a", "f".repeat(64), "pending");
+      database
+        .prepare("UPDATE work_item SET state = 'succeeded' WHERE work_key = ?")
+        .run("c".repeat(64));
+      expect(counts()).toEqual([
+        { item_count: 2, state: "pending" },
+        { item_count: 1, state: "succeeded" },
+      ]);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
+
   test("reconciliation due lookup uses the unknown-state time index", () => {
     const database = new Database(":memory:");
     try {
@@ -537,7 +593,8 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          `SELECT state, item_count FROM ledger_state_count ORDER BY state`,
+          `SELECT state, SUM(item_count) AS item_count
+           FROM ledger_kind_state_count GROUP BY state ORDER BY state`,
         )
         .all(),
     ).toEqual([

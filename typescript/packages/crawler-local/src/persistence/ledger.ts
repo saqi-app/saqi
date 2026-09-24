@@ -4995,7 +4995,6 @@ export class Ledger {
   rebuildStatusCounters(): void {
     this.#immediate(() => {
       this.#database.exec(`
-        DELETE FROM ledger_state_count;
         DELETE FROM ledger_kind_state_count;
         DELETE FROM ledger_profile_state_count;
         DELETE FROM ledger_profile_availability_count;
@@ -5006,8 +5005,6 @@ export class Ledger {
         DELETE FROM ledger_profile_success_clock;
         DELETE FROM paid_operation_state_count;
 
-        INSERT INTO ledger_state_count(state, item_count)
-          SELECT state, COUNT(*) FROM work_item GROUP BY state;
         INSERT INTO ledger_kind_state_count(kind, state, item_count)
           SELECT kind, state, COUNT(*) FROM work_item GROUP BY kind, state;
         INSERT INTO ledger_profile_state_count(
@@ -5074,7 +5071,8 @@ export class Ledger {
     const byState = emptyWorkStateCounts();
     const rows = this.#database
       .prepare<[], { count: number; state: string }>(
-        "SELECT state, item_count AS count FROM ledger_state_count ORDER BY state",
+        `SELECT state, SUM(item_count) AS count
+         FROM ledger_kind_state_count GROUP BY state ORDER BY state`,
       )
       .all();
     for (const row of rows)
