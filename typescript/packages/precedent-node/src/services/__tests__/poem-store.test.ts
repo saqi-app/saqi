@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS poem (
   active_source_revision_id TEXT,
   active_enrichment_artifact_id TEXT,
   translation_sol TEXT,
-  insights_sol TEXT
+  insights_sol TEXT,
+  legacy_translation_attributions TEXT
 );
 
 CREATE TABLE IF NOT EXISTS task (
@@ -426,53 +427,6 @@ describe("D1PoemStore", () => {
     it("returns empty array for author with no poems", async () => {
       const result = await store.poemsForAuthor("non-existent");
       expect(result).toEqual([]);
-    });
-  });
-
-  describe("untranslatedPoemIdsForAuthor", () => {
-    it("rejects malformed raw database result rows", async () => {
-      const all = vi
-        .spyOn(db, "all")
-        .mockResolvedValue([{ failed: "0", id: null, total: 1 }]);
-
-      await expect(
-        store.untranslatedPoemIdsForAuthor(testAuthorId, 10),
-      ).rejects.toThrow();
-      all.mockRestore();
-    });
-
-    it("includes blank translations and excludes valid translations", async () => {
-      db.update(poem)
-        .set({
-          translationGemini: { content: [" ".repeat(3)] },
-        })
-        .where(eq(poem.id, testPoemId))
-        .run();
-
-      const blank = await store.untranslatedPoemIdsForAuthor(testAuthorId, 10);
-      expect(blank).toEqual({ failed: 0, ids: [testPoemId], total: 1 });
-
-      db.update(poem)
-        .set({ translationGemini: { content: ["Translation"] } })
-        .where(eq(poem.id, testPoemId))
-        .run();
-      const translated = await store.untranslatedPoemIdsForAuthor(
-        testAuthorId,
-        10,
-      );
-      expect(translated).toEqual({ failed: 0, ids: [], total: 0 });
-    });
-
-    it("counts failed translation work without dispatching it again", async () => {
-      sqlite
-        .prepare(
-          "INSERT INTO task (id, work_key, status) VALUES (?, ?, 'failed')",
-        )
-        .run(crypto.randomUUID(), `translate-poem:${testPoemId}`);
-
-      const result = await store.untranslatedPoemIdsForAuthor(testAuthorId, 10);
-
-      expect(result).toEqual({ failed: 1, ids: [], total: 0 });
     });
   });
 

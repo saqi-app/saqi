@@ -387,13 +387,14 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
         FROM json_each(${requestJson})
       ), fingerprint_matches AS (
         SELECT requested.ordinal, requested.model_keys,
-               fingerprint.source_revision_id, fingerprint.algorithm,
-               fingerprint.line_nfc_hash, fingerprint.prompt_material_hash
+               revision.id AS source_revision_id,
+               revision.fingerprint_algorithm AS algorithm,
+               revision.line_nfc_hash, revision.prompt_material_hash
         FROM requested
-        JOIN source_revision_fingerprint fingerprint
-          ON fingerprint.algorithm = requested.algorithm
-         AND fingerprint.line_nfc_hash = requested.line_nfc_hash
-         AND fingerprint.prompt_material_hash = requested.prompt_material_hash
+        JOIN poem_source_revision revision
+          ON revision.fingerprint_algorithm = requested.algorithm
+         AND revision.line_nfc_hash = requested.line_nfc_hash
+         AND revision.prompt_material_hash = requested.prompt_material_hash
       ), raw_counts AS (
         SELECT ordinal, COUNT(*) AS raw_match_count
         FROM fingerprint_matches GROUP BY ordinal

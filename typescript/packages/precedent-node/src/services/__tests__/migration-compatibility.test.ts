@@ -65,9 +65,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe(
-      "0044_remove_duplicate_legacy_attribution_index.sql",
-    );
+    expect(first.at(-1)).toBe("0047_derive_artifact_profiles.sql");
     expect(
       database
         .prepare(
@@ -102,14 +100,11 @@ describe("production migration compatibility", () => {
     recordApplied(database, "0036_atomic_model_publication_pointer_upsert.sql");
     insertProductionRow(database);
     database.exec(`
-      INSERT INTO task (id, type, status, created_at)
-      VALUES ('historical', 'translate-poem', 'completed', 1);
       UPDATE poem SET translation = '{"content":["Preserved translation"]}';
     `);
     const before = {
       schema: schemaSnapshot(database),
       poems: database.prepare("SELECT * FROM poem").all(),
-      tasks: database.prepare("SELECT * FROM task").all(),
       receipts: database
         .prepare("SELECT * FROM d1_migrations ORDER BY id")
         .all(),
@@ -119,11 +114,164 @@ describe("production migration compatibility", () => {
     expect({
       schema: schemaSnapshot(database),
       poems: database.prepare("SELECT * FROM poem").all(),
-      tasks: database.prepare("SELECT * FROM task").all(),
       receipts: database
         .prepare("SELECT * FROM d1_migrations ORDER BY id")
         .all(),
     }).toEqual(before);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("folds existing translation attribution and retires unused task state", () => {
+    const database = open();
+    const files = migrationFiles();
+    applyPending(
+      database,
+      files.filter((name) => !name.startsWith("0045_")),
+    );
+    insertProductionRow(database);
+    database
+      .prepare(
+        `INSERT INTO poem_legacy_payload_attribution (
+          poem_id, legacy_field, source_payload_hash, attribution_key,
+          attributed_at
+        ) VALUES (?, 'translation', ?, 'legacy-claude-1-or-2', 1)`,
+      )
+      .run("00000000-0000-4000-8000-000000000002", "a".repeat(64));
+    database
+      .prepare(
+        "INSERT INTO task (id, type, status, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run("retired-task", "translate-poem", "completed", 1);
+
+    expect(applyPending(database, files)).toEqual([
+      "0045_fold_legacy_attribution_and_retire_task.sql",
+    ]);
+    const stored = database
+      .prepare("SELECT legacy_translation_attributions FROM poem WHERE id = ?")
+      .pluck()
+      .get("00000000-0000-4000-8000-000000000002") as string;
+    expect(JSON.parse(stored)).toEqual([
+      {
+        certainty: "inferred_range",
+        displayName: "Claude 1 or 2",
+        sourcePayloadHash: "a".repeat(64),
+        vendorKey: "anthropic",
+      },
+    ]);
+    for (const name of [
+      "legacy_model_attribution",
+      "poem_legacy_payload_attribution",
+      "task",
+    ]) {
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = ?",
+          )
+          .get(name),
+      ).toBeUndefined();
+    }
+    expect(applyPending(database, files)).toEqual([]);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("preserves existing revision fingerprints and one-time append guards", () => {
+    const database = open();
+    database.exec(`
+      CREATE TABLE poem_source_revision (
+        id TEXT PRIMARY KEY, source_poem_id TEXT NOT NULL,
+        schema_version INTEGER NOT NULL, content_hash TEXT NOT NULL,
+        title_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL,
+        observed_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        import_bundle_id TEXT NOT NULL, import_ordinal INTEGER NOT NULL
+      );
+      CREATE TRIGGER poem_source_revision_immutable_update
+      BEFORE UPDATE ON poem_source_revision
+      BEGIN SELECT RAISE(ABORT, 'POEM_SOURCE_REVISION_IMMUTABLE'); END;
+      CREATE TABLE source_revision_fingerprint (
+        source_revision_id TEXT PRIMARY KEY REFERENCES poem_source_revision(id),
+        line_nfc_hash TEXT NOT NULL, prompt_material_hash TEXT NOT NULL,
+        algorithm TEXT NOT NULL, created_at INTEGER NOT NULL
+      );
+      INSERT INTO poem_source_revision VALUES (
+        'revision', 'source', 2, 'content', 'عنوان', '{}', 1, 2, 'bundle', 0
+      );
+      INSERT INTO poem_source_revision VALUES (
+        'unfingerprinted', 'source', 2, 'content', 'عنوان', '{}', 1, 2, 'bundle', 1
+      );
+    `);
+    database
+      .prepare("INSERT INTO source_revision_fingerprint VALUES (?, ?, ?, ?, ?)")
+      .run(
+        "revision",
+        "a".repeat(64),
+        "b".repeat(64),
+        "sha256-canonical-nfc-v1",
+        3,
+      );
+
+    expect(
+      applyPending(database, ["0046_fold_source_revision_fingerprint.sql"]),
+    ).toEqual(["0046_fold_source_revision_fingerprint.sql"]);
+    expect(
+      database
+        .prepare(
+          `SELECT fingerprint_algorithm, fingerprint_created_at,
+                  line_nfc_hash, prompt_material_hash
+             FROM poem_source_revision WHERE id = 'revision'`,
+        )
+        .get(),
+    ).toEqual({
+      fingerprint_algorithm: "sha256-canonical-nfc-v1",
+      fingerprint_created_at: 3,
+      line_nfc_hash: "a".repeat(64),
+      prompt_material_hash: "b".repeat(64),
+    });
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE poem_source_revision SET title_arabic = 'changed' WHERE id = 'revision'",
+        )
+        .run(),
+    ).toThrow(/POEM_SOURCE_REVISION_IMMUTABLE/u);
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE poem_source_revision SET line_nfc_hash = ? WHERE id = 'revision'",
+        )
+        .run("c".repeat(64)),
+    ).toThrow(/POEM_SOURCE_REVISION_IMMUTABLE/u);
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO poem_source_revision (
+            id, source_poem_id, schema_version, content_hash, title_arabic,
+            content_arabic, observed_at, created_at, import_bundle_id,
+            import_ordinal, line_nfc_hash
+          ) VALUES ('partial', 'source', 2, 'content', 'عنوان', '{}', 1, 2,
+            'bundle', 2, ?)`,
+        )
+        .run("c".repeat(64)),
+    ).toThrow(/SOURCE_REVISION_FINGERPRINT_INVALID/u);
+    expect(() =>
+      database
+        .prepare(
+          `UPDATE poem_source_revision SET fingerprint_algorithm = ?,
+            fingerprint_created_at = 4, line_nfc_hash = ?,
+            prompt_material_hash = ? WHERE id = 'unfingerprinted'`,
+        )
+        .run("sha256-canonical-nfc-v1", "c".repeat(64), "d".repeat(64)),
+    ).not.toThrow();
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE poem_source_revision SET line_nfc_hash = ? WHERE id = 'unfingerprinted'",
+        )
+        .run("e".repeat(64)),
+    ).toThrow(/POEM_SOURCE_REVISION_IMMUTABLE/u);
+    expect(
+      applyPending(database, ["0046_fold_source_revision_fingerprint.sql"]),
+    ).toEqual([]);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -318,41 +466,13 @@ describe("production migration compatibility", () => {
     ).toThrow(/ENRICHMENT_PROFILE_IMMUTABLE/u);
 
     insertProductionRow(database);
-    database
-      .prepare(
-        `INSERT INTO poem_legacy_payload_attribution (
-          poem_id, legacy_field, source_payload_hash, attribution_key,
-          attributed_at
-        ) VALUES (?, 'translation', ?, 'legacy-claude-1-or-2', 1)`,
-      )
-      .run("00000000-0000-4000-8000-000000000002", "a".repeat(64));
-    expect(
-      database
-        .prepare(
-          `SELECT hash_algorithm FROM poem_legacy_payload_attribution
-           WHERE poem_id = ?`,
-        )
-        .pluck()
-        .get("00000000-0000-4000-8000-000000000002"),
-    ).toBe("sha256-utf8-exact-v1");
     expect(() =>
       database
         .prepare(
-          `UPDATE poem_legacy_payload_attribution
-           SET source_payload_hash = ? WHERE poem_id = ?`,
+          `UPDATE poem SET legacy_translation_attributions = ? WHERE id = ?`,
         )
-        .run("b".repeat(64), "00000000-0000-4000-8000-000000000002"),
-    ).toThrow(/LEGACY_PAYLOAD_ATTRIBUTION_IMMUTABLE/u);
-    expect(() =>
-      database
-        .prepare(
-          `INSERT INTO poem_legacy_payload_attribution (
-            poem_id, legacy_field, source_payload_hash, attribution_key,
-            attributed_at
-          ) VALUES (?, 'translation_gemini', ?, 'legacy-claude-1-or-2', 1)`,
-        )
-        .run("00000000-0000-4000-8000-000000000002", "c".repeat(64)),
-    ).toThrow(/LEGACY_PAYLOAD_ATTRIBUTION_INVALID/u);
+        .run("not json", "00000000-0000-4000-8000-000000000002"),
+    ).toThrow(/CHECK constraint failed/u);
   });
 });
 
@@ -436,12 +556,9 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
       "enrichment_profile",
       "enrichment_validation",
       "inference_backend",
-      "legacy_model_attribution",
       "model_enrichment_artifact",
-      "model_enrichment_artifact_profile",
       "model_enrichment_validation",
       "model_publication_receipt",
-      "poem_legacy_payload_attribution",
       "poem_publication_pointer",
       "poem_model_publication_pointer",
       "poem_source_pointer",
@@ -450,7 +567,6 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
       "source_author_identity",
       "source_admission_clock",
       "source_poem_identity",
-      "source_revision_fingerprint",
     ]),
   );
   const poemColumns = database.prepare("PRAGMA table_info(poem)").all() as {
@@ -599,9 +715,6 @@ function expectModelProfileRegistry(database: Database.Database): void {
       "ai_vendor",
       "enrichment_profile",
       "inference_backend",
-      "legacy_model_attribution",
-      "model_enrichment_artifact_profile",
-      "poem_legacy_payload_attribution",
     ]),
   );
   expect(
@@ -653,34 +766,12 @@ function expectModelProfileRegistry(database: Database.Database): void {
     { profiles: 4, public_track_key: "agy-claude-opus-4.6-thinking" }, // gitleaks:allow -- Public legacy model identifier, not a credential.
     { profiles: 2, public_track_key: "agy-gemini-3.1-pro-high" },
   ]);
-  expect(
-    database
-      .prepare(
-        `SELECT display_name FROM legacy_model_attribution
-         WHERE attribution_key = 'legacy-claude-1-or-2' -- gitleaks:allow: public legacy attribution label
-        `,
-      )
-      .pluck()
-      .get(),
-  ).toBe("Claude 1 or 2");
-  expect(
-    database
-      .prepare(
-        `SELECT certainty, display_name FROM legacy_model_attribution
-         WHERE attribution_key = 'legacy-gemini-unknown'`,
-      )
-      .get(),
-  ).toEqual({
-    certainty: "unknown",
-    display_name: "Gemini (legacy model unknown)",
-  });
   const triggers = database
     .prepare("SELECT name FROM sqlite_schema WHERE type = 'trigger'")
     .pluck()
     .all() as string[];
   expect(triggers).toEqual(
     expect.arrayContaining([
-      "model_enrichment_artifact_profile_bind",
       "model_enrichment_artifact_profile_required",
       "model_enrichment_word_gloss_v2_shape",
       "model_publication_profile_insert_guard",

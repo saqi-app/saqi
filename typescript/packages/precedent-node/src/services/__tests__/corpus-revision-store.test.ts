@@ -184,12 +184,24 @@ describe("D1CorpusRevisionStore", () => {
     // Reproduce a revision that predates migration 0034. Current promotion
     // correctly fingerprints new rows, while the production backfill must
     // cover the immutable historical population created before that contract.
+    const updateGuard = database
+      .prepare(
+        "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = 'poem_source_revision_immutable_update'",
+      )
+      .pluck()
+      .get() as string;
     database.exec(`
-      DROP TRIGGER source_revision_fingerprint_immutable_delete;
-      DELETE FROM source_revision_fingerprint;
+      DROP TRIGGER poem_source_revision_immutable_update;
+      UPDATE poem_source_revision SET fingerprint_algorithm = NULL,
+        fingerprint_created_at = NULL, line_nfc_hash = NULL,
+        prompt_material_hash = NULL;
     `);
+    database.exec(updateGuard);
     expect(
-      scalar(database, "SELECT count(*) FROM source_revision_fingerprint"),
+      scalar(
+        database,
+        "SELECT count(*) FROM poem_source_revision WHERE line_nfc_hash IS NOT NULL",
+      ),
     ).toBe(0);
 
     const first = await store.backfillActiveSourceFingerprints({ limit: 1 });
@@ -206,9 +218,9 @@ describe("D1CorpusRevisionStore", () => {
     expect(
       database
         .prepare(
-          `SELECT algorithm, line_nfc_hash, prompt_material_hash
-             FROM source_revision_fingerprint
-            WHERE source_revision_id = ?`,
+          `SELECT fingerprint_algorithm AS algorithm, line_nfc_hash, prompt_material_hash
+             FROM poem_source_revision
+            WHERE id = ?`,
         )
         .get(item.revisionId),
     ).toEqual({
@@ -238,7 +250,10 @@ describe("D1CorpusRevisionStore", () => {
       scanned: 0,
     });
     expect(
-      scalar(database, "SELECT count(*) FROM source_revision_fingerprint"),
+      scalar(
+        database,
+        "SELECT count(*) FROM poem_source_revision WHERE line_nfc_hash IS NOT NULL",
+      ),
     ).toBe(1);
   });
 
@@ -293,7 +308,10 @@ describe("D1CorpusRevisionStore", () => {
       ),
     ).toBe(0);
     expect(
-      scalar(database, "SELECT count(*) FROM source_revision_fingerprint"),
+      scalar(
+        database,
+        "SELECT count(*) FROM poem_source_revision WHERE line_nfc_hash IS NOT NULL",
+      ),
     ).toBe(1);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
@@ -481,7 +499,10 @@ describe("D1CorpusRevisionStore", () => {
       sourceRevisionId: input.sourceRevisionId,
     });
     expect(
-      scalar(database, "SELECT count(*) FROM source_revision_fingerprint"),
+      scalar(
+        database,
+        "SELECT count(*) FROM poem_source_revision WHERE line_nfc_hash IS NOT NULL",
+      ),
     ).toBe(1);
     expect(
       scalar(database, "SELECT count(*) FROM source_admission_clock"),
@@ -1314,8 +1335,18 @@ describe("D1CorpusRevisionStore", () => {
     expect(
       database
         .prepare(
-          `SELECT profile_key FROM model_enrichment_artifact_profile
-           ORDER BY profile_key`,
+          `SELECT profile.profile_key
+             FROM model_enrichment_artifact artifact
+             JOIN poem_source_revision revision
+               ON revision.id = artifact.source_revision_id
+             JOIN enrichment_profile profile
+               ON profile.public_track_key = artifact.model_key
+              AND profile.runtime_model_id = artifact.model
+              AND profile.prompt_version = artifact.prompt_version
+              AND profile.reasoning_effort = artifact.reasoning_effort
+              AND profile.input_schema_version = revision.schema_version
+              AND profile.output_schema_version = artifact.schema_version
+           ORDER BY profile.profile_key`,
         )
         .pluck()
         .all(),
@@ -1350,12 +1381,12 @@ describe("D1CorpusRevisionStore", () => {
     expect(() =>
       database
         .prepare(
-          `UPDATE model_enrichment_artifact_profile
-           SET profile_key = 'sol-5.6/source-v2'
-           WHERE artifact_id = 'same-claude'`,
+          `UPDATE model_enrichment_artifact
+           SET prompt_version = 'sol-enrichment-v1'
+           WHERE id = 'same-claude'`,
         )
         .run(),
-    ).toThrow(/ARTIFACT_PROFILE_IMMUTABLE/u);
+    ).toThrow(/MODEL_ENRICHMENT_ARTIFACT_IMMUTABLE/u);
   });
 
   it("uses legacy Sol only to create an empty pointer and never downgrades v2", async () => {

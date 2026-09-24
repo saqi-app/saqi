@@ -67,6 +67,9 @@ export const POEM_TABLE = sqliteTable(
     activeEnrichmentArtifactId: text("active_enrichment_artifact_id"),
     translationSol: text("translation_sol", { mode: "json" }),
     insightsSol: text("insights_sol", { mode: "json" }),
+    legacyTranslationAttributions: text("legacy_translation_attributions", {
+      mode: "json",
+    }),
   },
   (table) => [
     index("idx_poem_author_id").on(table.authorId),
@@ -236,6 +239,12 @@ export const POEM_SOURCE_REVISION_TABLE = sqliteTable(
       .notNull()
       .references(() => CRAWL_IMPORT_BUNDLE_TABLE.id),
     importOrdinal: integer("import_ordinal").notNull(),
+    fingerprintAlgorithm: text("fingerprint_algorithm"),
+    fingerprintCreatedAt: integer("fingerprint_created_at", {
+      mode: "timestamp",
+    }),
+    lineNfcHash: text("line_nfc_hash"),
+    promptMaterialHash: text("prompt_material_hash"),
   },
   (table) => [
     uniqueIndex("poem_source_revision_content_unique").on(
@@ -247,28 +256,13 @@ export const POEM_SOURCE_REVISION_TABLE = sqliteTable(
       table.sourcePoemId,
       table.createdAt,
     ),
-  ],
-);
-
-export const SOURCE_REVISION_FINGERPRINT_TABLE = sqliteTable(
-  "source_revision_fingerprint",
-  {
-    sourceRevisionId: text("source_revision_id")
-      .primaryKey()
-      .references(() => POEM_SOURCE_REVISION_TABLE.id),
-    lineNfcHash: text("line_nfc_hash").notNull(),
-    promptMaterialHash: text("prompt_material_hash").notNull(),
-    algorithm: text("algorithm").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
     index("idx_source_revision_fingerprint_line_nfc").on(
       table.lineNfcHash,
-      table.sourceRevisionId,
+      table.id,
     ),
     index("idx_source_revision_fingerprint_prompt_material").on(
       table.promptMaterialHash,
-      table.sourceRevisionId,
+      table.id,
     ),
   ],
 );
@@ -470,70 +464,6 @@ export const ENRICHMENT_ARTIFACT_TABLE = sqliteTable(
       table.sourceRevisionId,
       table.modelKey,
       table.createdAt,
-    ),
-  ],
-);
-
-export const ENRICHMENT_ARTIFACT_PROFILE_TABLE = sqliteTable(
-  "model_enrichment_artifact_profile",
-  {
-    artifactId: text("artifact_id")
-      .primaryKey()
-      .references(() => ENRICHMENT_ARTIFACT_TABLE.id),
-    profileKey: text("profile_key")
-      .notNull()
-      .references(() => ENRICHMENT_PROFILE_TABLE.profileKey),
-    boundAt: integer("bound_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    index("idx_artifact_profile_profile").on(
-      table.profileKey,
-      table.artifactId,
-    ),
-  ],
-);
-
-export const LEGACY_MODEL_ATTRIBUTION_TABLE = sqliteTable(
-  "legacy_model_attribution",
-  {
-    attributionKey: text("attribution_key").primaryKey(),
-    vendorKey: text("vendor_key")
-      .notNull()
-      .references(() => AI_VENDOR_TABLE.vendorKey),
-    familyKey: text("family_key").notNull(),
-    minimumVersion: text("minimum_version"),
-    maximumVersion: text("maximum_version"),
-    certainty: text("certainty").notNull(),
-    displayName: text("display_name").notNull(),
-    rationale: text("rationale").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [index("idx_legacy_model_attribution_vendor").on(table.vendorKey)],
-);
-
-export const POEM_LEGACY_PAYLOAD_ATTRIBUTION_TABLE = sqliteTable(
-  "poem_legacy_payload_attribution",
-  {
-    poemId: text("poem_id")
-      .notNull()
-      .references(() => POEM_TABLE.id),
-    legacyField: text("legacy_field").notNull(),
-    sourcePayloadHash: text("source_payload_hash").notNull(),
-    hashAlgorithm: text("hash_algorithm")
-      .notNull()
-      .default("sha256-utf8-exact-v1"),
-    attributionKey: text("attribution_key")
-      .notNull()
-      .references(() => LEGACY_MODEL_ATTRIBUTION_TABLE.attributionKey),
-    attributedAt: integer("attributed_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.poemId, table.legacyField, table.sourcePayloadHash],
-    }),
-    index("idx_legacy_attribution_attribution").on(
-      table.attributionKey,
-      table.poemId,
     ),
   ],
 );

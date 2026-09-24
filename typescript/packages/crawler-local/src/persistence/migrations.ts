@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 37;
+export const CURRENT_SCHEMA_VERSION = 38;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1335,14 +1335,16 @@ export const MIGRATIONS: readonly Migration[] = [
     statements: `
       DROP TRIGGER ledger_status_work_insert;
       DROP TRIGGER ledger_status_work_update;
+      DROP TRIGGER ledger_status_event_insert;
       DROP TABLE ledger_state_count;
+      DROP TABLE ledger_kind_state_count;
+      DROP TABLE ledger_error_count;
+      DROP TABLE ledger_kind_error_count;
+      DROP TABLE ledger_kind_success_clock;
 
       CREATE TRIGGER ledger_status_work_insert
       AFTER INSERT ON work_item
       BEGIN
-        INSERT INTO ledger_kind_state_count(kind, state, item_count)
-          VALUES(NEW.kind, NEW.state, 1)
-          ON CONFLICT(kind, state) DO UPDATE SET item_count = item_count + 1;
         INSERT INTO ledger_profile_state_count(
           kind, implementation_version, schema_version, state, item_count
         ) VALUES(NEW.kind, NEW.implementation_version, NEW.schema_version, NEW.state, 1)
@@ -1356,12 +1358,6 @@ export const MIGRATIONS: readonly Migration[] = [
           WHERE NEW.state IN ('pending','retry_wait','quota_wait')
           ON CONFLICT(kind, implementation_version, schema_version, available_at)
           DO UPDATE SET item_count = item_count + 1;
-        INSERT INTO ledger_error_count(error_code, item_count)
-          SELECT NEW.last_error_code, 1 WHERE NEW.last_error_code IS NOT NULL
-          ON CONFLICT(error_code) DO UPDATE SET item_count = item_count + 1;
-        INSERT INTO ledger_kind_error_count(kind, error_code, item_count)
-          SELECT NEW.kind, NEW.last_error_code, 1 WHERE NEW.last_error_code IS NOT NULL
-          ON CONFLICT(kind, error_code) DO UPDATE SET item_count = item_count + 1;
         INSERT INTO ledger_profile_error_count(
           kind, implementation_version, schema_version, error_code, item_count
         )
@@ -1376,10 +1372,6 @@ export const MIGRATIONS: readonly Migration[] = [
       AFTER UPDATE OF state, kind, implementation_version, schema_version,
                       available_at, last_error_code ON work_item
       BEGIN
-        UPDATE ledger_kind_state_count SET item_count = item_count - 1
-          WHERE kind = OLD.kind AND state = OLD.state;
-        DELETE FROM ledger_kind_state_count
-          WHERE kind = OLD.kind AND state = OLD.state AND item_count = 0;
         UPDATE ledger_profile_state_count SET item_count = item_count - 1
           WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
             AND schema_version = OLD.schema_version AND state = OLD.state;
@@ -1394,14 +1386,6 @@ export const MIGRATIONS: readonly Migration[] = [
           WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
             AND schema_version = OLD.schema_version AND available_at = OLD.available_at
             AND item_count = 0;
-        UPDATE ledger_error_count SET item_count = item_count - 1
-          WHERE error_code = OLD.last_error_code;
-        DELETE FROM ledger_error_count
-          WHERE error_code = OLD.last_error_code AND item_count = 0;
-        UPDATE ledger_kind_error_count SET item_count = item_count - 1
-          WHERE kind = OLD.kind AND error_code = OLD.last_error_code;
-        DELETE FROM ledger_kind_error_count
-          WHERE kind = OLD.kind AND error_code = OLD.last_error_code AND item_count = 0;
         UPDATE ledger_profile_error_count SET item_count = item_count - 1
           WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
             AND schema_version = OLD.schema_version
@@ -1411,9 +1395,6 @@ export const MIGRATIONS: readonly Migration[] = [
             AND schema_version = OLD.schema_version
             AND error_code = OLD.last_error_code AND item_count = 0;
 
-        INSERT INTO ledger_kind_state_count(kind, state, item_count)
-          VALUES(NEW.kind, NEW.state, 1)
-          ON CONFLICT(kind, state) DO UPDATE SET item_count = item_count + 1;
         INSERT INTO ledger_profile_state_count(
           kind, implementation_version, schema_version, state, item_count
         ) VALUES(NEW.kind, NEW.implementation_version, NEW.schema_version, NEW.state, 1)
@@ -1427,12 +1408,6 @@ export const MIGRATIONS: readonly Migration[] = [
           WHERE NEW.state IN ('pending','retry_wait','quota_wait')
           ON CONFLICT(kind, implementation_version, schema_version, available_at)
           DO UPDATE SET item_count = item_count + 1;
-        INSERT INTO ledger_error_count(error_code, item_count)
-          SELECT NEW.last_error_code, 1 WHERE NEW.last_error_code IS NOT NULL
-          ON CONFLICT(error_code) DO UPDATE SET item_count = item_count + 1;
-        INSERT INTO ledger_kind_error_count(kind, error_code, item_count)
-          SELECT NEW.kind, NEW.last_error_code, 1 WHERE NEW.last_error_code IS NOT NULL
-          ON CONFLICT(kind, error_code) DO UPDATE SET item_count = item_count + 1;
         INSERT INTO ledger_profile_error_count(
           kind, implementation_version, schema_version, error_code, item_count
         )
@@ -1443,6 +1418,34 @@ export const MIGRATIONS: readonly Migration[] = [
           DO UPDATE SET item_count = item_count + 1;
       END;
 
+      CREATE TRIGGER ledger_status_event_insert
+      AFTER INSERT ON work_event
+      BEGIN
+        UPDATE ledger_status_clock
+          SET last_success_at = NEW.created_at
+          WHERE singleton = 1 AND NEW.event_type IN ('succeeded','imported');
+        UPDATE ledger_status_clock
+          SET last_failure_at = NEW.created_at
+          WHERE singleton = 1 AND NEW.event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired');
+        INSERT INTO ledger_profile_success_clock(
+          kind, implementation_version, schema_version, last_success_at
+        )
+          SELECT kind, implementation_version, schema_version, NEW.created_at
+          FROM work_item
+          WHERE work_key = NEW.work_key AND NEW.event_type IN ('succeeded','imported')
+          ON CONFLICT(kind, implementation_version, schema_version)
+          DO UPDATE SET last_success_at = excluded.last_success_at;
+      END;
+
+    `,
+  },
+  {
+    version: 38,
+    statements: `
+      DROP TRIGGER IF EXISTS retired_scheduler_state_reject_update;
+      DROP TRIGGER IF EXISTS retired_scheduler_state_reject_delete;
+      DROP TABLE retired_scheduler_state;
+      DROP TABLE monitor_progress_history;
     `,
   },
 ];
@@ -1716,22 +1719,6 @@ export class LedgerMigrationEngine implements MigrationEnginePort {
       hash("sha256", authority.state_json, "hex") !== authority.state_digest
     )
       return;
-    this.#database
-      .prepare(
-        `INSERT INTO retired_scheduler_state(
-           state_key, state_json, state_digest, updated_at, retired_at,
-           authority_state_digest
-         )
-         SELECT state_key, state_json, state_digest, updated_at,
-                CAST(strftime('%s', 'now') AS INTEGER) * 1000, ?
-           FROM scheduler_state
-          WHERE state_key IN (
-            'provider-v10:agy', 'provider-v10:claude',
-            'provider:agy', 'provider:claude'
-          )
-         ON CONFLICT(state_key) DO NOTHING`,
-      )
-      .run(authority.state_digest);
     this.#database
       .prepare(
         `DELETE FROM scheduler_state

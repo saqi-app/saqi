@@ -339,6 +339,7 @@ const PoemRowSchema = z.object({
   enrichmentClaude: z.string().nullable(),
   enrichmentSol: z.string().nullable(),
   translation: z.string().nullable(),
+  legacyTranslationAttributions: z.string().nullable(),
   translationGemini: z.string().nullable(),
   translationSol: z.string().nullable(),
   insights: z.string().nullable(),
@@ -399,6 +400,7 @@ const ModelEnrichmentRowSchema = z.object({ enrichment: z.string() });
 const LegacyModelAttributionRowSchema = z.object({
   certainty: z.string().trim().min(1).max(100),
   displayName: z.string().trim().min(1).max(100),
+  sourcePayloadHash: z.string().regex(/^[a-f0-9]{64}$/u),
   vendorKey: ProviderVendorSchema,
 });
 
@@ -847,6 +849,7 @@ const BASE_POEM_COLUMNS = `p.id,
   p.insights`;
 
 const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  p.legacy_translation_attributions AS legacyTranslationAttributions,
   NULL AS enrichmentAgy,
   NULL AS enrichmentClaude,
   NULL AS enrichmentSol,
@@ -856,6 +859,7 @@ const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
   NULL AS solReasoningEffort`;
 
 const LEGACY_ENRICHMENT_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  NULL AS legacyTranslationAttributions,
   NULL AS enrichmentAgy,
   NULL AS enrichmentClaude,
   ${LEGACY_SOL_ENRICHMENT_COLUMN} AS enrichmentSol,
@@ -873,6 +877,7 @@ const LEGACY_ENRICHMENT_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
     ELSE NULL END AS solReasoningEffort`;
 
 const MINIMAL_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
+  NULL AS legacyTranslationAttributions,
   NULL AS enrichmentAgy,
   NULL AS enrichmentClaude,
   NULL AS enrichmentSol,
@@ -1102,7 +1107,10 @@ export class CatalogRepository implements CatalogReader {
     if (!parsedRow.success) return undefined;
     const [dynamicModelEnrichments, legacyAttribution] = await Promise.all([
       this.#loadDynamicModelEnrichments(poemId),
-      this.#loadLegacyModelAttribution(poemId, parsedRow.data.translation),
+      this.#loadLegacyModelAttribution(
+        parsedRow.data.translation,
+        parsedRow.data.legacyTranslationAttributions,
+      ),
     ]);
     const poem = poemFromRow(row, dynamicModelEnrichments, legacyAttribution);
     return poem ? { author: authorFromJoinedRow(row), poem } : undefined;
@@ -1132,34 +1140,23 @@ export class CatalogRepository implements CatalogReader {
   }
 
   async #loadLegacyModelAttribution(
-    poemId: string,
     storedPayload: null | string,
+    storedAttributions: null | string,
   ): Promise<undefined | z.infer<typeof LegacyModelAttributionRowSchema>> {
-    if (!storedPayload) return undefined;
+    if (!storedPayload || !storedAttributions) return undefined;
     const sourcePayloadHash = await sha256Utf8Exact(storedPayload);
     try {
-      const result = await this.#database
-        .prepare(
-          `SELECT attribution.certainty,
-                attribution.display_name AS displayName,
-                attribution.vendor_key AS vendorKey
-           FROM poem_legacy_payload_attribution payload_attribution
-           JOIN legacy_model_attribution attribution
-             ON attribution.attribution_key = payload_attribution.attribution_key
-          WHERE payload_attribution.poem_id = ?1
-            AND payload_attribution.legacy_field = 'translation'
-            AND payload_attribution.source_payload_hash = ?2
-          LIMIT 1`,
-        )
-        .bind(poemId, sourcePayloadHash)
-        .all();
-      const parsed = LegacyModelAttributionRowSchema.safeParse(
-        result.results[0],
+      const parsed = LegacyModelAttributionRowSchema.array().safeParse(
+        JSON.parse(storedAttributions),
       );
-      return parsed.success ? parsed.data : undefined;
-    } catch (error) {
-      if (isMissingSchemaError(error)) return undefined;
-      throw error;
+      return parsed.success
+        ? parsed.data.find(
+            (attribution) =>
+              attribution.sourcePayloadHash === sourcePayloadHash,
+          )
+        : undefined;
+    } catch {
+      return undefined;
     }
   }
 
@@ -1228,10 +1225,15 @@ export class CatalogRepository implements CatalogReader {
            FROM poem_model_publication_pointer publication
            JOIN model_enrichment_artifact artifact
              ON artifact.id = publication.enrichment_artifact_id
-           JOIN model_enrichment_artifact_profile artifact_profile
-             ON artifact_profile.artifact_id = artifact.id
+           JOIN poem_source_revision revision
+             ON revision.id = artifact.source_revision_id
            JOIN enrichment_profile profile
-             ON profile.profile_key = artifact_profile.profile_key
+             ON profile.public_track_key = artifact.model_key
+            AND profile.runtime_model_id = artifact.model
+            AND profile.prompt_version = artifact.prompt_version
+            AND profile.reasoning_effort = artifact.reasoning_effort
+            AND profile.input_schema_version = revision.schema_version
+            AND profile.output_schema_version = artifact.schema_version
            JOIN ai_model model ON model.model_key = profile.model_key
            JOIN ai_vendor vendor ON vendor.vendor_key = model.vendor_key
            JOIN inference_backend backend

@@ -38,12 +38,6 @@ export interface InsertPoem {
   verses: number;
 }
 
-export interface UntranslatedPoemBatch {
-  failed: number;
-  ids: string[];
-  total: number;
-}
-
 export interface AdjacentPoems {
   next: null | string;
   prev: null | string;
@@ -68,10 +62,6 @@ export interface PoemStore {
   getByIds(ids: string[]): Promise<Map<string, LoadedPoem>>;
   poemsForAuthor(authorId: string): Promise<Poem[]>;
   poemsToScrape(slugs: string[], limit: number): Promise<PoemScrapeSelection>;
-  untranslatedPoemIdsForAuthor(
-    authorId: string,
-    limit: number,
-  ): Promise<UntranslatedPoemBatch>;
   upsert(poem: InsertPoem): Promise<Poem>;
   writeTranslationGemini(
     poemId: string,
@@ -188,26 +178,6 @@ function normalizedTablesUnavailable(error: unknown): boolean {
 const BATCH_SIZE = 50;
 const READ_BATCH_CONCURRENCY = 4;
 const SqliteCountSchema = z.number().int().nonnegative();
-
-const UntranslatedPoemBatchRowsSchema = z
-  .array(
-    z.strictObject({
-      failed: SqliteCountSchema,
-      id: z.string().nullable(),
-      total: SqliteCountSchema,
-    }),
-  )
-  .min(1)
-  .max(500)
-  .transform((rows): UntranslatedPoemBatch => {
-    const first = firstRow(rows);
-    return {
-      failed: first.failed,
-      ids: rows.flatMap(({ id }) => (id ? [id] : [])),
-      total: first.total,
-    };
-  });
-
 const AdjacentPoemRowsSchema = z
   .array(
     z.strictObject({
@@ -362,71 +332,6 @@ export class D1PoemStore implements PoemStore {
       nameArabic: row.nameArabic,
       nameEnglish: row.poemTitleFirstLine ?? row.nameEnglish ?? undefined,
     }));
-  }
-
-  async untranslatedPoemIdsForAuthor(
-    authorId: string,
-    limit: number,
-  ): Promise<UntranslatedPoemBatch> {
-    const boundedLimit = Math.min(Math.max(limit, 1), 500);
-    const rows = await this.#db.all(sql`
-      WITH untranslated AS (
-        SELECT poem.id
-        FROM poem
-        WHERE poem.author_id = ${authorId}
-          AND NOT (
-          CASE WHEN json_valid(poem.translation_gemini)
-            THEN json_type(poem.translation_gemini, '$.content') = 'array'
-              AND json_array_length(poem.translation_gemini, '$.content') > 0
-              AND NOT EXISTS (
-                SELECT 1
-                FROM json_each(poem.translation_gemini, '$.content') line
-                WHERE line.type <> 'text'
-              )
-              AND EXISTS (
-                SELECT 1
-                FROM json_each(poem.translation_gemini, '$.content') line
-                WHERE line.type = 'text' AND trim(line.value) <> ''
-              )
-            ELSE 0
-          END
-          )
-      ), uncovered AS (
-        SELECT untranslated.id
-        FROM untranslated
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM task
-          WHERE task.work_key = 'translate-poem:' || untranslated.id
-            AND task.status IN ('pending', 'in_progress')
-        )
-      ), eligible_all AS (
-        SELECT uncovered.id
-        FROM uncovered
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM task
-          WHERE task.work_key = 'translate-poem:' || uncovered.id
-            AND task.status = 'failed'
-        )
-      ), eligible AS (
-        SELECT eligible_all.id
-        FROM eligible_all
-        ORDER BY eligible_all.id
-        LIMIT ${boundedLimit}
-      )
-      SELECT eligible.id, totals.total, totals.failed
-      FROM (
-        SELECT
-          (SELECT COUNT(*) FROM eligible_all) AS total,
-          (SELECT COUNT(*) FROM uncovered) -
-            (SELECT COUNT(*) FROM eligible_all) AS failed
-      ) totals
-      LEFT JOIN eligible ON 1 = 1
-      ORDER BY eligible.id
-    `);
-
-    return UntranslatedPoemBatchRowsSchema.parse(rows);
   }
 
   async getAdjacentPoems(

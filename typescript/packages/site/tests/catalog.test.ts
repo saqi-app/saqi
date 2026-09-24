@@ -91,14 +91,18 @@ void test("legacy attribution requires the exact stored payload hash", async () 
       .run(translation);
     sqlite
       .prepare(
-        `INSERT INTO poem_legacy_payload_attribution (
-           poem_id, legacy_field, source_payload_hash, attribution_key,
-           attributed_at
-         ) VALUES (
-           'p-attributed', 'translation', ?, 'legacy-claude-1-or-2', 1
-         )`,
+        "UPDATE poem SET legacy_translation_attributions = ? WHERE id = 'p-attributed'",
       )
-      .run(payloadHash);
+      .run(
+        JSON.stringify([
+          {
+            sourcePayloadHash: payloadHash,
+            certainty: "inferred_range",
+            displayName: "Claude 1 or 2",
+            vendorKey: "anthropic",
+          },
+        ]),
+      );
     const database = catalogRepository(sqlite);
     const attributed = await database.getPoemPage(
       "attributed-poet",
@@ -149,11 +153,18 @@ void test("legacy attribution requires the exact stored payload hash", async () 
       .run(exactPayload);
     sqlite
       .prepare(
-        `INSERT INTO poem_legacy_payload_attribution
-      (poem_id, legacy_field, source_payload_hash, attribution_key, attributed_at)
-      VALUES ('p-attributed', 'translation', ?, 'legacy-claude-1-or-2', 2)`,
+        "UPDATE poem SET legacy_translation_attributions = ? WHERE id = 'p-attributed'",
       )
-      .run(hash("sha256", exactPayload, "hex"));
+      .run(
+        JSON.stringify([
+          {
+            sourcePayloadHash: hash("sha256", exactPayload, "hex"),
+            certainty: "inferred_range",
+            displayName: "Claude 1 or 2",
+            vendorKey: "anthropic",
+          },
+        ]),
+      );
     const exact = await database.getPoemPage("attributed-poet", "p-attributed");
     assert.equal(exact?.poem.linesEnglishModel, "claude-opus-5");
     assert.equal(exact.poem.linesEnglishAttributionCertainty, undefined);
@@ -200,11 +211,7 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
     assert.ok(firstPoem);
     assert.equal(firstPoem.hasEnglish, true);
     assert.equal(firstPoem.hasInsights, false);
-    assert.equal(
-      firstPoem.verses,
-      1,
-      "verse count comes from content",
-    );
+    assert.equal(firstPoem.verses, 1, "verse count comes from content");
     sqlite
       .prepare("UPDATE poem SET translation = ? WHERE id = 'p-valid'")
       .run(JSON.stringify({ content: [" ".repeat(3)] }));
@@ -259,9 +266,7 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
         culturalSignificance: "A cultural note.",
         historicalContext: "A grounded setting.",
         literaryDevices: ["Metaphor"],
-        notableLines: [
-          { explanation: "A notable image.", line: "سطر أول" },
-        ],
+        notableLines: [{ explanation: "A notable image.", line: "سطر أول" }],
         summary: "A concise reading.",
         themes: ["Memory"],
       },
@@ -326,7 +331,11 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
     `);
     sqlite
       .prepare(
-        `INSERT INTO poem_source_revision VALUES
+        `INSERT INTO poem_source_revision (
+           id, source_poem_id, schema_version, content_hash, title_arabic,
+           content_arabic, observed_at, created_at, import_bundle_id,
+           import_ordinal
+         ) VALUES
           ('revision-1', 'source-poem-1', 1, ?, 'قصيدة',
            '{"content":["سطر أول","سطر ثان"]}', 1, 1,
            'bundle-sol', 0)`,
@@ -363,8 +372,10 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
         ('p-valid', 'sol-5.6', 'revision-1', 'artifact-1', 1, 1, 1);
     `);
     assert.deepEqual(
-      sqlite.prepare("SELECT model_key, poem_count FROM insights_model_count").all(),
-      [{ "model_key": "sol-5.6", "poem_count": 1 }],
+      sqlite
+        .prepare("SELECT model_key, poem_count FROM insights_model_count")
+        .all(),
+      [{ model_key: "sol-5.6", poem_count: 1 }],
     );
     const publishedSolPage = await database.getPoemPage("good-poet", "p-valid");
     const availableModels = async () => {
@@ -461,7 +472,7 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       modelEnrichment.wordGlosses?.lines[0]?.segments[0]?.surface,
       "سطر",
     );
-    sqlite.exec("DROP TABLE model_enrichment_artifact_profile");
+    sqlite.exec("DROP TABLE enrichment_profile");
     const preRegistryFallback = await database.getPoemPage(
       "good-poet",
       "p-valid",

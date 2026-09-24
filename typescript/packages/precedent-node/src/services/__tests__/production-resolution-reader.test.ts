@@ -299,7 +299,7 @@ describe("D1ProductionResolutionStore", () => {
       .run("6".repeat(64));
     database
       .prepare(
-        `INSERT INTO poem_source_revision VALUES (
+        `INSERT INTO poem_source_revision (id, source_poem_id, schema_version, content_hash, title_arabic, content_arabic, observed_at, created_at, import_bundle_id, import_ordinal) VALUES (
            ?, 'source-poem', 2, ?, 'قصيدة قديمة',
            '{"content":["بيت"],"titleArabic":"قصيدة قديمة"}',
            2, 1, 'bundle-collision', 0
@@ -308,16 +308,15 @@ describe("D1ProductionResolutionStore", () => {
       .run("f".repeat(64), "3".repeat(64));
     database
       .prepare(
-        `INSERT INTO source_revision_fingerprint (
-           source_revision_id, line_nfc_hash, prompt_material_hash,
-           algorithm, created_at
-         ) VALUES (?, ?, ?, ?, 1)`,
+        `UPDATE poem_source_revision SET line_nfc_hash = ?,
+           prompt_material_hash = ?, fingerprint_algorithm = ?,
+           fingerprint_created_at = 1 WHERE id = ?`,
       )
       .run(
-        "f".repeat(64),
         LINE_NFC_HASH,
         PROMPT_MATERIAL_HASH,
         PRODUCTION_RESOLUTION_FINGERPRINT_ALGORITHM,
+        "f".repeat(64),
       );
 
     await expect(reader.resolve(fingerprintRequest())).rejects.toThrow(
@@ -379,7 +378,7 @@ function adoptPoem(
     .run(ids.poemId);
   database
     .prepare(
-      `INSERT INTO poem_source_revision VALUES (
+      `INSERT INTO poem_source_revision (id, source_poem_id, schema_version, content_hash, title_arabic, content_arabic, observed_at, created_at, import_bundle_id, import_ordinal) VALUES (
          ?, 'source-poem', 2, ?, 'قصيدة',
          '{"content":["بيت"],"titleArabic":"قصيدة"}', 1, 1, 'bundle', 0
        )`,
@@ -395,16 +394,15 @@ function adoptPoem(
     .run("e".repeat(64), ids.poemId);
   database
     .prepare(
-      `INSERT INTO source_revision_fingerprint (
-         source_revision_id, line_nfc_hash, prompt_material_hash,
-         algorithm, created_at
-       ) VALUES (?, ?, ?, ?, 1)`,
+      `UPDATE poem_source_revision SET line_nfc_hash = ?,
+         prompt_material_hash = ?, fingerprint_algorithm = ?,
+         fingerprint_created_at = 1 WHERE id = ?`,
     )
     .run(
-      "e".repeat(64),
       LINE_NFC_HASH,
       PROMPT_MATERIAL_HASH,
       PRODUCTION_RESOLUTION_FINGERPRINT_ALGORITHM,
+      "e".repeat(64),
     );
 }
 
