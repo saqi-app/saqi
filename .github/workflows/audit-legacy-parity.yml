@@ -1,0 +1,42 @@
+name: Audit legacy translation parity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.repository == 'saqi-app/saqi' && github.ref == 'refs/heads/main' && github.actor == 'nmaswood'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: typescript/.nvmrc
+      - run: corepack enable && yarn install --immutable --mode=skip-build
+      - name: Count legacy rows without current equivalents
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+        run: |
+          sql=$(cat <<'SQL'
+          SELECT
+            (SELECT COUNT(*) FROM enrichment_artifact) AS legacy_artifacts,
+            (SELECT COUNT(*) FROM enrichment_validation) AS legacy_validations,
+            (SELECT COUNT(*) FROM poem_publication_pointer) AS legacy_pointers,
+            (SELECT COUNT(*) FROM poem_publication_pointer p JOIN poem c ON c.id = p.poem_id WHERE c.active_source_revision_id = p.source_revision_id) AS current_legacy_pointers,
+            (SELECT COUNT(*) FROM enrichment_artifact a JOIN poem_source_revision r ON r.id = a.source_revision_id JOIN enrichment_profile p ON p.runtime_model_id = a.model AND p.prompt_version = a.prompt_version AND p.reasoning_effort = a.reasoning_effort AND p.input_schema_version = r.schema_version AND p.output_schema_version = a.schema_version WHERE NOT EXISTS (SELECT 1 FROM model_enrichment_artifact m WHERE m.source_revision_id = a.source_revision_id AND m.payload_hash = a.payload_hash AND m.model_key = p.public_track_key AND m.payload = a.payload)) AS missing_model_artifacts,
+            (SELECT COUNT(*) FROM enrichment_validation v JOIN enrichment_artifact a ON a.id = v.artifact_id JOIN poem_source_revision r ON r.id = a.source_revision_id JOIN enrichment_profile p ON p.runtime_model_id = a.model AND p.prompt_version = a.prompt_version AND p.reasoning_effort = a.reasoning_effort AND p.input_schema_version = r.schema_version AND p.output_schema_version = a.schema_version WHERE NOT EXISTS (SELECT 1 FROM model_enrichment_artifact m JOIN model_enrichment_validation mv ON mv.artifact_id = m.id WHERE m.source_revision_id = a.source_revision_id AND m.payload_hash = a.payload_hash AND m.model_key = p.public_track_key AND mv.validator_key = v.validator_key AND mv.validator_version = v.validator_version AND mv.attempt = v.attempt AND mv.report_hash = v.report_hash AND mv.outcome = v.outcome)) AS missing_model_validations,
+            (SELECT COUNT(*) FROM poem_publication_pointer l JOIN poem c ON c.id = l.poem_id JOIN enrichment_artifact a ON a.id = l.enrichment_artifact_id JOIN poem_source_revision r ON r.id = a.source_revision_id JOIN enrichment_profile p ON p.runtime_model_id = a.model AND p.prompt_version = a.prompt_version AND p.reasoning_effort = a.reasoning_effort AND p.input_schema_version = r.schema_version AND p.output_schema_version = a.schema_version WHERE c.active_source_revision_id = l.source_revision_id AND NOT EXISTS (SELECT 1 FROM poem_model_publication_pointer m WHERE m.poem_id = l.poem_id AND m.model_key = p.public_track_key AND m.source_revision_id = l.source_revision_id)) AS missing_current_model_pointers;
+          SQL
+          )
+          yarn workspace @saqi/operations db:execute --remote --json --command "$sql"
