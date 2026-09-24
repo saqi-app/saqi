@@ -149,6 +149,22 @@ describe("ledger schema migrations", () => {
       expect(
         database
           .prepare(
+            `EXPLAIN QUERY PLAN SELECT state, SUM(item_count)
+            FROM ledger_profile_count
+            WHERE kind='author-manifest' AND implementation_version='crawler@1'
+              AND schema_version='input@1' GROUP BY state`,
+          )
+          .all(),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: expect.stringContaining("USING PRIMARY KEY"),
+          }),
+        ]),
+      );
+      expect(
+        database
+          .prepare(
             `EXPLAIN QUERY PLAN SELECT error_code, SUM(item_count)
             FROM ledger_profile_count WHERE error_code <> ''
             GROUP BY error_code`,
