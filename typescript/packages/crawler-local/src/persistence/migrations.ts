@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 39;
+export const CURRENT_SCHEMA_VERSION = 40;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1482,6 +1482,25 @@ export const MIGRATIONS: readonly Migration[] = [
         UPDATE local_source_identity
         SET metadata_revision = metadata_revision + 1 WHERE singleton = 1;
       END;
+    `,
+  },
+  {
+    version: 40,
+    statements: `
+      ALTER TABLE local_schema ADD COLUMN sol_milestone_history_complete INTEGER NOT NULL DEFAULT 0
+        CHECK(sol_milestone_history_complete IN (0, 1));
+      ALTER TABLE local_schema ADD COLUMN sol_milestone_high_watermark INTEGER NOT NULL DEFAULT 0
+        CHECK(sol_milestone_high_watermark >= 0);
+      UPDATE local_schema SET
+        sol_milestone_history_complete = CASE
+          WHEN (SELECT COUNT(*) FROM sol_poem_milestone_backfill
+                WHERE completed_at IS NOT NULL) = 2
+            OR (SELECT MAX(high_watermark) FROM sol_poem_milestone_backfill) = 0
+          THEN 1 ELSE 0 END,
+        sol_milestone_high_watermark =
+          (SELECT MAX(high_watermark) FROM sol_poem_milestone_backfill)
+      WHERE singleton = 1;
+      DROP TABLE sol_poem_milestone_backfill;
     `,
   },
 ];

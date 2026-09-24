@@ -2776,61 +2776,6 @@ describe("unified rig restart integration", () => {
     runtime.close();
   });
 
-  it("backfills poem milestones in a bounded free maintenance lane", async () => {
-    const root = mkdtempSync(join(tmpdir(), "saqi-milestone-backfill-lane-"));
-    const backfill = vi.spyOn(Ledger.prototype, "backfillSolPoemMilestones");
-    await importEmptyTestOperations(root);
-    const runtime = new UnifiedRigRuntime({
-      config: parseScraperOperationConfig({
-        collector: { enabled: false },
-        retention: { enabled: false },
-        schemaVersion: 1,
-        sol: { enabled: true },
-        startupReconciliation: { enabled: false },
-        stateDirectory: root,
-      }),
-      configDigest: DIGEST,
-      now: () => 1_000,
-      paths: {
-        artifacts: join(root, "artifacts"),
-        database: join(root, "ledger.sqlite3"),
-        paused: join(root, "PAUSED"),
-        root,
-        schedulerState: join(root, "sol-scheduler.json"),
-        solAttempts: join(root, "sol-attempts"),
-      },
-    });
-    const lanes = await runtime.createLanes({
-      publicationAllowed: false,
-      status: {},
-    });
-    const maintenance = lanes.find(
-      ({ name }) => name === "maintenance-sol-poem-milestones",
-    );
-    expect(maintenance).toMatchObject({
-      honorNextWakeAt: true,
-      maximumSleepMs: 60 * 60_000,
-    });
-    expect(backfill).not.toHaveBeenCalled();
-    await expect(
-      maintenance!.runOnce(new AbortController().signal),
-    ).resolves.toEqual({
-      nextWakeAt: 1_000,
-      result: "backfilling",
-    });
-    expect(backfill).toHaveBeenLastCalledWith("succeeded", 250, 1_000);
-    await expect(
-      maintenance!.runOnce(new AbortController().signal),
-    ).resolves.toEqual({
-      nextWakeAt: 60 * 60_000 + 1_000,
-      result: "complete",
-    });
-    expect(backfill).toHaveBeenLastCalledWith("imported", 250, 1_000);
-    for (const lane of lanes) await lane.close();
-    runtime.close();
-    backfill.mockRestore();
-  });
-
   it("persists bounded retention progress across runtime restarts", async () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-retention-cursor-"));
     const attempts = join(root, "sol-attempts");

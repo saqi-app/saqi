@@ -38,7 +38,6 @@ import {
   queryOptional,
   queryRequired,
   SqliteBooleanSchema,
-  sqliteJsonText,
   SqliteSafeIntegerSchema,
 } from "./sqlite-query.js";
 import { canonicalJson, inputHash, sha256, workKey } from "./work-key.js";
@@ -159,43 +158,15 @@ const LegacySolFanoutRecoveryRowSchema = z
 const CountRowSchema = z.strictObject({
   count: z.number().int().nonnegative(),
 });
-const SolMilestoneBackfillRowSchema = z
+const SolMilestoneCoverageRowSchema = z
   .strictObject({
-    completed_at: SqliteSafeIntegerSchema.nullable(),
-    cursor_sequence: SqliteSafeIntegerSchema.nonnegative(),
-    high_watermark: SqliteSafeIntegerSchema.nonnegative(),
+    sol_milestone_history_complete: SqliteBooleanSchema,
+    sol_milestone_high_watermark: SqliteSafeIntegerSchema.nonnegative(),
   })
   .transform((row) => ({
-    completedAt: row.completed_at,
-    cursorSequence: row.cursor_sequence,
-    highWatermark: row.high_watermark,
+    backfillComplete: row.sol_milestone_history_complete,
+    highWatermark: row.sol_milestone_high_watermark,
   }));
-const SolMilestoneEventRowSchema = z
-  .strictObject({
-    completed_at: SqliteSafeIntegerSchema.nonnegative(),
-    implementation_version: z.string().trim().min(1).max(100),
-    payload_json: z.string(),
-    schema_version: z.string().trim().min(1).max(100),
-    sequence: SqliteSafeIntegerSchema.nonnegative(),
-    work_key: Sha256Schema,
-  })
-  .transform((row) => ({
-    completedAt: row.completed_at,
-    implementationVersion: row.implementation_version,
-    payloadJson: row.payload_json,
-    schemaVersion: row.schema_version,
-    sequence: row.sequence,
-    workKey: row.work_key,
-  }));
-const SolImportedMilestonePayloadSchema = sqliteJsonText(
-  z.union([
-    z.strictObject({ artifactHash: Sha256Schema }),
-    z.strictObject({
-      publicationWorkKey: Sha256Schema,
-      receiptArtifactHash: Sha256Schema,
-    }),
-  ]),
-);
 const SolMilestoneWindowRowSchema = z
   .strictObject({
     last_15m: SqliteSafeIntegerSchema.nonnegative(),
@@ -468,15 +439,6 @@ export interface SolPoemThroughput {
     readonly ready: number;
     readonly terminalDead: number;
   };
-}
-
-export interface SolPoemMilestoneBackfillResult {
-  readonly complete: boolean;
-  readonly eventType: "imported" | "succeeded";
-  readonly highWatermark: number;
-  readonly inserted: number;
-  readonly invalid: number;
-  readonly processed: number;
 }
 
 export interface WakeResolutionPendingResult {
@@ -2321,109 +2283,6 @@ export class Ledger {
     if (!Number.isSafeInteger(now) || now < 0)
       throw new Error("Throughput time must be nonnegative");
     return this.#readTransaction(() => this.#poemThroughput(requirements, now));
-  }
-
-  backfillSolPoemMilestones(
-    eventType: "imported" | "succeeded",
-    limit: number,
-    now = Date.now(),
-  ): SolPoemMilestoneBackfillResult {
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000)
-      throw new Error("Milestone backfill limit must be between 1 and 1000");
-    if (!Number.isSafeInteger(now) || now < 0)
-      throw new Error("Milestone backfill time must be nonnegative");
-    const milestone = eventType === "succeeded" ? "generated" : "published";
-    return this.#immediate(() => {
-      const checkpoint = queryRequired(
-        { operation: "ledger.solMilestoneBackfill.checkpoint" },
-        () =>
-          this.#database
-            .prepare(
-              `SELECT cursor_sequence, high_watermark, completed_at
-                 FROM sol_poem_milestone_backfill WHERE event_type = ?`,
-            )
-            .get(eventType),
-        SolMilestoneBackfillRowSchema,
-      );
-      if (checkpoint.completedAt !== null)
-        return {
-          complete: true,
-          eventType,
-          highWatermark: checkpoint.highWatermark,
-          invalid: 0,
-          inserted: 0,
-          processed: 0,
-        };
-      const rows = queryMany(
-        { operation: "ledger.solMilestoneBackfill.events" },
-        () =>
-          this.#database
-            .prepare(
-              `SELECT event.sequence, event.created_at AS completed_at,
-                      event.payload_json, work.work_key,
-                      work.implementation_version, work.schema_version
-                 FROM work_event AS event INDEXED BY work_event_completed_scan
-                 JOIN work_item AS work ON work.work_key = event.work_key
-                WHERE event.event_type = ? AND event.sequence > ?
-                  AND event.sequence <= ? AND work.kind = 'poem-enrichment-sol'
-                ORDER BY event.sequence LIMIT ?`,
-            )
-            .all(
-              eventType,
-              checkpoint.cursorSequence,
-              checkpoint.highWatermark,
-              limit,
-            ),
-        SolMilestoneEventRowSchema,
-      );
-      const insert = this.#database.prepare(
-        `INSERT INTO sol_poem_milestone(
-           work_key, milestone, implementation_version, schema_version, completed_at
-         ) VALUES(?, ?, ?, ?, ?) ON CONFLICT(work_key, milestone) DO NOTHING`,
-      );
-      let inserted = 0;
-      let invalid = 0;
-      for (const row of rows) {
-        if (
-          eventType === "imported" &&
-          !SolImportedMilestonePayloadSchema.safeParse(row.payloadJson).success
-        ) {
-          invalid += 1;
-          continue;
-        }
-        inserted += insert.run(
-          row.workKey,
-          milestone,
-          row.implementationVersion,
-          row.schemaVersion,
-          row.completedAt,
-        ).changes;
-      }
-      const complete = rows.length < limit;
-      const cursorSequence = complete
-        ? checkpoint.highWatermark
-        : (rows.at(-1)?.sequence ?? checkpoint.cursorSequence);
-      this.#database
-        .prepare(
-          `UPDATE sol_poem_milestone_backfill
-              SET cursor_sequence = ?, completed_at = ?
-            WHERE event_type = ? AND cursor_sequence = ? AND completed_at IS NULL`,
-        )
-        .run(
-          cursorSequence,
-          complete ? now : null,
-          eventType,
-          checkpoint.cursorSequence,
-        );
-      return {
-        complete,
-        eventType,
-        highWatermark: checkpoint.highWatermark,
-        invalid,
-        inserted,
-        processed: rows.length,
-      };
-    });
   }
 
   attemptRetentionEligibility(
@@ -5370,19 +5229,17 @@ export class Ledger {
     };
     const generated = readWindow("generated");
     const published = readWindow("published");
-    const coverageRows = queryMany(
+    const coverage = queryRequired(
       { operation: "ledger.poemThroughput.coverage" },
       () =>
         this.#database
           .prepare(
-            `SELECT cursor_sequence, high_watermark, completed_at
-                 FROM sol_poem_milestone_backfill ORDER BY event_type`,
+            `SELECT sol_milestone_history_complete, sol_milestone_high_watermark
+             FROM local_schema WHERE singleton = 1`,
           )
-          .all(),
-      SolMilestoneBackfillRowSchema,
+          .get(),
+      SolMilestoneCoverageRowSchema,
     );
-    if (coverageRows.length !== 2)
-      throw new Error("SOL_POEM_MILESTONE_COVERAGE_MISSING");
     const progress = this.profileProgress("poem-enrichment-sol", requirements);
     const availability = this.availability(
       ["poem-enrichment-sol"],
@@ -5396,14 +5253,7 @@ export class Ledger {
     const active = progress.byState.running;
     const generatedAwaitingPublication = progress.byState.succeeded;
     return {
-      coverage: {
-        backfillComplete: coverageRows.every(
-          ({ completedAt }) => completedAt !== null,
-        ),
-        highWatermark: Math.max(
-          ...coverageRows.map(({ highWatermark }) => highWatermark),
-        ),
-      },
+      coverage,
       generated,
       published,
       remaining: {

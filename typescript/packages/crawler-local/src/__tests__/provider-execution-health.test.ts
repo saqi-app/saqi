@@ -623,7 +623,7 @@ describe("provider execution health", () => {
       coverage: {
         backfillComplete: true,
         highWatermark: 42,
-        state: "backfilling" as const,
+        state: "partial" as const,
       },
       generated: { last15m: 7, last1h: 15, last5m: 3, lastAt: 990 },
       published: { last15m: 5, last1h: 12, last5m: 2, lastAt: 980 },

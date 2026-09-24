@@ -78,7 +78,7 @@ internal struct ProviderPoemThroughputCoverage: Codable, Hashable {
     let state: String
 
     var isValid: Bool {
-        highWatermark >= 0 && ["backfilling", "complete"].contains(state)
+        highWatermark >= 0 && ["partial", "complete"].contains(state)
             && (state == "complete") == backfillComplete
     }
 }

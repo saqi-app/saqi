@@ -13,7 +13,7 @@
     "0047_derive_artifact_profiles.sql",
     "0048_fold_crawl_import_receipt.sql"
   ],
-  "localVersion": 39,
+  "localVersion": 40,
   "databases": [
     {
       "id": "corpus",
@@ -2072,6 +2072,18 @@
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
+            },
+            {
+              "name": "sol_milestone_history_complete",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "sol_milestone_high_watermark",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
             }
           ],
           "foreignKeys": []
@@ -2790,36 +2802,6 @@
               "to": "work_key"
             }
           ]
-        },
-        {
-          "name": "sol_poem_milestone_backfill",
-          "columns": [
-            {
-              "name": "event_type",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "cursor_sequence",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "high_watermark",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "completed_at",
-              "type": "INTEGER",
-              "nullable": true,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "source_author_metadata",
