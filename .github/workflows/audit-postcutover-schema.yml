@@ -1,0 +1,42 @@
+name: Audit deployed corpus schema
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.repository == 'saqi-app/saqi' && github.ref == 'refs/heads/main' && github.actor == 'nmaswood'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: typescript/.nvmrc
+      - run: corepack enable && yarn install --immutable --mode=skip-build
+      - name: Read deployed table and publication counts
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+        run: |
+          sql=$(cat <<'SQL'
+          SELECT
+            (SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations') AS corpus_tables,
+            (SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name IN ('enrichment_artifact', 'enrichment_validation', 'poem_publication_pointer')) AS retired_tables_remaining,
+            (SELECT COUNT(*) FROM pragma_table_info('poem') WHERE name IN ('active_enrichment_artifact_id', 'translation_sol', 'insights_sol')) AS retired_poem_columns_remaining,
+            (SELECT COUNT(*) FROM model_enrichment_artifact) AS model_artifacts,
+            (SELECT COUNT(*) FROM model_enrichment_validation) AS model_validations,
+            (SELECT COUNT(*) FROM poem_model_publication_pointer) AS model_publications,
+            (SELECT COUNT(*) FROM poem WHERE hidden = 0 AND publishable = 1) AS published_poems;
+          SQL
+          )
+          yarn workspace @saqi/operations db:execute --remote --json --command "$sql"
