@@ -191,7 +191,6 @@ describe("production baseline export", () => {
       ineligiblePoems: 5,
       poems: 9,
       seededEnrichmentWork: 4,
-      seededSolWork: 4,
     });
     const plannedReplay = await planProductionBaselineFiles({
       authorsPath: fixture.paths.authorsOutput,
@@ -200,8 +199,7 @@ describe("production baseline export", () => {
     });
     expect(plannedReplay.report).toMatchObject({
       duplicateEnrichmentWork: 4,
-      duplicateSolWork: 4,
-      seededSolWork: 0,
+      seededEnrichmentWork: 0,
     });
     expect(plannedReplay.report.planHash).toBe(planned.report.planHash);
     ledger.close();

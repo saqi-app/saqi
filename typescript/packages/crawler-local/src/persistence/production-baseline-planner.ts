@@ -188,8 +188,6 @@ interface ProductionBaselineReport {
   readonly batchSize: number;
   readonly currentProfileWork: number;
   readonly duplicateEnrichmentWork: number;
-  /** @deprecated Use duplicateEnrichmentWork. */
-  readonly duplicateSolWork: number;
   readonly eligiblePoems: number;
   readonly ineligible: readonly BaselineIneligiblePoem[];
   readonly ineligiblePoems: number;
@@ -200,8 +198,6 @@ interface ProductionBaselineReport {
   readonly planHash: string;
   readonly poems: number;
   readonly seededEnrichmentWork: number;
-  /** @deprecated Use seededEnrichmentWork. */
-  readonly seededSolWork: number;
   readonly skippedComplete: number;
 }
 
@@ -410,7 +406,6 @@ export async function planProductionBaseline(
       authors: authors.size,
       batchSize,
       duplicateEnrichmentWork,
-      duplicateSolWork: duplicateEnrichmentWork,
       eligiblePoems: poemCount - ineligible.length,
       ineligible,
       ineligiblePoems: ineligible.length,
@@ -421,7 +416,6 @@ export async function planProductionBaseline(
       planHash,
       poems: poemCount,
       seededEnrichmentWork,
-      seededSolWork: seededEnrichmentWork,
       currentProfileWork,
       skippedComplete,
     },

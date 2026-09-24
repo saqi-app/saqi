@@ -448,14 +448,14 @@
       "count": 1
     },
     {
-      "fingerprint": "37af0085da6b15c076d7c2a2a01c1c22f580819cbf1e0cd0fa1aa7fe9259f110",
+      "fingerprint": "0e7fefdcad5971f59347fc74573c506e581bd62866821d74f81e223f5c987bae",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
       "count": 1
     },
     {
-      "fingerprint": "d5deade6fb26365adb1a5c70eb7462a4e07c4bf7d696ba2204959e3ba96f551e",
+      "fingerprint": "1c0d3c057e18d90c3e62d6b134f170bac5d95821b21820b0a0c52b80eb24c9d3",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/production-baseline-planner.ts",
