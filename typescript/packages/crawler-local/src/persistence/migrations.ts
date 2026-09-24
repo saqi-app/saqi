@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 40;
+export const CURRENT_SCHEMA_VERSION = 42;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1501,6 +1501,148 @@ export const MIGRATIONS: readonly Migration[] = [
           (SELECT MAX(high_watermark) FROM sol_poem_milestone_backfill)
       WHERE singleton = 1;
       DROP TABLE sol_poem_milestone_backfill;
+    `,
+  },
+  {
+    version: 41,
+    statements: `
+      ALTER TABLE work_item ADD COLUMN priority_hint_created_at INTEGER
+        CHECK(priority_hint_created_at IS NULL OR priority_hint_created_at >= 0);
+      ALTER TABLE work_item ADD COLUMN priority_hint_updated_at INTEGER
+        CHECK((priority_hint_created_at IS NULL) = (priority_hint_updated_at IS NULL)
+          AND (priority_hint_updated_at IS NULL OR priority_hint_updated_at >= priority_hint_created_at));
+      UPDATE work_item SET
+        priority_hint_created_at = (
+          SELECT created_at FROM fanout_priority_hint WHERE fanout_priority_hint.work_key = work_item.work_key
+        ),
+        priority_hint_updated_at = (
+          SELECT updated_at FROM fanout_priority_hint WHERE fanout_priority_hint.work_key = work_item.work_key
+        )
+      WHERE EXISTS(SELECT 1 FROM fanout_priority_hint WHERE fanout_priority_hint.work_key = work_item.work_key);
+      CREATE TEMP TABLE _priority_hint_guard (missing_count INTEGER NOT NULL CHECK(missing_count = 0));
+      INSERT INTO _priority_hint_guard(missing_count)
+        SELECT COUNT(*) FROM fanout_priority_hint AS hint
+        JOIN work_item AS work ON work.work_key = hint.work_key
+        WHERE work.priority_hint_created_at IS NOT hint.created_at
+           OR work.priority_hint_updated_at IS NOT hint.updated_at;
+      DROP TABLE _priority_hint_guard;
+      DROP TRIGGER fanout_priority_hint_work_sync;
+      DROP TRIGGER fanout_priority_hint_terminal_cleanup;
+      DROP TRIGGER fanout_priority_hint_limit_insert;
+      DROP TABLE fanout_priority_hint;
+      DROP INDEX work_item_fanout_resolution_ready;
+      CREATE INDEX work_item_fanout_resolution_ready
+        ON work_item(kind, available_at, work_key, state, priority_hint_created_at)
+        WHERE state IN ('pending', 'retry_wait', 'quota_wait')
+          AND last_error_code = 'FANOUT_RESOLUTION_PENDING';
+      CREATE INDEX work_item_fanout_priority_schedule
+        ON work_item(kind, priority_hint_created_at, work_key)
+        WHERE priority_hint_created_at IS NOT NULL
+          AND state IN ('pending','retry_wait','quota_wait');
+      CREATE TRIGGER work_item_fanout_priority_limit
+      BEFORE UPDATE OF priority_hint_created_at ON work_item
+      WHEN OLD.priority_hint_created_at IS NULL
+        AND NEW.priority_hint_created_at IS NOT NULL
+        AND (SELECT COUNT(*) FROM work_item WHERE priority_hint_created_at IS NOT NULL) >= 1000
+      BEGIN SELECT RAISE(ABORT, 'FANOUT_PRIORITY_HINT_LIMIT'); END;
+      CREATE TRIGGER work_item_fanout_priority_terminal_cleanup
+      AFTER UPDATE OF state ON work_item
+      WHEN NEW.state IN ('succeeded','dead_letter','imported')
+        AND NEW.priority_hint_created_at IS NOT NULL
+      BEGIN
+        UPDATE work_item SET priority_hint_created_at = NULL,
+                             priority_hint_updated_at = NULL
+         WHERE work_key = NEW.work_key;
+      END;
+    `,
+  },
+  {
+    version: 42,
+    statements: `
+      ALTER TABLE canonical_translation_binding
+        ADD COLUMN publication_work_key TEXT REFERENCES work_item(work_key);
+      ALTER TABLE canonical_translation_binding
+        ADD COLUMN approved_artifact_hash TEXT;
+      ALTER TABLE canonical_translation_binding
+        ADD COLUMN publication_created_at INTEGER;
+
+      DROP TRIGGER canonical_translation_binding_reject_update;
+      UPDATE canonical_translation_binding AS binding
+         SET publication_work_key = (
+               SELECT publication_work_key FROM publication_derivation
+                WHERE translation_work_key = binding.translation_work_key
+             ),
+             approved_artifact_hash = (
+               SELECT approved_artifact_hash FROM publication_derivation
+                WHERE translation_work_key = binding.translation_work_key
+             ),
+             publication_created_at = (
+               SELECT created_at FROM publication_derivation
+                WHERE translation_work_key = binding.translation_work_key
+             )
+       WHERE EXISTS (
+         SELECT 1 FROM publication_derivation
+          WHERE translation_work_key = binding.translation_work_key
+       );
+
+      CREATE TEMP TABLE _publication_binding_guard (
+        valid INTEGER NOT NULL CHECK(valid = 1)
+      );
+      INSERT INTO _publication_binding_guard(valid)
+      SELECT CASE WHEN
+        (SELECT COUNT(*) FROM publication_derivation) =
+        (SELECT COUNT(*) FROM canonical_translation_binding
+          WHERE publication_work_key IS NOT NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM publication_derivation AS derivation
+          LEFT JOIN canonical_translation_binding AS binding
+            ON binding.translation_work_key = derivation.translation_work_key
+          WHERE binding.binding_id IS NOT derivation.binding_id
+             OR binding.publication_work_key IS NOT derivation.publication_work_key
+             OR binding.approved_artifact_hash IS NOT derivation.approved_artifact_hash
+             OR binding.publication_created_at IS NOT derivation.created_at
+        ) THEN 1 ELSE 0 END;
+      DROP TABLE _publication_binding_guard;
+      DROP TRIGGER publication_derivation_reject_update;
+      DROP TRIGGER publication_derivation_reject_delete;
+      DROP TABLE publication_derivation;
+
+      CREATE UNIQUE INDEX canonical_translation_binding_publication
+        ON canonical_translation_binding(publication_work_key)
+        WHERE publication_work_key IS NOT NULL;
+      CREATE TRIGGER canonical_translation_binding_reject_update
+      BEFORE UPDATE ON canonical_translation_binding
+      WHEN NOT (
+        OLD.translation_work_key IS NEW.translation_work_key
+        AND OLD.binding_id IS NEW.binding_id
+        AND OLD.binding_json IS NEW.binding_json
+        AND OLD.poem_id IS NEW.poem_id
+        AND OLD.source_revision_id IS NEW.source_revision_id
+        AND OLD.line_nfc_hash IS NEW.line_nfc_hash
+        AND OLD.prompt_material_hash IS NEW.prompt_material_hash
+        AND OLD.created_at IS NEW.created_at
+        AND OLD.publication_work_key IS NULL
+        AND OLD.approved_artifact_hash IS NULL
+        AND OLD.publication_created_at IS NULL
+        AND NEW.publication_work_key IS NOT NULL
+        AND NEW.approved_artifact_hash IS NOT NULL
+        AND length(NEW.approved_artifact_hash) = 64
+        AND NEW.approved_artifact_hash NOT GLOB '*[^0-9a-f]*'
+        AND NEW.publication_created_at >= 0
+      )
+      BEGIN SELECT RAISE(ABORT, 'CANONICAL_TRANSLATION_BINDING_IMMUTABLE'); END;
+      CREATE TRIGGER canonical_translation_binding_validate_insert
+      BEFORE INSERT ON canonical_translation_binding
+      WHEN NOT (
+        (NEW.publication_work_key IS NULL AND NEW.approved_artifact_hash IS NULL
+          AND NEW.publication_created_at IS NULL)
+        OR (NEW.publication_work_key IS NOT NULL
+          AND NEW.approved_artifact_hash IS NOT NULL
+          AND length(NEW.approved_artifact_hash) = 64
+          AND NEW.approved_artifact_hash NOT GLOB '*[^0-9a-f]*'
+          AND NEW.publication_created_at >= 0)
+      )
+      BEGIN SELECT RAISE(ABORT, 'CANONICAL_TRANSLATION_BINDING_INVALID'); END;
     `,
   },
 ];

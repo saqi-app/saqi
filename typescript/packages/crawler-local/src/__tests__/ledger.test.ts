@@ -692,8 +692,8 @@ describe("work identity and fenced leases", () => {
         expect(
           database
             .prepare(
-              `SELECT COUNT(*) AS count FROM publication_derivation
-             WHERE translation_work_key = ?`,
+              `SELECT COUNT(*) AS count FROM canonical_translation_binding
+             WHERE translation_work_key = ? AND publication_work_key IS NOT NULL`,
             )
             .get(source.workKey),
         ).toEqual({ count: 1 });
@@ -816,7 +816,7 @@ describe("work identity and fenced leases", () => {
           .prepare(
             `SELECT
                (SELECT COUNT(*) FROM canonical_translation_binding) AS bindings,
-               (SELECT COUNT(*) FROM publication_derivation) AS derivations`,
+               (SELECT COUNT(*) FROM canonical_translation_binding WHERE publication_work_key IS NOT NULL) AS derivations`,
           )
           .get(),
       ).toEqual({ bindings: 0, derivations: 0 });
@@ -863,7 +863,7 @@ describe("work identity and fenced leases", () => {
           .prepare(
             `SELECT
                (SELECT COUNT(*) FROM canonical_translation_binding) AS bindings,
-               (SELECT COUNT(*) FROM publication_derivation) AS derivations`,
+               (SELECT COUNT(*) FROM canonical_translation_binding WHERE publication_work_key IS NOT NULL) AS derivations`,
           )
           .get(),
       ).toEqual({ bindings: 0, derivations: 0 });
@@ -947,7 +947,7 @@ describe("work identity and fenced leases", () => {
     const database = new Database(path);
     database.exec(`
       CREATE TRIGGER reject_legacy_derivation
-      BEFORE INSERT ON publication_derivation
+      BEFORE UPDATE OF publication_work_key ON canonical_translation_binding
       BEGIN
         SELECT RAISE(ABORT, 'REJECT_TEST_DERIVATION');
       END;
@@ -979,7 +979,9 @@ describe("work identity and fenced leases", () => {
       ).toEqual({ count: 0 });
       expect(
         readonlyDatabase
-          .prepare(`SELECT COUNT(*) AS count FROM publication_derivation`)
+          .prepare(
+            `SELECT COUNT(*) AS count FROM canonical_translation_binding WHERE publication_work_key IS NOT NULL`,
+          )
           .get(),
       ).toEqual({ count: 0 });
     } finally {
@@ -1045,7 +1047,7 @@ describe("work identity and fenced leases", () => {
         translation_work_key: source.workKey,
       });
       expect(
-        database.prepare(`SELECT * FROM publication_derivation`).get(),
+        database.prepare(`SELECT * FROM canonical_translation_binding`).get(),
       ).toMatchObject({
         approved_artifact_hash: "a".repeat(64),
         binding_id: canonicalBinding().bindingId,
@@ -1125,7 +1127,9 @@ describe("work identity and fenced leases", () => {
       ).toEqual({ count: 0 });
       expect(
         database
-          .prepare(`SELECT COUNT(*) AS count FROM publication_derivation`)
+          .prepare(
+            `SELECT COUNT(*) AS count FROM canonical_translation_binding WHERE publication_work_key IS NOT NULL`,
+          )
           .get(),
       ).toEqual({ count: 0 });
     } finally {
@@ -3481,13 +3485,19 @@ test("durable fanout priority backfills only bounded ready resolution work", () 
   expect(
     new Set(ledger.listFanoutPriorityWorkKeys([fanoutKind], 10, 10)),
   ).toEqual(new Set(keys.slice(0, 2)));
-  expect(
-    calls.some(
-      (statement) =>
-        statement.includes("INDEXED BY fanout_priority_hint_schedule") &&
-        !statement.includes("FROM work_item"),
-    ),
-  ).toBe(true);
+  const priorityRead = calls.find((statement) =>
+    statement.includes("INDEXED BY work_item_fanout_priority_schedule"),
+  );
+  if (!priorityRead) throw new Error("priority schedule read missing");
+  expect(database.prepare(`EXPLAIN QUERY PLAN ${priorityRead}`).all()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        detail: expect.stringContaining(
+          "SEARCH work_item USING INDEX work_item_fanout_priority_schedule",
+        ),
+      }),
+    ]),
+  );
 });
 
 test("resolution-pending compatibility pages are stable, bounded, and index-only", () => {

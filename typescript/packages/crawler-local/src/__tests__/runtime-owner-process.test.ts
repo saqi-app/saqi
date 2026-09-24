@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 import { ModuleKind, transpileModule } from "typescript";
 import { expect, test } from "vitest";
 
+import { CURRENT_SCHEMA_VERSION } from "../persistence/migrations.js";
 import { RUNTIME_OWNER_MIGRATION_SQL } from "../persistence/runtime-owner-schema.js";
 import { RuntimeOwnerStore } from "../persistence/runtime-owner-store.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
@@ -55,7 +56,7 @@ test("two processes cannot both claim or remove a replacement runtime owner", as
   const database = new Database(path);
   database.pragma("journal_mode=WAL");
   database.exec(
-    "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,40)",
+    `CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,${String(CURRENT_SCHEMA_VERSION)})`,
   );
   database.exec(RUNTIME_OWNER_MIGRATION_SQL);
   const base = import.meta.dirname;
