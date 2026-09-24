@@ -1,6 +1,0 @@
-# Copy to .dev.vars for local development only. Never commit real values.
-CF_ACCESS_TEAM_DOMAIN=https://example.cloudflareaccess.com
-CF_ACCESS_AUD=replace-with-access-application-audience
-SAQI_PUBLIC_CACHE_PURGE_SECRET=replace-with-64-hex-secret
-SAQI_SOURCE_NAME=source
-SAQI_SOURCE_BASE_URL=https://source.example

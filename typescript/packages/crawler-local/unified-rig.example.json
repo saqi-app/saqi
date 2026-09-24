@@ -1,8 +1,0 @@
-{
-  "schemaId": "saqi.unified-rig",
-  "schemaVersion": 1,
-  "stateDirectory": "./.saqi-runs",
-  "sol": {
-    "initialConcurrency": 2
-  }
-}
