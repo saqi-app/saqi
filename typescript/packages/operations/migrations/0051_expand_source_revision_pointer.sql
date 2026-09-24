@@ -12,7 +12,7 @@ ON poem_source_revision(source_poem_id, id);
 CREATE TABLE IF NOT EXISTS _source_pointer_expand_guard (
   invalid_count INTEGER NOT NULL CHECK (invalid_count = 0)
 ) STRICT;
-INSERT INTO _source_pointer_expand_guard (invalid_count)
+INSERT INTO _source_pointer_expand_guard (invalid_count) -- sarj-noqa: SARJ105 — A nonzero count must abort this one-time migration rather than replay.
 SELECT count(*)
 FROM poem_source_pointer pointer
 LEFT JOIN poem_source_revision revision ON revision.id = pointer.revision_id
@@ -35,7 +35,7 @@ WHERE EXISTS (
   SELECT 1 FROM poem_source_pointer WHERE source_poem_id = source_poem_identity.id
 );
 
-INSERT INTO _source_pointer_expand_guard (invalid_count)
+INSERT INTO _source_pointer_expand_guard (invalid_count) -- sarj-noqa: SARJ105 — Any parity mismatch must abort this one-time migration.
 SELECT count(*) FROM source_poem_identity source
 LEFT JOIN poem_source_pointer pointer ON pointer.source_poem_id = source.id
 WHERE source.current_revision_id IS NOT pointer.revision_id

@@ -76,6 +76,48 @@ const SourceContentDocumentSchema = z.looseObject({
 
 export class ProductionResolutionConflictError extends Error {}
 
+function assertSourceLineage(
+  row: z.infer<typeof ResolutionRowSchema>,
+  requested: Extract<
+    ProductionResolutionRequest,
+    { schemaVersion: 2 }
+  >["targets"][number],
+  sourceName: string,
+): void {
+  if (row.source_identity_id === null) {
+    if ("poemId" in requested) {
+      throw new ProductionResolutionConflictError(
+        "PRODUCTION_RESOLUTION_SOURCE_LINEAGE_CONFLICT",
+      );
+    }
+    if (
+      row.active_source_revision_id !== null ||
+      row.source_pointer_revision_id !== null ||
+      row.source_pointer_version !== null ||
+      (row.requested_author_id !== null &&
+        row.requested_author_id !== row.author_id)
+    ) {
+      throw new ProductionResolutionConflictError(
+        "PRODUCTION_RESOLUTION_LEGACY_OWNERSHIP_CONFLICT",
+      );
+    }
+  } else if (
+    row.source_identity_tombstoned_at !== null ||
+    row.identity_author_source_name !== sourceName ||
+    ("sourceAuthorSlug" in requested &&
+      row.identity_author_slug !== requested.sourceAuthorSlug) ||
+    row.identity_author_id !== row.author_id ||
+    row.active_source_revision_id === null ||
+    row.source_pointer_revision_id !== row.active_source_revision_id ||
+    row.source_revision_source_poem_id !== row.source_identity_id ||
+    ("poemId" in requested && row.poem_id !== requested.poemId)
+  ) {
+    throw new ProductionResolutionConflictError(
+      "PRODUCTION_RESOLUTION_SOURCE_LINEAGE_CONFLICT",
+    );
+  }
+}
+
 export interface ProductionResolutionStore {
   resolve(input: unknown): Promise<ProductionResolutionResponse>;
 }
@@ -280,38 +322,7 @@ export class D1ProductionResolutionStore implements ProductionResolutionStore {
             "PRODUCTION_RESOLUTION_TARGET_UNRESOLVED",
           );
         }
-        if (row.source_identity_id === null) {
-          if ("poemId" in requested) {
-            throw new ProductionResolutionConflictError(
-              "PRODUCTION_RESOLUTION_SOURCE_LINEAGE_CONFLICT",
-            );
-          }
-          if (
-            row.active_source_revision_id !== null ||
-            row.source_pointer_revision_id !== null ||
-            row.source_pointer_version !== null ||
-            (row.requested_author_id !== null &&
-              row.requested_author_id !== row.author_id)
-          ) {
-            throw new ProductionResolutionConflictError(
-              "PRODUCTION_RESOLUTION_LEGACY_OWNERSHIP_CONFLICT",
-            );
-          }
-        } else if (
-          row.source_identity_tombstoned_at !== null ||
-          row.identity_author_source_name !== this.#sourceName ||
-          ("sourceAuthorSlug" in requested &&
-            row.identity_author_slug !== requested.sourceAuthorSlug) ||
-          row.identity_author_id !== row.author_id ||
-          row.active_source_revision_id === null ||
-          row.source_pointer_revision_id !== row.active_source_revision_id ||
-          row.source_revision_source_poem_id !== row.source_identity_id ||
-          ("poemId" in requested && row.poem_id !== requested.poemId)
-        ) {
-          throw new ProductionResolutionConflictError(
-            "PRODUCTION_RESOLUTION_SOURCE_LINEAGE_CONFLICT",
-          );
-        }
+        assertSourceLineage(row, requested, this.#sourceName);
         const modelPointers = ModelPointersSchema.parse(
           JSON.parse(row.model_pointers),
         ).map(({ modelKey, pointerVersion }) => ({ modelKey, pointerVersion }));
