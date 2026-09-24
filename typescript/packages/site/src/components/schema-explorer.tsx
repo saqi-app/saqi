@@ -146,7 +146,7 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
           <p>
             {matches.length} of {database.tables.length} tables
           </p>
-          <output className="visually-hidden" role="status" aria-live="polite">
+          <output aria-live="polite" className="visually-hidden" role="status">
             {matches.length} matching tables
           </output>
           <div className="schema-table-list" key={databaseId}>
@@ -171,8 +171,8 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
           className="schema-canvas"
         >
           <ReactFlow<SchemaNode>
-            key={databaseId}
             defaultViewport={{ x: 24, y: 24, zoom: 0.72 }}
+            key={databaseId}
             edges={edges}
             elementsSelectable
             maxZoom={1.5}
