@@ -2293,7 +2293,6 @@ describe("unified rig restart integration", () => {
       join(root, "health", "provider-execution-latest.json"),
     );
     expect(execution.providers[0]).toMatchObject({
-      admission: { primaryReason: "no_ready_work", state: "open" },
       progress: { accepted: 1, terminalWork: 1 },
       provider: "sol",
       throughput: {

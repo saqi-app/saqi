@@ -42,13 +42,6 @@
       "count": 1
     },
     {
-      "fingerprint": "6863d0db14fc5dd19192258b3cc7ee55277e8a068cab7c8dc61369641fdd4a47",
-      "source": "eslint",
-      "ruleId": "@sarj/no-conditional-empty-object-spread",
-      "path": "typescript/packages/crawler-local/src/__tests__/cli-command-policy.test.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "f6d5ea2e06b82870600dc3f7ae6782b9b14acf0ec9f1fb529db43f4c78627f59",
       "source": "eslint",
       "ruleId": "@sarj/no-conditional-empty-object-spread",
@@ -273,7 +266,7 @@
       "count": 3
     },
     {
-      "fingerprint": "872953f4d17a5dd50b87e6d2bc3a715456ad9a366b2486a47e4df90634f641b2",
+      "fingerprint": "28cbd998b4035ba186667cc06d496c15c913bf912430d2ec8b74577e08bbf639",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/cli.ts",
@@ -378,42 +371,42 @@
       "count": 1
     },
     {
-      "fingerprint": "6cdf2a75ffecb20e3859613acb09c3a3bc63e33d5f44b4190ee9224712dfb59b",
+      "fingerprint": "30f231f29189c3beaa79395d45bac31f2e7b5fb571af08adcae470313ebe656c",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "b197b065cbb4d255ca3ffbf10815a1a583ae2fa1562641f03c13debf4eac52ca",
+      "fingerprint": "44992fe120020db646038211cdfb4c7986febb67d4f97a27c92ae122e3990dec",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "b6dd615ce12800fcf1c01a39efec57cdc309c3255648acb30bc8d63ce4c8105c",
+      "fingerprint": "d0055d905b3e75062802290415b5d45c1ce837cdfc962fca7a1796de1160c95a",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
       "count": 1
     },
     {
-      "fingerprint": "736b5fc615252052b1e71dc6e2c311e9d88a3ae7120f9aabf80f98ca9e3483a0",
+      "fingerprint": "3d8bfacdd5b78e79991b290645bb4447135ce5040e594dda94304e5dbfe8a220",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {
-      "fingerprint": "a869a1427bc83eacfa252715f32599167682f04a02cbcd90f4c192706e4929e0",
+      "fingerprint": "3f6eaac832dd2581a709be04509f98c88d795e1f2dfa1fe4c9f25b88b82455a5",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
       "count": 1
     },
     {
-      "fingerprint": "c9162db558452f19e5e561eb1ea34484e84adf12f184063a6460f079ff3584d1",
+      "fingerprint": "d5e4296d3d6ca7c37f250b599c18fa382f371c9c5807c52fccbc59a2a49d15fe",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-lane-scheduler.ts",
@@ -431,20 +424,6 @@
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/persistence/artifact-store.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "bb85c05b1460f55f1ce061fabc5e525b33befa1c51116993b3486c64238629fc",
-      "source": "eslint",
-      "ruleId": "@sarj/no-excessive-cognitive-complexity",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "053af816549e5c3e32bd6941ac93a2ab0c05e66598d0898090d1825b56402040",
-      "source": "eslint",
-      "ruleId": "@sarj/no-excessive-cognitive-complexity",
-      "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
       "count": 1
     },
     {
@@ -581,7 +560,7 @@
       "count": 1
     },
     {
-      "fingerprint": "d27ce9bc21d7b47d099ef59c6110d018eb2885182709aec03f54550e72f4d44f",
+      "fingerprint": "12406480cb19e4c47c9ce5ab23b01f08824fe71fba5e010982beffd98590debe",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/doctor-report.ts",
@@ -602,21 +581,21 @@
       "count": 1
     },
     {
-      "fingerprint": "0e1ca294865c1a0c9198f373011349e56db44f2765c17666c4f14414279f0bd1",
+      "fingerprint": "83e2c08ac457645035a53826d8fc7979ecd87a2812423740532d57b98175e957",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/pipeline-diagnostics.ts",
       "count": 1
     },
     {
-      "fingerprint": "5bc08d226dc39f26c3481d67bfd8104180be17511cf0f9300c09a2607d0d0c02",
+      "fingerprint": "9bfea0b9a43696ffe02c5c420b0deb000fa453f5026ed1f03bb65cb9cf365116",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/provider-execution-health.ts",
       "count": 1
     },
     {
-      "fingerprint": "9e0ccc8334462c46f2ad6c7f1c7305391f62a896753a4222ad0317dbcf2655f9",
+      "fingerprint": "cd1e1f1b7b06154603115e123b12a257f2df2048227ecd7c4cc3bf4fbea7a6d4",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/provider-execution-health.ts",
@@ -644,21 +623,28 @@
       "count": 1
     },
     {
-      "fingerprint": "5f134951392e1abe4cff8ddb0f4b2cd16b3afab4b5c237a2fc2ed99a58046eac",
+      "fingerprint": "785ba1ee77ea139d228448d3f5959e54b72cfab55aba02b04f8c442558512ba3",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "b0357e3ae84668f9fba1e81865b0aa30d1c435399ae3e9c074daf5e77e31f3c9",
+      "fingerprint": "941fad7794a6f5f5a20482c90b100d8a42fb14b6e7b4e086dda213e1c42ea54e",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "ccc160ff6fbce9e1e1032694b538fafa7bdb79461490794eebfee9b048984e3a",
+      "fingerprint": "ab31a0680901154ee6183907ecc00461d7c10580c766c79e25c1cf2b11fa0553",
+      "source": "eslint",
+      "ruleId": "@sarj/no-excessive-cognitive-complexity",
+      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "e15171fee7242de9f2f6306d1420df86e5a9c378bd2da0321bad4c77496f33d3",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
@@ -666,13 +652,6 @@
     },
     {
       "fingerprint": "e36592251494a409be0ec7394c0b0c930fd7bca83ffbe20d1cd3df9fe0c17a02",
-      "source": "eslint",
-      "ruleId": "@sarj/no-excessive-cognitive-complexity",
-      "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "ea097252f99392a5bb95c162945a1dc4147bf9ca73843d9e363a1a522e399cb8",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
@@ -851,13 +830,6 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/__tests__/baseline-export.test.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "b5a7b3e63c5d849510ac1902b6dc28bb776b0348e9f247baecb1b54f24fcf601",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/__tests__/cli-readonly-status.test.ts",
       "count": 1
     },
     {
@@ -1526,13 +1498,6 @@
       "count": 1
     },
     {
-      "fingerprint": "b696f9dc1d18b74c697b786c88d071b1251b548ec015a9aebc6d5fee60e33a19",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "d94be14a851a4d26379ed60e6308b0c6b72e539871d765087343a83ba6a074eb",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
@@ -1645,13 +1610,6 @@
       "count": 4
     },
     {
-      "fingerprint": "1f06b41246131e4ec99dbc7e1f0557e18cc0e58c369f3a75f651394734d52761",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 2
-    },
-    {
       "fingerprint": "2088331a4706cc0201b308f9fe28ea64f46a5ffe4f459c63504bb1dffc3bc91a",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
@@ -1694,7 +1652,7 @@
       "count": 8
     },
     {
-      "fingerprint": "391f25207384f3c3cbd0d0f2e18218739bc897193df733e79a80a27622865825",
+      "fingerprint": "356c2d616a284b5940b1b9dc60c1b5f5ed9e7ddfac9943b915ef2e10843bf0ed",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
@@ -1712,7 +1670,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 8
+      "count": 5
     },
     {
       "fingerprint": "42a54b3ceeb8e37bdba9a645e0c462b25b8902a571c007cd6b23ee7fec06fe2f",
@@ -1810,14 +1768,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 12
-    },
-    {
-      "fingerprint": "6e54d4ac7abc1769821d0dfe449dd71cd17bf4f86cd38218d1ee29f9a6f0936a",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 4
+      "count": 10
     },
     {
       "fingerprint": "703c1395c21e92be493740ce28a619e6aa7bd9ebc93f6aaa0fd40fc21e3fd34f",
@@ -1880,7 +1831,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 4
+      "count": 2
     },
     {
       "fingerprint": "899eba8e9b3e170d66b3ffda34baf17e63ffb33a68d089ce1389fe58cb26dfdb",
@@ -1894,21 +1845,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 50
-    },
-    {
-      "fingerprint": "8d6951a1b5bfd06b2f0039cab410edb4c8ca88861cf362e04290cf041eafe2d1",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 6
-    },
-    {
-      "fingerprint": "910b6f877034ab0317187aabbbe0f0e378c278bb7c98b727bc6b035010b51261",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 2
+      "count": 48
     },
     {
       "fingerprint": "9afe95b76f85c3559a4540e1e4c8b32991e3bba9c2eebeef3f0d7cb44a485b37",
@@ -1944,13 +1881,6 @@
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
       "count": 2
-    },
-    {
-      "fingerprint": "a82b37d856e389e7ceab423ed5984873a5dc4ddf0660ad6d4ae57ba420b6f01f",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 5
     },
     {
       "fingerprint": "a8e502fae813269a1332ed85ba98e60436bbd874266b07a4540dd66392d09bbb",
@@ -2016,13 +1946,6 @@
       "count": 3
     },
     {
-      "fingerprint": "c9f73b13e931bfb23633d82e08c09619cc059360ed48fe77d4b2776368d0f1e4",
-      "source": "eslint",
-      "ruleId": "@sarj/require-camelcase-properties",
-      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 4
-    },
-    {
       "fingerprint": "cb3764ee84f75ef872886cc13f7fbee52d0a3fc8698cd5f1d085271189103a65",
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
@@ -2048,7 +1971,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
-      "count": 10
+      "count": 8
     },
     {
       "fingerprint": "d51e622bcfc96e1ddc53bfdeb442774bf94877fd63cbd5505e6d744ed0474517",
@@ -2056,6 +1979,13 @@
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
       "count": 4
+    },
+    {
+      "fingerprint": "d60113800e134cffe2e35dbbfa4ca18dc50787c192e66006c4505c89c61cf429",
+      "source": "eslint",
+      "ruleId": "@sarj/require-camelcase-properties",
+      "path": "typescript/packages/crawler-local/src/persistence/ledger.ts",
+      "count": 2
     },
     {
       "fingerprint": "da639e7377816492a2d78b9cc0c839b2c8f3d7618d6a20c35820c5642d82c22f",
@@ -2167,7 +2097,7 @@
       "source": "eslint",
       "ruleId": "@sarj/require-camelcase-properties",
       "path": "typescript/packages/crawler-local/src/persistence/migrations.ts",
-      "count": 3
+      "count": 2
     },
     {
       "fingerprint": "c6454c2c8b254f2be8770e0e497d250bb9e8114716f96f15fa162389bacd864a",
@@ -4256,13 +4186,6 @@
       "count": 2
     },
     {
-      "fingerprint": "0a3c6271cfdcf679bfbeb7a140fd3c9d5654865fd7e054268e2e0b7d5ec0d3fd",
-      "source": "eslint",
-      "ruleId": "jsdoc/no-restricted-syntax",
-      "path": "typescript/packages/crawler-local/src/enrichment/completion-plan.ts",
-      "count": 1
-    },
-    {
       "fingerprint": "0daddff9eeba3c568d50dd89c00924ee9dc514d3ff8fd2f353efd5fd1caaf4bb",
       "source": "eslint",
       "ruleId": "jsdoc/no-restricted-syntax",
@@ -5062,13 +4985,6 @@
     },
     {
       "fingerprint": "ba034d3e0b50c784a2fe072969bb63638429436a308d2eb1c90dce7913627741",
-      "source": "eslint",
-      "ruleId": "unicorn/custom-error-definition",
-      "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",
-      "count": 1
-    },
-    {
-      "fingerprint": "d2e038f88611673ed2b269c85f61e13065411cf12ec8f3b1414114ce2cf78460",
       "source": "eslint",
       "ruleId": "unicorn/custom-error-definition",
       "path": "typescript/packages/crawler-local/src/enrichment/sol-coordinator.ts",

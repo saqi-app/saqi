@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import { Ledger } from "../persistence/ledger.js";
 import { SqliteQueryValidationError } from "../persistence/sqlite-query.js";
-import { inputHash } from "../persistence/work-key.js";
 import { trackedMkdtempSync } from "./support/tracked-test-root.js";
 
 function fixture() {
