@@ -49,7 +49,6 @@ const PRODUCTION_RESOLUTION_SCHEMA_ID = "saqi.production-resolution-store";
 // Version 3 is already occupied by exact-scope snapshots. Full snapshots add
 // binding evidence at version 4 so the generic opener can distinguish them.
 export const PRODUCTION_RESOLUTION_SCHEMA_VERSION = 4;
-const LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION = 2;
 const ForeignKeyViolationsSchema = z.array(z.unknown());
 const ExistenceFlagSchema = z.literal(1);
 const MaximumResolutionAgeMsSchema = z
@@ -125,10 +124,7 @@ const MetaRowSchema = z
     observed_at: ObservedAtSchema,
     poem_count: SqliteSafeIntegerSchema.nonnegative(),
     schema_id: z.literal(PRODUCTION_RESOLUTION_SCHEMA_ID),
-    schema_version: z.union([
-      z.literal(LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION),
-      z.literal(PRODUCTION_RESOLUTION_SCHEMA_VERSION),
-    ]),
+    schema_version: z.literal(PRODUCTION_RESOLUTION_SCHEMA_VERSION),
     writer_epoch: SqliteSafeIntegerSchema.positive(),
   })
   .transform(
@@ -268,7 +264,7 @@ interface ProductionResolutionStorePort extends LocalEnrichmentResolver {
   resolvePublication(
     poemId: string,
     modelKey: string,
-    legacyFallback: boolean,
+    _legacyFallback: boolean,
     requiredSourceRevisionId?: string,
   ): Promise<{
     expectedPointerVersion: null | number;
@@ -286,9 +282,7 @@ export interface ProductionResolutionReport {
   readonly promotion?: "created" | "replayed";
   readonly replayed?: boolean;
   readonly schemaId: typeof PRODUCTION_RESOLUTION_SCHEMA_ID;
-  readonly schemaVersion:
-    | typeof LEGACY_PRODUCTION_RESOLUTION_SCHEMA_VERSION
-    | typeof PRODUCTION_RESOLUTION_SCHEMA_VERSION;
+  readonly schemaVersion: typeof PRODUCTION_RESOLUTION_SCHEMA_VERSION;
   readonly writerEpoch: number;
 }
 
@@ -318,7 +312,7 @@ class ProductionResolutionDatabase {
     );
   }
 
-  validateSchema(schemaVersion: 2 | 4): void {
+  validateSchema(): void {
     this.#validateColumns("resolution_meta", [
       "manifest_sha256",
       "model_pointer_count",
@@ -337,9 +331,8 @@ class ProductionResolutionDatabase {
       "poem_id",
       "source_author_slug",
       "source_poem_id",
-      ...(schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
-        ? ["current_source_nfc_sha256", "source_pointer_version"]
-        : []),
+      "current_source_nfc_sha256",
+      "source_pointer_version",
     ]);
     this.#validateColumns("model_pointer", [
       "model_key",
@@ -395,10 +388,6 @@ class ProductionResolutionDatabase {
         throw new Error("PRODUCTION_RESOLUTION_INDEX_MISSING");
     }
     const manifest = createHash("sha256");
-    const sourceBindingColumns =
-      meta.schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
-        ? "current_source_nfc_sha256, source_pointer_version"
-        : "NULL AS current_source_nfc_sha256, NULL AS source_pointer_version";
     for (const row of queryStream(
       { operation: "productionResolution.manifestPoems" },
       () =>
@@ -406,28 +395,14 @@ class ProductionResolutionDatabase {
           .prepare(
             `SELECT source_poem_id, poem_id, author_id, author_name_arabic,
                     source_author_slug, current_revision_id,
-                    expected_pointer_version, ${sourceBindingColumns}
+                    expected_pointer_version, current_source_nfc_sha256,
+                    source_pointer_version
                FROM poem_resolution ORDER BY poem_id`,
           )
           .iterate(),
       ResolutionRowSchema,
     )) {
-      manifest.update(
-        `${canonicalJson(
-          meta.schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
-            ? { kind: "poem", ...row }
-            : {
-                authorId: row.authorId,
-                authorNameArabic: row.authorNameArabic,
-                currentRevisionId: row.currentRevisionId,
-                expectedPointerVersion: row.expectedPointerVersion,
-                kind: "poem",
-                poemId: row.poemId,
-                sourceAuthorSlug: row.sourceAuthorSlug,
-                sourcePoemId: row.sourcePoemId,
-              },
-        )}\n`,
-      );
+      manifest.update(`${canonicalJson({ kind: "poem", ...row })}\n`);
     }
     for (const row of queryStream(
       { operation: "productionResolution.manifestPointers" },
@@ -478,16 +453,13 @@ class ProductionResolutionQueries {
   readonly #bySource: Database.Statement;
   readonly #modelPointer: Database.Statement;
 
-  constructor(database: Database.Database, schemaVersion: 2 | 4) {
-    const sourceBindingColumns =
-      schemaVersion === PRODUCTION_RESOLUTION_SCHEMA_VERSION
-        ? "current_source_nfc_sha256, source_pointer_version"
-        : "NULL AS current_source_nfc_sha256, NULL AS source_pointer_version";
+  constructor(database: Database.Database) {
     // eslint-disable-next-line @sarj/require-sql-access-class -- This query-store constructor prepares its source lookup on the injected connection.
     this.#bySource = database.prepare(
       `SELECT source_poem_id, poem_id, author_id, author_name_arabic,
               source_author_slug, expected_pointer_version,
-              current_revision_id, ${sourceBindingColumns}
+              current_revision_id, current_source_nfc_sha256,
+              source_pointer_version
          FROM poem_resolution WHERE source_poem_id = ?`,
     );
     // eslint-disable-next-line @sarj/require-sql-access-class -- This query-store constructor prepares its poem lookup on the injected connection.
@@ -574,7 +546,7 @@ class ProductionSourceDatabase {
     );
   }
 
-  poemRows(legacy: boolean) {
+  poemRows() {
     return queryStream(
       { operation: "productionSource.poems" },
       () =>
@@ -589,7 +561,7 @@ class ProductionSourceDatabase {
                 source_pointer.revision_id AS current_revision_id,
                 source_pointer.pointer_version AS source_pointer_version,
                 source_revision.content_arabic AS content_arabic,
-                ${legacy ? "legacy.pointer_version" : "NULL"} AS expected_pointer_version
+                NULL AS expected_pointer_version
            FROM source_poem_identity AS source_poem
            JOIN source_author_identity AS source_author
              ON source_author.id = source_poem.source_author_id
@@ -602,7 +574,6 @@ class ProductionSourceDatabase {
             AND source_revision.source_poem_id = source_poem.id
            JOIN author ON author.id = source_author.canonical_author_id
             AND author.id = poem.author_id
-           ${legacy ? "LEFT JOIN poem_publication_pointer AS legacy ON legacy.poem_id = poem.id" : ""}
           WHERE source_poem.source_name = ?
             AND source_poem.tombstoned_at IS NULL
           ORDER BY poem.id`,
@@ -680,11 +651,6 @@ class ProductionSourceDatabase {
       "id",
       "source_poem_id",
     ]);
-    if (this.tableExists("poem_publication_pointer"))
-      this.#validateColumns("poem_publication_pointer", [
-        "poem_id",
-        "pointer_version",
-      ]);
     if (this.tableExists("poem_model_publication_pointer"))
       this.#validateColumns("poem_model_publication_pointer", [
         "model_key",
@@ -892,13 +858,10 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
     try {
       this.#repository.configureReadonly();
       this.#meta = this.#repository.meta();
-      this.#repository.validateSchema(this.#meta.schemaVersion);
+      this.#repository.validateSchema();
       this.#assertFresh();
       this.#repository.validateContents(this.#meta);
-      this.#queries = new ProductionResolutionQueries(
-        this.#database,
-        this.#meta.schemaVersion,
-      );
+      this.#queries = new ProductionResolutionQueries(this.#database);
     } catch (error) {
       this.#database.close();
       throw error;
@@ -1019,7 +982,7 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
   async resolvePublication(
     poemId: string,
     modelKey: string,
-    legacyFallback: boolean,
+    _legacyFallback: boolean,
     requiredSourceRevisionId?: string,
   ): Promise<{
     expectedPointerVersion: null | number;
@@ -1036,9 +999,7 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
       return null;
     const model = this.#queries.modelPointer(poemId, modelKey);
     return {
-      expectedPointerVersion:
-        model?.pointerVersion ??
-        (legacyFallback ? poem.expectedPointerVersion : null),
+      expectedPointerVersion: model?.pointerVersion ?? null,
       writerEpoch: this.#meta.writerEpoch,
     };
   }
@@ -1082,6 +1043,7 @@ export class ProductionResolutionStore implements ProductionResolutionStorePort 
   }
 }
 
+// eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Snapshot export owns one atomic source read, destination write, validation, and replay comparison.
 export async function exportProductionResolution(
   options: ProductionResolutionExportOptions,
 ): Promise<ProductionResolutionReport> {
@@ -1110,8 +1072,7 @@ export async function exportProductionResolution(
     let modelPointerCount = 0;
     snapshot.begin();
     try {
-      const legacy = sourceRepository.tableExists("poem_publication_pointer");
-      const poemRows = sourceRepository.poemRows(legacy);
+      const poemRows = sourceRepository.poemRows();
       for (const base of poemRows) {
         if (++poemCount > MAXIMUM_POEMS)
           throw new Error("PRODUCTION_RESOLUTION_POEM_LIMIT");
@@ -1271,7 +1232,6 @@ function sameSnapshot(
     left.modelPointerCount === right.modelPointerCount &&
     left.observedAt === right.observedAt &&
     left.poemCount === right.poemCount &&
-    left.schemaVersion === right.schemaVersion &&
     left.writerEpoch === right.writerEpoch
   );
 }

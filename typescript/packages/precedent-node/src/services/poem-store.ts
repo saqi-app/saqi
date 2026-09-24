@@ -152,20 +152,6 @@ function validationIdentity(input: {
   ]);
 }
 
-function normalizedTablesUnavailable(error: unknown): boolean {
-  const messages: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
-    messages.push(current.message);
-    current = current.cause;
-  }
-  return messages.some((message) =>
-    /no such (?:table:\s*|column:\s*["`']?)(?:model_enrichment_artifact|model_enrichment_validation|poem_model_publication_pointer)(?:["`']?|\.)/iu.test(
-      message,
-    ),
-  );
-}
-
 const BATCH_SIZE = 50;
 const READ_BATCH_CONCURRENCY = 4;
 const SqliteCountSchema = z.number().int().nonnegative();
@@ -566,88 +552,76 @@ export class D1PoemStore implements PoemStore {
     return PoemScrapeSelectionRowsSchema.parse(rows);
   }
 
-  // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing model-enrichment reader branches preserve legacy poem display during the schema fold.
+  // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Model publication validation checks profile, review, payload, and source lineage in one reader.
   async #modelEnrichments(
     poemIds: readonly string[],
   ): Promise<Map<string, PoemModelEnrichment[]>> {
     if (poemIds.length === 0) return new Map();
-    let artifacts: ModelArtifactRow[];
-    try {
-      artifacts = await this.#db
-        .select({
-          id: enrichmentArtifact.id,
-          model: enrichmentArtifact.model,
-          modelKey: enrichmentArtifact.modelKey,
-          // Selecting JSON-mode columns through raw SQL prevents the driver
-          // decoder from throwing before one malformed document can be
-          // isolated and rejected below.
-          payload: sql<unknown>`${enrichmentArtifact.payload}`,
-          poemId: modelPublication.poemId,
-          promptVersion: enrichmentArtifact.promptVersion,
-          reasoningEffort: enrichmentArtifact.reasoningEffort,
-          schemaVersion: enrichmentArtifact.schemaVersion,
-        })
-        .from(modelPublication)
-        .innerJoin(
-          enrichmentArtifact,
-          eq(enrichmentArtifact.id, modelPublication.enrichmentArtifactId),
-        )
-        .innerJoin(poem, eq(poem.id, modelPublication.poemId))
-        .where(
-          and(
-            inArray(modelPublication.poemId, [...poemIds]),
-            eq(modelPublication.modelKey, enrichmentArtifact.modelKey),
-            eq(
-              modelPublication.sourceRevisionId,
-              enrichmentArtifact.sourceRevisionId,
-            ),
-            eq(modelPublication.sourceRevisionId, poem.activeSourceRevisionId),
+    const artifacts: ModelArtifactRow[] = await this.#db
+      .select({
+        id: enrichmentArtifact.id,
+        model: enrichmentArtifact.model,
+        modelKey: enrichmentArtifact.modelKey,
+        // Selecting JSON-mode columns through raw SQL prevents the driver
+        // decoder from throwing before one malformed document can be
+        // isolated and rejected below.
+        payload: sql<unknown>`${enrichmentArtifact.payload}`,
+        poemId: modelPublication.poemId,
+        promptVersion: enrichmentArtifact.promptVersion,
+        reasoningEffort: enrichmentArtifact.reasoningEffort,
+        schemaVersion: enrichmentArtifact.schemaVersion,
+      })
+      .from(modelPublication)
+      .innerJoin(
+        enrichmentArtifact,
+        eq(enrichmentArtifact.id, modelPublication.enrichmentArtifactId),
+      )
+      .innerJoin(poem, eq(poem.id, modelPublication.poemId))
+      .where(
+        and(
+          inArray(modelPublication.poemId, [...poemIds]),
+          eq(modelPublication.modelKey, enrichmentArtifact.modelKey),
+          eq(
+            modelPublication.sourceRevisionId,
+            enrichmentArtifact.sourceRevisionId,
           ),
-        )
-        .all();
-    } catch (error) {
-      if (normalizedTablesUnavailable(error)) return new Map();
-      throw error;
-    }
+          eq(modelPublication.sourceRevisionId, poem.activeSourceRevisionId),
+        ),
+      )
+      .all();
     if (artifacts.length === 0) return new Map();
-    let validations: ModelValidationRow[];
-    try {
-      validations = await this.#db
-        .select({
-          artifactId: enrichmentValidation.artifactId,
-          attempt: enrichmentValidation.attempt,
-          highestSeverity: enrichmentValidation.highestSeverity,
-          outcome: enrichmentValidation.outcome,
-          report: sql<unknown>`${enrichmentValidation.report}`,
-          validatorKey: enrichmentValidation.validatorKey,
-          validatorVersion: enrichmentValidation.validatorVersion,
-        })
-        .from(enrichmentValidation)
-        .innerJoin(
-          enrichmentArtifact,
-          eq(enrichmentArtifact.id, enrichmentValidation.artifactId),
-        )
-        .innerJoin(
-          modelPublication,
-          eq(modelPublication.enrichmentArtifactId, enrichmentArtifact.id),
-        )
-        .innerJoin(poem, eq(poem.id, modelPublication.poemId))
-        .where(
-          and(
-            inArray(modelPublication.poemId, [...poemIds]),
-            eq(modelPublication.modelKey, enrichmentArtifact.modelKey),
-            eq(
-              modelPublication.sourceRevisionId,
-              enrichmentArtifact.sourceRevisionId,
-            ),
-            eq(modelPublication.sourceRevisionId, poem.activeSourceRevisionId),
+    const validations: ModelValidationRow[] = await this.#db
+      .select({
+        artifactId: enrichmentValidation.artifactId,
+        attempt: enrichmentValidation.attempt,
+        highestSeverity: enrichmentValidation.highestSeverity,
+        outcome: enrichmentValidation.outcome,
+        report: sql<unknown>`${enrichmentValidation.report}`,
+        validatorKey: enrichmentValidation.validatorKey,
+        validatorVersion: enrichmentValidation.validatorVersion,
+      })
+      .from(enrichmentValidation)
+      .innerJoin(
+        enrichmentArtifact,
+        eq(enrichmentArtifact.id, enrichmentValidation.artifactId),
+      )
+      .innerJoin(
+        modelPublication,
+        eq(modelPublication.enrichmentArtifactId, enrichmentArtifact.id),
+      )
+      .innerJoin(poem, eq(poem.id, modelPublication.poemId))
+      .where(
+        and(
+          inArray(modelPublication.poemId, [...poemIds]),
+          eq(modelPublication.modelKey, enrichmentArtifact.modelKey),
+          eq(
+            modelPublication.sourceRevisionId,
+            enrichmentArtifact.sourceRevisionId,
           ),
-        )
-        .all();
-    } catch (error) {
-      if (normalizedTablesUnavailable(error)) return new Map();
-      throw error;
-    }
+          eq(modelPublication.sourceRevisionId, poem.activeSourceRevisionId),
+        ),
+      )
+      .all();
     const validationsByArtifact = new Map<string, ModelValidationRow[]>();
     for (const validation of validations) {
       const grouped = validationsByArtifact.get(validation.artifactId) ?? [];

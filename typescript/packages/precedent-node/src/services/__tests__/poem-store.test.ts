@@ -301,7 +301,7 @@ describe("D1PoemStore", () => {
       ]);
     });
 
-    it("fails closed without crashing on a partial normalized schema", async () => {
+    it("reports a partial normalized schema", async () => {
       sqlite.exec(`
         DROP TABLE model_enrichment_validation;
         CREATE TABLE model_enrichment_validation (
@@ -324,9 +324,7 @@ describe("D1PoemStore", () => {
         false,
       );
 
-      const result = await store.getById(testPoemId);
-
-      expect(result.modelEnrichments).toBeUndefined();
+      await expect(store.getById(testPoemId)).rejects.toThrow();
     });
   });
 

@@ -551,7 +551,7 @@ export async function openProductionResolutionStore(
   }
   if (version === SCOPED_PRODUCTION_RESOLUTION_SCHEMA_VERSION)
     return ScopedProductionResolutionStore.open(input, options);
-  if (version === 2 || version === PRODUCTION_RESOLUTION_SCHEMA_VERSION)
+  if (version === PRODUCTION_RESOLUTION_SCHEMA_VERSION)
     return ProductionResolutionStore.open(input, options);
   throw new Error("PRODUCTION_RESOLUTION_SCHEMA_VERSION_UNSUPPORTED");
 }

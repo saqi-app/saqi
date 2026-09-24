@@ -10,7 +10,6 @@
   "private": true,
   "sideEffects": false,
   "scripts": {
-    "benchmark:offline": "yarn build && node dist/offline-scale-benchmark.js",
     "build": "tsc && node scripts/finalize-build.mjs",
     "check": "yarn check::format && yarn check::lint && yarn check::types",
     "check::format": "prettier --check .",
