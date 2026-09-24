@@ -18,7 +18,8 @@
     "0052_guard_legacy_enrichment_contract.sql",
     "0053_retire_legacy_sol_translation_column.sql",
     "0054_retire_legacy_sol_insights_column.sql",
-    "0055_retire_legacy_enrichment_tables.sql"
+    "0055_retire_legacy_enrichment_tables.sql",
+    "0056_stage_database_identity.sql"
   ],
   "localVersion": 42,
   "databases": [
@@ -1150,6 +1151,12 @@
               "name": "updated_at",
               "type": "INTEGER",
               "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "database_id",
+              "type": "TEXT",
+              "nullable": true,
               "primaryKey": false
             }
           ],

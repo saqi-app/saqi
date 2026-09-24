@@ -58,7 +58,7 @@ describe("production deployment identity", () => {
     first.mockResolvedValue({ databaseId: SAQI_PRODUCTION_DATABASE_ID });
     await expect(repository.matchesProduction()).resolves.toBe(true);
     expect(prepare).toHaveBeenCalledExactlyOnceWith(
-      "SELECT database_id AS databaseId FROM production_deployment_identity WHERE scope = 'production'"
+      "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
     );
     expect(first).toHaveBeenCalledExactlyOnceWith();
   });

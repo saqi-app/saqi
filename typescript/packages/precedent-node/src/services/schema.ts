@@ -86,6 +86,7 @@ export const SCRAPER_WRITER_CONTROL_TABLE = sqliteTable(
     writerEpoch: integer("writer_epoch").notNull(),
     writerId: text("writer_id"),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    databaseId: text("database_id"),
   },
 );
 

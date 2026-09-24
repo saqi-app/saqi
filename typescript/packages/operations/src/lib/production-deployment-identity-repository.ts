@@ -21,7 +21,7 @@ export class ProductionDeploymentIdentityRepository implements ProductionDeploym
     try {
       const row = await this.#database
         .prepare(
-          "SELECT database_id AS databaseId FROM production_deployment_identity WHERE scope = 'production'"
+          "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
         )
         .first<unknown>();
       const identity = ProductionDeploymentIdentityRowSchema.parse(row);
