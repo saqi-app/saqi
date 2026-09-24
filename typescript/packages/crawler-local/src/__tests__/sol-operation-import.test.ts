@@ -99,14 +99,6 @@ function operatorState(path: string) {
         "SELECT control_key, enabled FROM runtime_control WHERE control_key != 'sol_operation_import_complete' ORDER BY control_key",
       )
       .all(),
-    budgets: database
-      .prepare("SELECT * FROM sol_paid_usage_budget ORDER BY budget_id")
-      .all(),
-    reservations: database
-      .prepare(
-        "SELECT * FROM sol_paid_usage_reservation ORDER BY budget_id, attempt_id",
-      )
-      .all(),
   }));
 }
 
@@ -187,7 +179,6 @@ test.each(HistoricalReconciliationCases)(
     const { root, path } = fixture();
     const item = legacy(root, "unknown");
     const ledger = Ledger.open(path);
-    ledger.armSolPaidUsageBudget(3);
     ledger.close();
     const before = operatorState(path);
     const original = { ...observation, finishedAt: Date.now() };
@@ -663,7 +654,6 @@ test.each(["event-turn", "snapshot-turn", "missing-exit", "signal"])(
   async (reason) => {
     const { root, path } = fixture();
     const ledger = Ledger.open(path);
-    ledger.armSolPaidUsageBudget(3);
     ledger.close();
     const beforeOperatorState = operatorState(path);
     const item = legacy(root, "known_rejection");
@@ -827,36 +817,16 @@ test("record and aggregate byte budgets stop scans without unbounded reads", asy
   ).rejects.toThrow("SOL_IMPORT_BYTE_LIMIT");
 });
 
-test("finite spent budget and explicit pauses are unchanged by import", async () => {
+test("explicit pauses are unchanged by import", async () => {
   const { root, path } = fixture();
   legacy(root, "known_success");
-  inspect(path, (db) =>
-    db.exec(
-      "INSERT INTO sol_paid_usage_budget VALUES('fixture-budget', 9, 9, 'exhausted', 1, 1)",
-    ),
-  );
-  const before = inspect(path, (db) =>
-    db.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-  );
+  const before = operatorState(path);
   await importLegacySolOperations({
     stateDirectory: root,
     apply: true,
     expectedDigest: await digest(root),
   });
-  expect(
-    inspect(path, (db) =>
-      db.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-    ),
-  ).toEqual(before);
-  expect(
-    inspect(path, (db) =>
-      db
-        .prepare(
-          "SELECT enabled FROM runtime_control WHERE control_key IN ('global_paused','paid_work_paused')",
-        )
-        .all(),
-    ),
-  ).toEqual([{ enabled: 1 }, { enabled: 1 }]);
+  expect(operatorState(path)).toEqual(before);
 });
 
 test("expired but still-running Sol ownership blocks the offline apply", async () => {
@@ -956,15 +926,10 @@ test("root and lock symlinks are refused without following their targets", async
   expect(readFileSync(target, "utf8")).toBe("not a lock");
 });
 
-test("symlinked ledger is rejected before opening or changing an external budget and controls", async () => {
+test("symlinked ledger is rejected without changing the external database", async () => {
   const source = fixture();
   const target = fixture();
   const expectedDigest = await digest(source.root);
-  inspect(target.path, (db) =>
-    db.exec(
-      "INSERT INTO sol_paid_usage_budget VALUES('external-budget', 9, 9, 'exhausted', 1, 1)",
-    ),
-  );
   const before = readFileSync(target.path);
   unlinkSync(source.path);
   symlinkSync(target.path, source.path);

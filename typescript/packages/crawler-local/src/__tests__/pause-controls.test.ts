@@ -88,10 +88,9 @@ describe("SQLite pause controls", () => {
     reopened.close();
   });
 
-  it("does not arm or replenish a budget when changing pause state", () => {
+  it("changes pause state independently of work execution", () => {
     const root = trackedMkdtempSync(join(tmpdir(), "saqi-controls-"));
     const ledger = Ledger.initialize(join(root, "ledger.sqlite3"));
-    const budget = ledger.solPaidUsageBudgetStatus();
     ledger.pauseControls.set("global", true);
     ledger.pauseControls.set("paid", true);
     ledger.pauseControls.set("global", false);
@@ -99,7 +98,6 @@ describe("SQLite pause controls", () => {
       paused: false,
       paidWorkPaused: true,
     });
-    expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
     ledger.close();
     expect(() => ledger.pauseControls.read()).toThrow();
   });

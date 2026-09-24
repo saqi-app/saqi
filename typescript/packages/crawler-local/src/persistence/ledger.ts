@@ -88,41 +88,9 @@ const SchedulerSerializedStateSchema = z.string().refine((value) => {
 const ExpiredWorkRowSchema = z.strictObject({
   attemptId: z.string().nullable(),
   leaseEpoch: SqliteSafeIntegerSchema.nonnegative(),
-  reservedSolAttempt: z.literal([0, 1]),
+  solClaim: z.literal([0, 1]),
   workKey: z.string(),
 });
-const BudgetStateSchema = z.literal(["active", "closed", "exhausted"]);
-const BudgetCapacityRowSchema = z.strictObject({
-  budget_id: z.string(),
-  maximum_operations: SqliteSafeIntegerSchema.positive(),
-});
-const LatestBudgetRowSchema = BudgetCapacityRowSchema.extend({
-  state: BudgetStateSchema,
-}).transform((row) => ({
-  budgetId: row.budget_id,
-  maximumOperations: row.maximum_operations,
-  state: row.state,
-}));
-const BudgetAccountingRowSchema = BudgetCapacityRowSchema.extend({
-  reserved_operations: SqliteSafeIntegerSchema.nonnegative(),
-});
-const BudgetReservationRowSchema = BudgetAccountingRowSchema.refine(
-  (row) => row.reserved_operations <= row.maximum_operations,
-).transform((row) => ({
-  budgetId: row.budget_id,
-  maximumOperations: row.maximum_operations,
-  reservedOperations: row.reserved_operations,
-}));
-const BudgetStatusRowSchema = BudgetAccountingRowSchema.extend({
-  state: BudgetStateSchema,
-})
-  .refine((row) => row.reserved_operations <= row.maximum_operations)
-  .transform((row) => ({
-    budgetId: row.budget_id,
-    maximumOperations: row.maximum_operations,
-    reservedOperations: row.reserved_operations,
-    state: row.state,
-  }));
 const SchedulerStateRowSchema = z
   .strictObject({
     state_digest: Sha256Schema,
@@ -407,7 +375,6 @@ export interface WorkAvailability {
 
 export interface ProviderProfileDiagnostics {
   readonly availability: WorkAvailability;
-  readonly budget: SolPaidUsageBudgetStatus;
   readonly poemThroughput: SolPoemThroughput;
   readonly progress: KindProgress;
   readonly quarantinedOperations: number;
@@ -532,14 +499,6 @@ export class LedgerIntegrityError extends Error {
   }
 }
 
-export interface SolPaidUsageBudgetStatus {
-  readonly budgetId: null | string;
-  readonly maximumOperations: number;
-  readonly remainingOperations: number;
-  readonly reservedOperations: number;
-  readonly state: "active" | "closed" | "exhausted" | "unarmed";
-}
-
 export class PoemIdentityConflictError extends Error {
   readonly authorHref: string;
   readonly existingAuthorHref: null | string;
@@ -642,135 +601,6 @@ export class Ledger {
 
   close(): void {
     this.#database.close();
-  }
-
-  armSolPaidUsageBudget(
-    maximumOperations: number,
-    rearm = false,
-    now = Date.now(),
-  ): SolPaidUsageBudgetStatus {
-    if (
-      !Number.isSafeInteger(maximumOperations) ||
-      maximumOperations <= 0 ||
-      maximumOperations % 3 !== 0
-    ) {
-      throw new Error(
-        "maximum Sol operations must be a positive multiple of 3",
-      );
-    }
-    return this.#immediate(() => {
-      const latest = queryOptional(
-        { operation: "Ledger.armSolPaidUsageBudget" },
-        () =>
-          this.#database
-            .prepare(
-              `SELECT budget_id, maximum_operations, state
-             FROM sol_paid_usage_budget
-            ORDER BY created_at DESC, budget_id DESC LIMIT 1`,
-            )
-            .get(),
-        LatestBudgetRowSchema,
-      );
-      if (latest?.state === "active") {
-        if (rearm) throw new Error("SOL_PAID_USAGE_BUDGET_ALREADY_ACTIVE");
-        if (maximumOperations < latest.maximumOperations) {
-          throw new Error("SOL_PAID_USAGE_BUDGET_CANNOT_DECREASE");
-        }
-        if (maximumOperations > latest.maximumOperations) {
-          this.#database
-            .prepare(
-              `UPDATE sol_paid_usage_budget
-                  SET maximum_operations = ?, updated_at = max(updated_at, ?)
-                WHERE budget_id = ? AND state = 'active'`,
-            )
-            .run(maximumOperations, now, latest.budgetId);
-        }
-        return this.solPaidUsageBudgetStatus();
-      }
-      if (latest && !rearm)
-        throw new Error("SOL_PAID_USAGE_BUDGET_REARM_REQUIRED");
-      const budgetId = randomUUID();
-      this.#database
-        .prepare(
-          `INSERT INTO sol_paid_usage_budget(
-             budget_id, maximum_operations, reserved_operations, state,
-             created_at, updated_at
-           ) VALUES(?, ?, 0, 'active', ?, ?)`,
-        )
-        .run(budgetId, maximumOperations, now, now);
-      return this.solPaidUsageBudgetStatus();
-    });
-  }
-
-  solPaidUsageBudgetStatus(): SolPaidUsageBudgetStatus {
-    const row = queryOptional(
-      { operation: "Ledger.solPaidUsageBudgetStatus" },
-      () =>
-        this.#database
-          .prepare(
-            `SELECT budget_id, maximum_operations, reserved_operations, state
-           FROM sol_paid_usage_budget
-          ORDER BY created_at DESC, budget_id DESC LIMIT 1`,
-          )
-          .get(),
-      BudgetStatusRowSchema,
-    );
-    if (!row)
-      return {
-        budgetId: null,
-        maximumOperations: 0,
-        remainingOperations: 0,
-        reservedOperations: 0,
-        state: "unarmed",
-      };
-    return {
-      budgetId: row.budgetId,
-      maximumOperations: row.maximumOperations,
-      remainingOperations: Math.max(
-        0,
-        row.maximumOperations - row.reservedOperations,
-      ),
-      reservedOperations: row.reservedOperations,
-      state: row.state,
-    };
-  }
-
-  reserveSolPaidClaim(claim: WorkClaim, now = Date.now()): boolean {
-    return this.#immediate(() => {
-      const budget = queryOptional(
-        { operation: "Ledger.reserveSolPaidClaim" },
-        () =>
-          this.#database
-            .prepare(
-              `SELECT budget_id, maximum_operations, reserved_operations
-             FROM sol_paid_usage_budget WHERE state = 'active' LIMIT 1`,
-            )
-            .get(),
-        BudgetReservationRowSchema,
-      );
-      if (!budget || budget.maximumOperations - budget.reservedOperations < 3)
-        return false;
-      const inserted = this.#database
-        .prepare(
-          `INSERT INTO sol_paid_usage_reservation(
-             budget_id, attempt_id, work_key, reserved_operations, created_at
-           ) VALUES(?, ?, ?, 3, ?)
-           ON CONFLICT(budget_id, attempt_id) DO NOTHING`,
-        )
-        .run(budget.budgetId, claim.attemptId, claim.work.workKey, now);
-      if (inserted.changes === 0) return true;
-      const next = budget.reservedOperations + 3;
-      this.#database
-        .prepare(
-          `UPDATE sol_paid_usage_budget
-              SET reserved_operations = ?,
-                  state = CASE WHEN ? >= maximum_operations THEN 'exhausted' ELSE 'active' END,
-                  updated_at = MAX(updated_at, ?)
-            WHERE budget_id = ? AND state = 'active'`,
-        )
-        .run(next, next, now, budget.budgetId);
-      return true;
-    });
   }
 
   loadSchedulerState(stateKey: string): null | SchedulerStateRecord {
@@ -2262,7 +2092,6 @@ export class Ledger {
   ): ProviderProfileDiagnostics {
     return this.#readTransaction(() => ({
       availability: this.availability([kind], now, requirements),
-      budget: this.solPaidUsageBudgetStatus(),
       poemThroughput: this.#poemThroughput(requirements, now),
       progress: this.profileProgress(kind, requirements),
       quarantinedOperations: this.countErrors(
@@ -4477,11 +4306,7 @@ export class Ledger {
             .prepare(
               `SELECT work_item.work_key AS workKey, work_item.lease_epoch AS leaseEpoch,
                   claimed.attempt_id AS attemptId,
-                  CASE WHEN work_item.kind = 'poem-enrichment-sol' AND EXISTS (
-                    SELECT 1 FROM sol_paid_usage_reservation AS reservation
-                    WHERE reservation.work_key = work_item.work_key
-                      AND reservation.attempt_id = claimed.attempt_id
-                  ) THEN 1 ELSE 0 END AS reservedSolAttempt
+                  CASE WHEN work_item.kind = 'poem-enrichment-sol' THEN 1 ELSE 0 END AS solClaim
            FROM work_item
            LEFT JOIN work_event AS claimed
              ON claimed.sequence = (
@@ -4511,14 +4336,7 @@ export class Ledger {
                updated_at = ?
              WHERE work_key = ? AND state = 'running' AND lease_epoch = ? AND lease_expires_at <= ?`,
           )
-          .run(
-            now,
-            row.reservedSolAttempt,
-            now,
-            row.workKey,
-            row.leaseEpoch,
-            now,
-          );
+          .run(now, row.solClaim, now, row.workKey, row.leaseEpoch, now);
         if (changed.changes !== 1) {
           throw new LostLeaseError("Expired lease recovery lost its fence");
         }

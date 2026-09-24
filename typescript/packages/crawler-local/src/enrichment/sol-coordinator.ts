@@ -56,7 +56,6 @@ export const SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED =
   "SOL_REVIEW_REJECTED_MANUAL_ADJUDICATION_REQUIRED";
 const MAX_TRANSIENT_ATTEMPTS = 12;
 const DISK_PRESSURE_RETRY_MS = 60_000;
-class SolBudgetExhaustedError extends Error {}
 const ArtifactPersistenceErrorCodeSchema = z.enum([
   "EBUSY",
   "EIO",
@@ -84,8 +83,6 @@ export interface SolCoordinatorOptions {
   /** Explicit migration escape hatch. Production defaults to bound-only paid work. */
   readonly allowLegacyPaidClaims?: boolean;
   readonly artifacts: ArtifactStore;
-  /** Require a durable three-operation reservation before every paid Sol claim. */
-  readonly enforcePaidUsageBudget?: boolean;
   readonly leaseDurationMs?: number;
   readonly leaseHeartbeatMs?: number;
   readonly ledger: Ledger;
@@ -110,7 +107,6 @@ export interface SolRunSummary {
   readonly retryAt: null | number;
   readonly schedulerOutcome:
     | "ambiguous_outcome"
-    | "budget_exhausted"
     | "error"
     | "idle"
     | "network_wait"
@@ -146,7 +142,6 @@ const SCHEDULER_OUTCOME_SEVERITY: Readonly<
   Record<SolRunSummary["schedulerOutcome"], number>
 > = {
   ambiguous_outcome: 5,
-  budget_exhausted: 8,
   error: 3,
   idle: 0,
   network_wait: 7,
@@ -156,7 +151,6 @@ const SCHEDULER_OUTCOME_SEVERITY: Readonly<
   success: 2,
   task_failure: 1,
 };
-const PAID_USAGE_BUDGET_RECHECK_MS = 60_000;
 const PROVIDER_RETRY_MS = 15 * 60_000;
 const UNKNOWN_OPERATION_RECONCILIATION_AGE_MS = 5 * 60_000;
 const UNKNOWN_OPERATION_RECONCILIATION_BATCH = 8;
@@ -178,7 +172,6 @@ export class SolEnrichmentCoordinator
   readonly #artifacts: ArtifactStore;
   readonly #allowLegacyPaidClaims: boolean;
   readonly #ledger: Ledger;
-  readonly #enforcePaidUsageBudget: boolean;
   readonly #leaseDurationMs: number;
   readonly #leaseHeartbeatMs: number;
   readonly #owner: string;
@@ -194,7 +187,6 @@ export class SolEnrichmentCoordinator
   constructor(options: SolCoordinatorOptions) {
     this.#artifacts = options.artifacts;
     this.#ledger = options.ledger;
-    this.#enforcePaidUsageBudget = options.enforcePaidUsageBudget ?? false;
     this.#leaseDurationMs = options.leaseDurationMs ?? LEASE_DURATION_MS;
     this.#leaseHeartbeatMs =
       options.leaseHeartbeatMs ?? Math.floor(this.#leaseDurationMs / 3);
@@ -280,9 +272,7 @@ export class SolEnrichmentCoordinator
       }
       throw error;
     }
-    // A raised retry ceiling automatically revives only work terminalized by
-    // the previous, narrower policy. Paid execution remains closed until an
-    // explicit three-operation budget is available.
+    // A raised retry ceiling revives only work terminalized by the previous policy.
     this.#ledger.requeueDeadLettersBelowAttemptThreshold(
       this.#workKind,
       {
@@ -351,16 +341,6 @@ export class SolEnrichmentCoordinator
       if (recoveryClaim) recoveryClaims += 1;
       if (!recoveryClaim && options.artifactReconciliationOnly) break;
       if (!recoveryClaim && !this.#hasProviderWork(claimAt)) break;
-      // Budget denial is not an attempt. Keep fresh work untouched and avoid
-      // authentication subprocesses; local recovery remains independently free.
-      if (!recoveryClaim && this.#enforcePaidUsageBudget) {
-        const budget = this.#ledger.solPaidUsageBudgetStatus();
-        if (budget.state !== "active" || budget.remainingOperations < 3) {
-          summary.retryAt = claimAt + PAID_USAGE_BUDGET_RECHECK_MS;
-          summary.schedulerOutcome = "budget_exhausted";
-          break;
-        }
-      }
       if (!recoveryClaim && !providerVerified) {
         try {
           // Authentication is an admission gate only for fresh paid work.
@@ -429,19 +409,6 @@ export class SolEnrichmentCoordinator
         const approvedCompletion =
           failure instanceof SolApprovedCompletionInterruption;
         const error = approvedCompletion ? failure.cause : failure;
-        if (error instanceof SolBudgetExhaustedError) {
-          const transitionAt = now();
-          const retryAt = transitionAt + PAID_USAGE_BUDGET_RECHECK_MS;
-          this.#ledger.operatorRelease(
-            claim,
-            "SOL_PAID_USAGE_BUDGET_EXHAUSTED",
-            transitionAt,
-            retryAt,
-          );
-          summary.retryAt = retryAt;
-          summary.schedulerOutcome = "budget_exhausted";
-          break;
-        }
         if (error instanceof LostLeaseError) continue;
         if (error instanceof SolDiskPressureError) {
           try {
@@ -742,7 +709,7 @@ export class SolEnrichmentCoordinator
       );
       if (metadata === null) {
         // No retained operation exists for the next review. Keep the completed
-        // free checkpoints; fresh paid work remains subject to its own budget gate.
+        // free checkpoints.
         this.#releaseArtifactReconciliation(claim, now());
         return;
       }
@@ -850,14 +817,6 @@ export class SolEnrichmentCoordinator
     now: () => number,
     signal?: AbortSignal,
   ): Promise<void> {
-    let reserved = false;
-    const beforeNewOperation = () => {
-      if (reserved || !this.#enforcePaidUsageBudget) return;
-      if (!this.#ledger.reserveSolPaidClaim(claim, now())) {
-        throw new SolBudgetExhaustedError();
-      }
-      reserved = true;
-    };
     const parsedInput = SupportedPoemEnrichmentInputSchema.safeParse(
       claim.work.input,
     );
@@ -887,7 +846,6 @@ export class SolEnrichmentCoordinator
         parsedInput.data,
         signal,
         repair,
-        beforeNewOperation,
       );
       if (generation.state !== "succeeded") {
         const transitionAt = now();
@@ -944,7 +902,6 @@ export class SolEnrichmentCoordinator
         phase.output,
         reviewAttempt,
         signal,
-        beforeNewOperation,
       );
       if (result.state !== "succeeded") {
         const transitionAt = now();

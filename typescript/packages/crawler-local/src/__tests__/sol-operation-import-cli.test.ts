@@ -73,13 +73,12 @@ async function run(root: string, ...args: string[]): Promise<unknown> {
 }
 
 test.each([34, 35] as const)(
-  "schema%s CLI import requires explicit digest apply and never rearms paused budgets",
+  "schema%s CLI import requires explicit digest apply and preserves pause controls",
   async (version) => {
     const { root, path } = fixture(version);
     let ledger = inspectLedger(path);
     expect(ledger.solOperations).toBe(ledger.solOperations);
     expect(() => ledger.solOperations.assertImported()).toThrow();
-    const budget = ledger.solPaidUsageBudgetStatus();
     const pauses = ledger.pauseControls.read();
     ledger.close();
     const before = sha256(readFileSync(path));
@@ -135,7 +134,6 @@ test.each([34, 35] as const)(
       expect(ledger.solOperations.assertImported().sourceDigest).toBe(
         dryRun.result.sourceDigest,
       );
-      expect(ledger.solPaidUsageBudgetStatus()).toEqual(budget);
       expect(ledger.pauseControls.read()).toEqual(pauses);
     } finally {
       ledger.close();
@@ -159,7 +157,7 @@ test("CLI import refuses enabled service without changing controls", async () =>
   expect(sha256(readFileSync(path))).toBe(before);
 }, 30_000);
 
-test("run-enrichment refuses missing import before recovering expired work or reserving budget", async () => {
+test("run-enrichment refuses missing import before recovering expired work", async () => {
   const { root, path } = fixture();
   const ledger = Ledger.open(path);
   const seeded = ledger.seed(
@@ -175,9 +173,7 @@ test("run-enrichment refuses missing import before recovering expired work or re
   );
   const claim = ledger.claim("expired-fixture", 2, 1, ["author-manifest"]);
   expect(claim).not.toBeNull();
-  ledger.armSolPaidUsageBudget(3);
   const beforeWork = ledger.get(seeded.workKey);
-  const beforeBudget = ledger.solPaidUsageBudgetStatus();
   ledger.close();
   await expect(
     execFileAsync(
@@ -198,7 +194,6 @@ test("run-enrichment refuses missing import before recovering expired work or re
   const reopened = Ledger.open(path);
   try {
     expect(reopened.get(seeded.workKey)).toEqual(beforeWork);
-    expect(reopened.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
   } finally {
     reopened.close();
   }
@@ -206,7 +201,7 @@ test("run-enrichment refuses missing import before recovering expired work or re
 }, 30_000);
 
 test.each([false, true])(
-  "standalone refuses existing owner (strict maintenance %s) before changing work or budget",
+  "standalone refuses existing owner (strict maintenance %s) before changing work",
   async (maintenance) => {
     const { root, path } = fixture();
     const owner = await acquireRunLock(
@@ -219,7 +214,6 @@ test.each([false, true])(
     const controls = before
       .prepare("SELECT * FROM runtime_control ORDER BY control_key")
       .all();
-    const budget = before.prepare("SELECT * FROM sol_paid_usage_budget").all();
     before.close();
     try {
       await expect(
@@ -248,9 +242,6 @@ test.each([false, true])(
             .prepare("SELECT * FROM runtime_control ORDER BY control_key")
             .all(),
         ).toEqual(controls);
-        expect(
-          after.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-        ).toEqual(budget);
       } finally {
         after.close();
       }

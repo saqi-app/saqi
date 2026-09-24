@@ -85,7 +85,6 @@ describe("unified runtime chaos boundaries", () => {
     let calls = 0;
     let runAt = Date.now() + 1_000;
     const fundedLedger = Ledger.initialize(join(root, "ledger.sqlite3"));
-    fundedLedger.armSolPaidUsageBudget(12);
     fundedLedger.close();
     const rig = new UnifiedRigRuntime({
       config,

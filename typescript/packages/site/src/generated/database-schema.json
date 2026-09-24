@@ -26,7 +26,7 @@
     "0060_restore_catalog_publishability.sql",
     "0061_retire_source_lineage_maintenance.sql"
   ],
-  "localVersion": 45,
+  "localVersion": 46,
   "databases": [
     {
       "id": "corpus",
@@ -2237,95 +2237,6 @@
               "from": "current_epoch",
               "table": "sol_invocation_attempt",
               "to": "claim_epoch"
-            }
-          ]
-        },
-        {
-          "name": "sol_paid_usage_budget",
-          "columns": [
-            {
-              "name": "budget_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "maximum_operations",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "reserved_operations",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "state",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "updated_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "sol_paid_usage_reservation",
-          "columns": [
-            {
-              "name": "budget_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "attempt_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "work_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "reserved_operations",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "work_key",
-              "table": "work_item",
-              "to": "work_key"
-            },
-            {
-              "from": "budget_id",
-              "table": "sol_paid_usage_budget",
-              "to": "budget_id"
             }
           ]
         },

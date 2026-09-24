@@ -279,121 +279,21 @@ function canonicalBinding(): CanonicalPoemBindingV1 {
   };
 }
 
-test("Sol paid usage budget persists, exhausts atomically, and requires explicit rearm", () => {
+test("expired Sol claims retain unknown-outcome recovery without a budget marker", () => {
   const ledger = open();
-  expect(ledger.solPaidUsageBudgetStatus()).toMatchObject({
-    remainingOperations: 0,
-    state: "unarmed",
+  const key = ledger.seed(
+    { ...definition(), kind: "poem-enrichment-sol" },
+    100,
+  ).workKey;
+  ledger.pauseControls.read();
+  const claim = ledger.claim("crashed", 100, 10);
+  if (!claim) throw new Error("Expected claim");
+  expect(ledger.recoverExpired(111)).toBe(1);
+  expect(ledger.get(key)).toMatchObject({
+    state: "pending",
+    lastErrorCode: "CODEX_OPERATION_OUTCOME_UNKNOWN",
   });
-  expect(ledger.armSolPaidUsageBudget(6)).toMatchObject({
-    maximumOperations: 6,
-    remainingOperations: 6,
-    state: "active",
-  });
-  expect(ledger.armSolPaidUsageBudget(6)).toMatchObject({
-    remainingOperations: 6,
-    state: "active",
-  });
-
-  ledger.seed(definition({ poem: 1 }));
-  ledger.seed(definition({ poem: 2 }));
-  ledger.seed(definition({ poem: 3 }));
-  const claimAt = Date.now() + 1;
-  const first = ledger.claim("sol", claimAt, 100, ["author-manifest"]);
-  const second = ledger.claim("sol", claimAt, 100, ["author-manifest"]);
-  const third = ledger.claim("sol", claimAt, 100, ["author-manifest"]);
-  expect(first).not.toBeNull();
-  expect(second).not.toBeNull();
-  expect(third).not.toBeNull();
-  expect(ledger.reserveSolPaidClaim(first!, claimAt)).toBe(true);
-  expect(ledger.reserveSolPaidClaim(first!, claimAt)).toBe(true);
-  expect(ledger.reserveSolPaidClaim(second!, claimAt)).toBe(true);
-  expect(ledger.solPaidUsageBudgetStatus()).toMatchObject({
-    remainingOperations: 0,
-    reservedOperations: 6,
-    state: "exhausted",
-  });
-  expect(ledger.reserveSolPaidClaim(third!, claimAt)).toBe(false);
-  expect(() => ledger.armSolPaidUsageBudget(6)).toThrow(
-    "SOL_PAID_USAGE_BUDGET_REARM_REQUIRED",
-  );
-  expect(ledger.armSolPaidUsageBudget(3, true)).toMatchObject({
-    maximumOperations: 3,
-    remainingOperations: 3,
-    state: "active",
-  });
-});
-
-test("an active Sol budget can only be increased monotonically", () => {
-  const ledger = open();
-  expect(ledger.armSolPaidUsageBudget(6)).toMatchObject({
-    maximumOperations: 6,
-    remainingOperations: 6,
-  });
-  expect(ledger.armSolPaidUsageBudget(9)).toMatchObject({
-    maximumOperations: 9,
-    remainingOperations: 9,
-  });
-  expect(() => ledger.armSolPaidUsageBudget(6)).toThrow(
-    "SOL_PAID_USAGE_BUDGET_CANNOT_DECREASE",
-  );
-  expect(() => ledger.armSolPaidUsageBudget(9, true)).toThrow(
-    "SOL_PAID_USAGE_BUDGET_ALREADY_ACTIVE",
-  );
   ledger.close();
-});
-
-test.each(["current", "previous", "none"])(
-  "expired Sol recovery recognizes only the %s attempt reservation",
-  (reservation) => {
-    const ledger = open();
-    const key = ledger.seed(
-      { ...definition(), kind: "poem-enrichment-sol" },
-      100,
-    ).workKey;
-    ledger.armSolPaidUsageBudget(3);
-    ledger.pauseControls.read();
-    let claim = ledger.claim("crashed", 100, 10);
-    if (!claim) throw new Error("Expected claim");
-    if (reservation !== "none")
-      expect(ledger.reserveSolPaidClaim(claim, 101)).toBe(true);
-    if (reservation === "previous") {
-      ledger.operatorRelease(claim, "OPERATOR_RELEASED", 102);
-      claim = ledger.claim("replacement", 103, 10);
-      if (!claim) throw new Error("Expected replacement claim");
-    }
-    const beforeBudget = ledger.solPaidUsageBudgetStatus();
-    const beforePause = ledger.pauseControls.read();
-    expect(ledger.recoverExpired(114)).toBe(1);
-    expect(ledger.get(key)).toMatchObject({
-      state: "pending",
-      lastErrorCode:
-        reservation === "current"
-          ? "CODEX_OPERATION_OUTCOME_UNKNOWN"
-          : "LEASE_EXPIRED",
-    });
-    expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
-    expect(ledger.pauseControls.read()).toEqual(beforePause);
-    const recovered = ledger.claimUnknownOperationRecovery(
-      "free-recovery",
-      200,
-      100,
-      "poem-enrichment-sol",
-      200,
-      {
-        implementationVersion: "crawler@1",
-        schemaVersion: "author-manifest@1",
-      },
-    );
-    expect(recovered !== null).toBe(reservation === "current");
-  },
-);
-
-test("Sol paid usage budget rejects partial claim ceilings", () => {
-  const ledger = open();
-  expect(() => ledger.armSolPaidUsageBudget(1)).toThrow(
-    "positive multiple of 3",
-  );
 });
 
 describe("work identity and fenced leases", () => {

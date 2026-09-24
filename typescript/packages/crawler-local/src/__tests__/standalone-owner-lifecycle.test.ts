@@ -35,9 +35,6 @@ test.each(["success", "abort", "run-failure", "close-failure"])(
     const controls = database
       .prepare("SELECT * FROM runtime_control ORDER BY control_key")
       .all();
-    const budgets = database
-      .prepare("SELECT * FROM sol_paid_usage_budget")
-      .all();
     const argv = process.argv;
     const exitCode = process.exitCode;
     let abort: (() => void) | undefined;
@@ -105,9 +102,6 @@ test.each(["success", "abort", "run-failure", "close-failure"])(
           .prepare("SELECT * FROM runtime_control ORDER BY control_key")
           .all(),
       ).toEqual(controls);
-      expect(
-        database.prepare("SELECT * FROM sol_paid_usage_budget").all(),
-      ).toEqual(budgets);
       if (mode.endsWith("failure"))
         expect(stderr).toHaveBeenCalledWith(
           expect.stringContaining(

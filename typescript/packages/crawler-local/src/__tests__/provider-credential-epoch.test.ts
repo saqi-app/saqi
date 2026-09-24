@@ -117,7 +117,6 @@ describe("provider credential epochs", () => {
 
   it.each<SolTaskOutcome>([
     { kind: "idle" },
-    { kind: "budget_exhausted" },
     { kind: "error" },
     { kind: "task_failure" },
   ])("does not verify credentials from $kind", async (outcome) => {

@@ -187,9 +187,10 @@ describe("quota-aware Sol lane scheduler", () => {
     const permit = await target.acquire(OPEN);
     if (!permit) throw new Error("Expected scheduler permit");
 
-    await expect(
-      permit.complete({ kind: "budget_exhausted" }, 1_100),
-    ).resolves.toEqual({ accepted: true, quotaCleared: false });
+    await expect(permit.complete({ kind: "idle" }, 1_100)).resolves.toEqual({
+      accepted: true,
+      quotaCleared: false,
+    });
 
     await expect(target.snapshot(OPEN, 1_100)).resolves.toMatchObject({
       providerUntil: before.providerUntil,
@@ -213,9 +214,10 @@ describe("quota-aware Sol lane scheduler", () => {
     expect(probe?.purpose).toBe("quota_probe");
     const before = await target.snapshot(OPEN, now);
 
-    await expect(
-      probe?.complete({ kind: "budget_exhausted" }, now + 1),
-    ).resolves.toEqual({ accepted: true, quotaCleared: false });
+    await expect(probe?.complete({ kind: "idle" }, now + 1)).resolves.toEqual({
+      accepted: true,
+      quotaCleared: false,
+    });
 
     await expect(target.snapshot(OPEN, now + 1)).resolves.toMatchObject({
       providerUntil: before.providerUntil,
@@ -1135,7 +1137,7 @@ describe("quota-aware Sol lane scheduler", () => {
     if (probe?.recoveryLease === null || probe === null)
       throw new Error("Expected account-switch recovery ownership");
 
-    await probe.complete({ kind: "budget_exhausted" }, 1_100);
+    await probe.complete({ kind: "idle" }, 1_100);
     await expect(target.snapshot(OPEN, 1_100)).resolves.toMatchObject({
       recoveryCause: null,
       selectedConcurrency: 1,

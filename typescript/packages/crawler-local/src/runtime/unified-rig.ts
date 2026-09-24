@@ -1290,11 +1290,8 @@ export class UnifiedRigRuntime {
     if (!(this.#artifacts?.capacitySnapshot.writable ?? false))
       resourceReasons.add("DISK_PRESSURE");
     const schedulerBlock = snapshot?.blockReason ?? null;
-    const budget = diagnostics.budget;
     const actualQuotaWait =
-      budget.state === "active" &&
-      snapshot?.recoveryCause === "quota" &&
-      snapshot.quotaUntil > now;
+      snapshot?.recoveryCause === "quota" && snapshot.quotaUntil > now;
     const providerWaitActive = providerWaitIsActive(
       snapshot?.providerUntil,
       now,
@@ -1345,7 +1342,6 @@ export class UnifiedRigRuntime {
                   state: "waiting" as const,
                 }
               : { errorCode: null, retryAt: null, state: "ready" as const },
-            budget,
             operator: { globalPaused, paidWorkPaused },
             provider:
               providerState === "ready"
@@ -1509,7 +1505,6 @@ export class UnifiedRigRuntime {
           (_, index) =>
             new SolEnrichmentCoordinator({
               artifacts,
-              enforcePaidUsageBudget: true,
               ledger,
               owner: `sol-v2-drain-${String(process.pid)}-${String(index)}`,
               recoverUnknownOperations: false,
@@ -1532,7 +1527,6 @@ export class UnifiedRigRuntime {
         if (!sharedRunner) throw new Error("SOL_RUNNER_MISSING");
         return new SolEnrichmentCoordinator({
           artifacts,
-          enforcePaidUsageBudget: true,
           ledger,
           owner,
           recoverUnknownOperations: false,
@@ -1583,7 +1577,7 @@ export class UnifiedRigRuntime {
             artifactReconciliationOnly: true,
             maximum: 8,
             now: this.#now,
-            // Paid admission may be paused by budget/operator policy while
+            // Provider admission may be paused by operator policy while
             // already completed provider artifacts still need free local
             // reconciliation. A global pause remains authoritative.
             paused: () => this.paused(),
@@ -1628,18 +1622,6 @@ export class UnifiedRigRuntime {
             paused: await this.paidWorkPaused(),
             quotaWaitUntil: null,
           });
-          // These lanes create fresh paid claims only. Free artifact recovery
-          // has its own lane and must continue while the budget is closed.
-          const budget = ledger.solPaidUsageBudgetStatus();
-          if (
-            !(await this.paidWorkPaused()) &&
-            (budget.state !== "active" || budget.remainingOperations < 3)
-          ) {
-            return {
-              nextWakeAt: this.#now() + this.#config.restart.idlePollMs,
-              result: "budget_exhausted",
-            };
-          }
           const permit = await scheduler.acquire({
             circuitOpen: false,
             diskWritable,
@@ -1893,11 +1875,8 @@ export class UnifiedRigRuntime {
     if (!(capacity?.writable ?? false)) resourceReasons.add("DISK_PRESSURE");
     const resourceWaiting = resourceReasons.size > 0;
     const schedulerBlock = solScheduler?.blockReason ?? null;
-    const solBudget = ledger.solPaidUsageBudgetStatus();
     const actualQuotaWait =
-      solBudget.state === "active" &&
-      solScheduler?.recoveryCause === "quota" &&
-      solScheduler.quotaUntil > now;
+      solScheduler?.recoveryCause === "quota" && solScheduler.quotaUntil > now;
     const providerWaitActive = providerWaitIsActive(
       solScheduler?.providerUntil,
       now,
@@ -1965,7 +1944,6 @@ export class UnifiedRigRuntime {
               state: "waiting",
             }
           : { errorCode: null, retryAt: null, state: "ready" },
-        budget: solBudget,
         operator: { globalPaused, paidWorkPaused },
         provider:
           providerState === "ready"

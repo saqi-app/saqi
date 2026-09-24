@@ -155,7 +155,6 @@ export type SolTaskOutcome =
       readonly retryAt?: number;
     }
   | { readonly kind: "ambiguous_outcome" }
-  | { readonly kind: "budget_exhausted" }
   | { readonly kind: "error"; readonly retryAt?: number }
   | { readonly kind: "idle" }
   | {
@@ -489,10 +488,7 @@ export class QuotaAwareSolLaneScheduler implements SolLaneScheduler {
           return {
             accepted,
             quotaCleared:
-              accepted &&
-              quotaProbe &&
-              outcome.kind !== "budget_exhausted" &&
-              this.#state.quotaUntil === 0,
+              accepted && quotaProbe && this.#state.quotaUntil === 0,
           };
         }),
     };
@@ -826,10 +822,10 @@ export class QuotaAwareSolLaneScheduler implements SolLaneScheduler {
     recoveryLeaseId: null | string,
     staleCredentialEpoch: boolean,
   ): Promise<boolean> {
-    if (outcome.kind === "budget_exhausted" || outcome.kind === "idle") {
+    if (outcome.kind === "idle") {
       // An account switch is only a fence until the exact recovery owner has
-      // reached the coordinator. Idle work and an internal budget fence make
-      // no provider-capacity claim, but future claims still run the shared
+      // reached the coordinator. Idle work makes no provider-capacity claim,
+      // but future claims still run the shared
       // pre-claim login verification. Clear this one cause atomically with
       // completion so a crash cannot strand the replacement for a full paid
       // operation lease. All other recovery causes remain authoritative.

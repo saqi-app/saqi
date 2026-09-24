@@ -412,10 +412,8 @@ describe("unified rig restart integration", () => {
       },
       1,
     ).workKey;
-    ledger.armSolPaidUsageBudget(3);
     ledger.claim("crashed", 1, 10);
     const beforeWork = ledger.get(key);
-    const beforeBudget = ledger.solPaidUsageBudgetStatus();
     const runtime = new UnifiedRigRuntime({
       config: parseScraperOperationConfig({
         schemaVersion: 1,
@@ -443,7 +441,6 @@ describe("unified rig restart integration", () => {
         "SQLITE_ROW_VALIDATION_FAILED:solOperation.importComplete",
       );
       expect(ledger.get(key)).toEqual(beforeWork);
-      expect(ledger.solPaidUsageBudgetStatus()).toEqual(beforeBudget);
     } finally {
       runtime.close();
       ledger.close();
@@ -563,7 +560,7 @@ describe("unified rig restart integration", () => {
         });
         expect(reader.get(key)).toMatchObject({
           state: "pending",
-          lastErrorCode: "LEASE_EXPIRED",
+          lastErrorCode: "CODEX_OPERATION_OUTCOME_UNKNOWN",
         });
         expect(reader.get(activeKey)?.state).toBe("running");
         expect(() => reader.succeed(stale, "a".repeat(64), now)).toThrow();
@@ -1588,10 +1585,9 @@ describe("unified rig restart integration", () => {
     expect(run).not.toHaveBeenCalled();
     const ledger = Ledger.open(join(root, "ledger.sqlite3"));
     ledger.pauseControls.set("paid", false);
-    await expect(
-      sol!.runOnce(new AbortController().signal),
-    ).resolves.toMatchObject({ result: "budget_exhausted" });
-    expect(run).not.toHaveBeenCalled();
+    await sol!.runOnce(new AbortController().signal);
+    expect(run).toHaveBeenCalledOnce();
+    run.mockClear();
     await expect(runtime.providerExecutionStatus()).resolves.toMatchObject({
       providerExecution: {
         providers: [
@@ -1615,10 +1611,6 @@ describe("unified rig restart integration", () => {
     ledger.pauseControls.set("global", true);
     await expect(recoveryOptions?.paused?.()).resolves.toBe(true);
     ledger.pauseControls.set("global", false);
-    run.mockClear();
-    ledger.armSolPaidUsageBudget(3);
-    await sol!.runOnce(new AbortController().signal);
-    expect(run).toHaveBeenCalledOnce();
     ledger.close();
     for (const lane of lanes) await lane.close();
     runtime.close();
@@ -1653,7 +1645,6 @@ describe("unified rig restart integration", () => {
       stateDirectory: root,
     });
     const ledger = Ledger.initialize(database);
-    ledger.armSolPaidUsageBudget(12, false, 1);
     ledger.close();
     let now = 1_000;
     const quotaRun = vi.fn(() =>
@@ -1738,7 +1729,6 @@ describe("unified rig restart integration", () => {
   it("releases its exact account-switch lease after an idle probe", async () => {
     const root = mkdtempSync(join(tmpdir(), "saqi-graceful-lease-release-"));
     const fundedLedger = Ledger.initialize(join(root, "ledger.sqlite3"));
-    fundedLedger.armSolPaidUsageBudget(12);
     fundedLedger.close();
     const codexHome = join(root, "codex-home");
     const authPath = join(codexHome, "auth.json");
@@ -2303,7 +2293,7 @@ describe("unified rig restart integration", () => {
       join(root, "health", "provider-execution-latest.json"),
     );
     expect(execution.providers[0]).toMatchObject({
-      admission: { primaryReason: "budget_unarmed", state: "closed" },
+      admission: { primaryReason: "no_ready_work", state: "open" },
       progress: { accepted: 1, terminalWork: 1 },
       provider: "sol",
       throughput: {
