@@ -13,7 +13,7 @@
     "0047_derive_artifact_profiles.sql",
     "0048_fold_crawl_import_receipt.sql",
     "0049_fold_enrichment_dimensions.sql",
-    "0050_retire_legacy_enrichment.sql"
+    "0050_copy_legacy_enrichment.sql"
   ],
   "localVersion": 40,
   "databases": [
@@ -308,6 +308,84 @@
           ]
         },
         {
+          "name": "enrichment_artifact",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "task_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "variant",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "schema_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "prompt_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "reasoning_effort",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "payload",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            }
+          ]
+        },
+        {
           "name": "enrichment_profile",
           "columns": [
             {
@@ -426,6 +504,78 @@
             }
           ],
           "foreignKeys": []
+        },
+        {
+          "name": "enrichment_validation",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "artifact_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "validator_version",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "attempt",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "outcome",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "highest_severity",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report_hash",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "report",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "artifact_id",
+              "table": "enrichment_artifact",
+              "to": "id"
+            }
+          ]
         },
         {
           "name": "insights_collection_month",
@@ -861,6 +1011,24 @@
               "primaryKey": false
             },
             {
+              "name": "active_enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "translation_sol",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "insights_sol",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
               "name": "legacy_translation_attributions",
               "type": "TEXT",
               "nullable": true,
@@ -868,6 +1036,11 @@
             }
           ],
           "foreignKeys": [
+            {
+              "from": "active_enrichment_artifact_id",
+              "table": "enrichment_artifact",
+              "to": "id"
+            },
             {
               "from": "active_source_revision_id",
               "table": "poem_source_revision",
@@ -930,6 +1103,64 @@
             {
               "from": "enrichment_artifact_id",
               "table": "model_enrichment_artifact",
+              "to": "id"
+            },
+            {
+              "from": "source_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
+            {
+              "from": "poem_id",
+              "table": "poem",
+              "to": "id"
+            }
+          ]
+        },
+        {
+          "name": "poem_publication_pointer",
+          "columns": [
+            {
+              "name": "poem_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "source_revision_id",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "enrichment_artifact_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "pointer_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "writer_epoch",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            }
+          ],
+          "foreignKeys": [
+            {
+              "from": "enrichment_artifact_id",
+              "table": "enrichment_artifact",
               "to": "id"
             },
             {

@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0050_retire_legacy_enrichment.sql");
+    expect(first.at(-1)).toBe("0050_copy_legacy_enrichment.sql");
     expect(
       database
         .prepare(
@@ -131,7 +131,7 @@ describe("production migration compatibility", () => {
 
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
-      "0050_retire_legacy_enrichment.sql",
+      "0050_copy_legacy_enrichment.sql",
     ]);
     expect(
       database
@@ -175,7 +175,7 @@ describe("production migration compatibility", () => {
       .all();
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
-      "0050_retire_legacy_enrichment.sql",
+      "0050_copy_legacy_enrichment.sql",
     ]);
     expect(
       database
@@ -300,7 +300,7 @@ describe("production migration compatibility", () => {
     `);
 
     expect(applyPending(database, migrationFiles())).toEqual([
-      "0050_retire_legacy_enrichment.sql",
+      "0050_copy_legacy_enrichment.sql",
     ]);
     expect(
       database
@@ -338,7 +338,7 @@ describe("production migration compatibility", () => {
         database
           .prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?")
           .get(name),
-      ).toBeUndefined();
+      ).toBeDefined();
     }
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
@@ -892,11 +892,14 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     expect.arrayContaining([
       "crawl_import_bundle",
       "crawl_import_record",
+      "enrichment_artifact",
       "enrichment_profile",
+      "enrichment_validation",
       "model_enrichment_artifact",
       "model_enrichment_validation",
       "model_publication_receipt",
       "poem_model_publication_pointer",
+      "poem_publication_pointer",
       "poem_source_pointer",
       "poem_source_revision",
       "scraper_writer_control",
@@ -909,14 +912,13 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     name: string;
   }[];
   expect(poemColumns.map(({ name }) => name)).toEqual(
-    expect.arrayContaining(["active_source_revision_id"]),
+    expect.arrayContaining([
+      "active_source_revision_id",
+      "active_enrichment_artifact_id",
+      "insights_sol",
+      "translation_sol",
+    ]),
   );
-  for (const retired of [
-    "active_enrichment_artifact_id",
-    "insights_sol",
-    "translation_sol",
-  ])
-    expect(poemColumns.map(({ name }) => name)).not.toContain(retired);
   const enrichmentColumns = database
     .prepare("PRAGMA table_info(model_enrichment_artifact)")
     .all() as { name: string }[];
