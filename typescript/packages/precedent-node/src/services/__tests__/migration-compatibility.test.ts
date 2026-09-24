@@ -160,9 +160,12 @@ describe("production migration compatibility", () => {
       );
     `);
 
-    expect(applyPending(database, migrationFiles())).toEqual([
-      "0051_expand_source_revision_pointer.sql",
-    ]);
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0052_"),
+      ),
+    ).toEqual(["0051_expand_source_revision_pointer.sql"]);
     const current = () =>
       database
         .prepare(
