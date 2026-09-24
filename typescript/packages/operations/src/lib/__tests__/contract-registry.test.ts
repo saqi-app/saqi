@@ -58,6 +58,7 @@ describe("contract registry", () => {
       "public.poem-sitemap",
       "operations.home",
       "operations.not-found",
+      "operations.public-sitemap",
       "operations.legacy-source-lineage-adoption",
       "operations.corpus-fingerprint-backfill",
       "operations.corpus-import",

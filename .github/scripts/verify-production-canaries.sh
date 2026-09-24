@@ -93,6 +93,11 @@ curl_probe 'authenticated publication identity' --fail --retry 2 --retry-all-err
   https://ops.saqi.app/api/corpus-import \
   | node scripts/verify-publication-identity.mjs
 
+curl_probe 'authenticated live public sitemap' --fail --retry 2 --retry-all-errors \
+  "${access_headers[@]}" \
+  https://ops.saqi.app/api/public-sitemap \
+  | node -e 'let body=""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const { xml } = JSON.parse(body); if (typeof xml !== "string" || !xml.includes("<sitemapindex") || !xml.includes("https://saqi.app/sitemaps/authors-1.xml")) process.exit(1); console.error("PUBLIC_SITEMAP_OK: live XML fetched from public Worker"); });'
+
 readonly resolution_url='https://ops.saqi.app/api/corpus-resolution'
 readonly source_request='{"schemaId":"saqi.production-resolution-request","schemaVersion":2,"targets":[{"modelKeys":["sol-5.6"],"sourceAuthorSlug":"poet-Abdelkader-El-Djezairi","sourcePoemId":"47644"}]}'
 
