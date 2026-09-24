@@ -149,7 +149,7 @@ jobs:
         if: steps.changes.outputs.deployment_required == 'true'
         run: >-
           yarn workspace @saqi/operations db:execute --remote --json
-          --command "SELECT database_id AS databaseId FROM production_deployment_identity WHERE scope = 'production'"
+          --command "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
           | node scripts/verify-production-d1-identity.mjs
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
