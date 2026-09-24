@@ -58,7 +58,9 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
   if (!initialDatabase) throw new Error("DATABASE_SCHEMA_EMPTY");
   const [databaseId, setDatabaseId] = useState(initialDatabase.id);
   const [query, setQuery] = useState("");
-  const [selectedName, setSelectedName] = useState<null | string>(null);
+  const [selectedName, setSelectedName] = useState<null | string>(
+    initialDatabase.tables[0]?.name ?? null,
+  );
   const [detailView, setDetailView] = useState<"columns" | "examples">(
     "columns",
   );
@@ -120,7 +122,7 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
             key={item.id}
             onClick={() => {
               setDatabaseId(item.id);
-              setSelectedName(null);
+              setSelectedName(item.tables[0]?.name ?? null);
               setDetailView("columns");
               setQuery("");
               setFlow(null);
