@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0051_expand_source_revision_pointer.sql");
+    expect(first.at(-1)).toBe("0055_retire_legacy_enrichment_tables.sql");
     expect(
       database
         .prepare(
@@ -160,9 +160,12 @@ describe("production migration compatibility", () => {
       );
     `);
 
-    expect(applyPending(database, migrationFiles())).toEqual([
-      "0051_expand_source_revision_pointer.sql",
-    ]);
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0052_"),
+      ),
+    ).toEqual(["0051_expand_source_revision_pointer.sql"]);
     const current = () =>
       database
         .prepare(
@@ -233,6 +236,10 @@ describe("production migration compatibility", () => {
       "0049_fold_enrichment_dimensions.sql",
       "0050_copy_legacy_enrichment.sql",
       "0051_expand_source_revision_pointer.sql",
+      "0052_guard_legacy_enrichment_contract.sql",
+      "0053_retire_legacy_sol_translation_column.sql",
+      "0054_retire_legacy_sol_insights_column.sql",
+      "0055_retire_legacy_enrichment_tables.sql",
     ]);
     expect(
       database
@@ -278,6 +285,10 @@ describe("production migration compatibility", () => {
       "0049_fold_enrichment_dimensions.sql",
       "0050_copy_legacy_enrichment.sql",
       "0051_expand_source_revision_pointer.sql",
+      "0052_guard_legacy_enrichment_contract.sql",
+      "0053_retire_legacy_sol_translation_column.sql",
+      "0054_retire_legacy_sol_insights_column.sql",
+      "0055_retire_legacy_enrichment_tables.sql",
     ]);
     expect(
       database
@@ -401,7 +412,12 @@ describe("production migration compatibility", () => {
       );
     `);
 
-    expect(applyPending(database, migrationFiles())).toEqual([
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0052_"),
+      ),
+    ).toEqual([
       "0050_copy_legacy_enrichment.sql",
       "0051_expand_source_revision_pointer.sql",
     ]);
@@ -443,7 +459,72 @@ describe("production migration compatibility", () => {
           .get(name),
       ).toBeDefined();
     }
+    database.exec(`
+      UPDATE poem SET
+        translation_sol = '{"content":["First line","Second line"]}',
+        insights_sol = (
+          SELECT json_extract(payload, '$.insights')
+          FROM model_enrichment_artifact WHERE id = 'legacy/legacy-artifact'
+        ),
+        publishable = 1
+      WHERE id = '00000000-0000-4000-8000-000000000002';
+    `);
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0052_guard_legacy_enrichment_contract.sql",
+      "0053_retire_legacy_sol_translation_column.sql",
+      "0054_retire_legacy_sol_insights_column.sql",
+      "0055_retire_legacy_enrichment_tables.sql",
+    ]);
+    for (const name of [
+      "enrichment_artifact",
+      "enrichment_validation",
+      "poem_publication_pointer",
+    ]) {
+      expect(
+        database
+          .prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?")
+          .get(name),
+      ).toBeUndefined();
+    }
+    expect(
+      database
+        .prepare(
+          `SELECT payload FROM model_enrichment_artifact
+           WHERE id = 'legacy/legacy-artifact'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe(payload);
     expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("keeps a published Sol projection when no model publication preserves it", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0053_"),
+    );
+    insertProductionRow(database);
+    database.exec(`
+      UPDATE poem SET publishable = 1,
+        translation_sol = '{"content":["Uncopied English"]}'
+      WHERE id = '00000000-0000-4000-8000-000000000002';
+    `);
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare(
+          `SELECT translation_sol FROM poem
+           WHERE id = '00000000-0000-4000-8000-000000000002'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe('{"content":["Uncopied English"]}');
+    expect(
+      database
+        .prepare("SELECT 1 FROM d1_migrations WHERE name LIKE '0053_%'")
+        .get(),
+    ).toBeUndefined();
   });
 
   it("rejects a profile whose referenced model is missing", () => {
@@ -995,14 +1076,11 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     expect.arrayContaining([
       "crawl_import_bundle",
       "crawl_import_record",
-      "enrichment_artifact",
       "enrichment_profile",
-      "enrichment_validation",
       "model_enrichment_artifact",
       "model_enrichment_validation",
       "model_publication_receipt",
       "poem_model_publication_pointer",
-      "poem_publication_pointer",
       "poem_source_pointer",
       "poem_source_revision",
       "scraper_writer_control",
@@ -1011,17 +1089,24 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
       "source_poem_identity",
     ]),
   );
+  for (const retired of [
+    "enrichment_artifact",
+    "enrichment_validation",
+    "poem_publication_pointer",
+  ])
+    expect(tables).not.toContain(retired);
   const poemColumns = database.prepare("PRAGMA table_info(poem)").all() as {
     name: string;
   }[];
-  expect(poemColumns.map(({ name }) => name)).toEqual(
-    expect.arrayContaining([
-      "active_source_revision_id",
-      "active_enrichment_artifact_id",
-      "insights_sol",
-      "translation_sol",
-    ]),
+  expect(poemColumns.map(({ name }) => name)).toContain(
+    "active_source_revision_id",
   );
+  for (const retired of [
+    "active_enrichment_artifact_id",
+    "insights_sol",
+    "translation_sol",
+  ])
+    expect(poemColumns.map(({ name }) => name)).not.toContain(retired);
   const enrichmentColumns = database
     .prepare("PRAGMA table_info(model_enrichment_artifact)")
     .all() as { name: string }[];
