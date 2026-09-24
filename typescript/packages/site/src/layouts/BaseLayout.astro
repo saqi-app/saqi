@@ -8,6 +8,7 @@ interface Props {
   title: string;
   description: string;
   canonicalPath: string;
+  fullWidth?: boolean;
   nextPath?: string | undefined;
   noindex?: boolean;
   openGraphType?: "article" | "website";
@@ -20,6 +21,7 @@ const {
   title,
   description,
   canonicalPath,
+  fullWidth = false,
   nextPath,
   noindex = false,
   openGraphType = "website",
@@ -111,7 +113,7 @@ if (preloadArabicFont) {
         </a>
       </div>
     </header>
-    <main id="main-content" tabindex="-1">
+    <main id="main-content" class:list={{ "full-width": fullWidth }} tabindex="-1">
       <slot />
     </main>
   </body>

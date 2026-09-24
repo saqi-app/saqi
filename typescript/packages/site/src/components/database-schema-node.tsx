@@ -1,5 +1,5 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
-import { memo, type ReactNode, useState } from "react";
+import { memo, type ReactNode } from "react";
 
 export interface SchemaColumn {
   name: string;
@@ -25,11 +25,7 @@ function DatabaseSchemaNode({ children }: { children: ReactNode }) {
   return <section className="schema-node">{children}</section>;
 }
 
-function DatabaseSchemaNodeHeader({
-  children,
-}: {
-  children: ReactNode;
-}) {
+function DatabaseSchemaNodeHeader({ children }: { children: ReactNode }) {
   return <div className="schema-node-header">{children}</div>;
 }
 
@@ -72,19 +68,13 @@ export function illustrativeValue(column: SchemaColumn, row: number): string {
 
 function SchemaNodeView({ data }: NodeProps<SchemaNode>) {
   const { table, onSelect } = data;
-  const [preview, setPreview] = useState(false);
   return (
-    <div
-      onMouseEnter={() => setPreview(true)}
-      onMouseLeave={() => setPreview(false)}
-    >
+    <div>
       <DatabaseSchemaNode>
         <DatabaseSchemaNodeHeader>
           <button
             className="schema-node-title nodrag"
-            onBlur={() => setPreview(false)}
             onClick={() => onSelect(table.name)}
-            onFocus={() => setPreview(true)}
             type="button"
           >
             {table.name}
@@ -120,37 +110,6 @@ function SchemaNodeView({ data }: NodeProps<SchemaNode>) {
           ))}
         </DatabaseSchemaNodeBody>
       </DatabaseSchemaNode>
-      {preview ? (
-        <div className="schema-preview nodrag" role="note">
-          <strong>Five illustrative rows</strong>
-          <p>
-            Made-up shapes from column names and types. They are not database
-            records or valid inserts.
-          </p>
-          <div className="schema-preview-scroll">
-            <table>
-              <thead>
-                <tr>
-                  {table.columns.map((column) => (
-                    <th key={column.name}>{column.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[1, 2, 3, 4, 5].map((row) => (
-                  <tr key={row}>
-                    {table.columns.map((column) => (
-                      <td key={column.name}>
-                        {illustrativeValue(column, row)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

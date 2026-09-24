@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 35;
+export const CURRENT_SCHEMA_VERSION = 36;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1321,6 +1321,15 @@ export const MIGRATIONS: readonly Migration[] = [
     `,
   },
   { version: 35, statements: RUNTIME_OWNER_MIGRATION_SQL },
+  {
+    version: 36,
+    statements: `
+      DROP INDEX IF EXISTS paid_operation_reconciliation_due;
+      CREATE INDEX paid_operation_reconciliation_due
+        ON paid_operation_reconciliation(next_reconcile_at)
+        WHERE state = 'unknown';
+    `,
+  },
 ];
 
 export class LedgerMigrator implements LedgerMigrationPort {

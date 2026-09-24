@@ -18,6 +18,25 @@ const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("reconciliation due lookup uses the unknown-state time index", () => {
+    const database = new Database(":memory:");
+    try {
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      const plan = database
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT operation_key FROM paid_operation_reconciliation WHERE state = 'unknown' AND next_reconcile_at <= ?",
+        )
+        .all(100) as { detail: string }[];
+      expect(
+        plan.some((step) =>
+          step.detail.includes("paid_operation_reconciliation_due"),
+        ),
+      ).toBe(true);
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+    } finally {
+      database.close();
+    }
+  });
   test("schema 32 adds a ready range index and preserves priority paging on upgrade", () => {
     const database = new Database(":memory:");
     database.exec(

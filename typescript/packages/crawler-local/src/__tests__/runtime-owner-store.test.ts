@@ -13,7 +13,7 @@ function fixture(run: (database: Database.Database) => void) {
   const database = new Database(":memory:");
   try {
     database.exec(
-      "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,35)",
+      "CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO local_schema VALUES(1,36)",
     );
     database.exec(RUNTIME_OWNER_MIGRATION_SQL);
     run(database);

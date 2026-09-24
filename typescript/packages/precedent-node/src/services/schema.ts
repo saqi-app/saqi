@@ -531,11 +531,6 @@ export const POEM_LEGACY_PAYLOAD_ATTRIBUTION_TABLE = sqliteTable(
     primaryKey({
       columns: [table.poemId, table.legacyField, table.sourcePayloadHash],
     }),
-    index("idx_legacy_attribution_lookup").on(
-      table.poemId,
-      table.legacyField,
-      table.sourcePayloadHash,
-    ),
     index("idx_legacy_attribution_attribution").on(
       table.attributionKey,
       table.poemId,

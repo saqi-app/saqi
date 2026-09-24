@@ -58,7 +58,12 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
   if (!initialDatabase) throw new Error("DATABASE_SCHEMA_EMPTY");
   const [databaseId, setDatabaseId] = useState(initialDatabase.id);
   const [query, setQuery] = useState("");
-  const [selectedName, setSelectedName] = useState<null | string>(null);
+  const [selectedName, setSelectedName] = useState<null | string>(
+    initialDatabase.tables[0]?.name ?? null,
+  );
+  const [detailView, setDetailView] = useState<"columns" | "examples">(
+    "columns",
+  );
   const [flow, setFlow] = useState<null | ReactFlowInstance<SchemaNode>>(null);
   const database =
     catalog.databases.find((item) => item.id === databaseId) ?? initialDatabase;
@@ -73,11 +78,11 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
       ),
     [database, query],
   );
-  const selected =
-    database.tables.find((table) => table.name === selectedName) ?? null;
+  const selected = matches.find((table) => table.name === selectedName) ?? null;
   const select = useCallback(
     (name: string) => {
       setSelectedName(name);
+      setDetailView("columns");
       requestAnimationFrame(
         () =>
           void flow?.fitView({
@@ -117,12 +122,10 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
             key={item.id}
             onClick={() => {
               setDatabaseId(item.id);
-              setSelectedName(null);
+              setSelectedName(item.tables[0]?.name ?? null);
+              setDetailView("columns");
               setQuery("");
-              void flow?.setViewport(
-                { x: 24, y: 24, zoom: 0.72 },
-                { duration: 250 },
-              );
+              setFlow(null);
             }}
             type="button"
           >
@@ -143,6 +146,9 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
           <p>
             {matches.length} of {database.tables.length} tables
           </p>
+          <output aria-live="polite" className="visually-hidden" role="status">
+            {matches.length} matching tables
+          </output>
           <div className="schema-table-list" key={databaseId}>
             {matches.map((table) => (
               <button
@@ -155,6 +161,9 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
                 <small>{table.columns.length} columns</small>
               </button>
             ))}
+            {matches.length === 0 ? (
+              <p>No matching tables or columns.</p>
+            ) : null}
           </div>
         </aside>
         <div
@@ -165,98 +174,116 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
             defaultViewport={{ x: 24, y: 24, zoom: 0.72 }}
             edges={edges}
             elementsSelectable
+            key={databaseId}
             maxZoom={1.5}
             minZoom={0.12}
             nodes={nodes}
             nodesConnectable={false}
             nodeTypes={NODE_TYPES}
             onInit={setFlow}
-            onNodeClick={(_event, node) => setSelectedName(node.id)}
+            onNodeClick={(_event, node) => select(node.id)}
             proOptions={{ hideAttribution: false }}
           >
             <Background gap={22} size={1} />
             <Controls showInteractive={false} />
             <MiniMap pannable zoomable />
           </ReactFlow>
+          {query.trim() ? (
+            <p className="schema-filter-note">
+              Relationships between matching tables
+            </p>
+          ) : null}
         </div>
-      </div>
-      <section aria-live="polite" className="schema-inspector">
-        {selected ? (
-          <>
-            <div className="schema-inspector-title">
-              <h2>{selected.name}</h2>
-              <span>
-                {selected.columns.length} columns ·{" "}
-                {selected.foreignKeys.length} foreign keys
-              </span>
-            </div>
-            <div className="schema-inspector-grid">
-              <div>
-                <h3>Columns</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Column</th>
-                      <th>Type</th>
-                      <th>Constraint</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.columns.map((column) => (
-                      <tr key={column.name}>
-                        <th scope="row">{column.name}</th>
-                        <td>{column.type}</td>
-                        <td>
-                          {column.primaryKey
-                            ? "Primary key"
-                            : column.nullable
-                              ? "Nullable"
-                              : "Required"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <section className="schema-inspector">
+          {selected ? (
+            <>
+              <div className="schema-inspector-title">
+                <h2>{selected.name}</h2>
+                <span>
+                  {selected.columns.length} columns ·{" "}
+                  {selected.foreignKeys.length} foreign keys
+                </span>
               </div>
-              <div>
-                <h3>Five illustrative rows</h3>
-                <p>
-                  These are generated examples, never read from either database.
-                  Singleton and audit tables cannot necessarily accept five real
-                  rows.
-                </p>
-                <div className="schema-inspector-samples">
+              <div
+                aria-label="Table details"
+                className="schema-detail-tabs"
+                role="group"
+              >
+                <button
+                  aria-pressed={detailView === "columns"}
+                  onClick={() => setDetailView("columns")}
+                  type="button"
+                >
+                  Columns
+                </button>
+                <button
+                  aria-pressed={detailView === "examples"}
+                  onClick={() => setDetailView("examples")}
+                  type="button"
+                >
+                  5 example rows
+                </button>
+              </div>
+              {detailView === "columns" ? (
+                <div className="schema-detail-content">
                   <table>
                     <thead>
                       <tr>
-                        {selected.columns.map((column) => (
-                          <th key={column.name}>{column.name}</th>
-                        ))}
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th>Constraint</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[1, 2, 3, 4, 5].map((row) => (
-                        <tr key={row}>
-                          {selected.columns.map((column) => (
-                            <td key={column.name}>
-                              {illustrativeValue(column, row)}
-                            </td>
-                          ))}
+                      {selected.columns.map((column) => (
+                        <tr key={column.name}>
+                          <th scope="row">{column.name}</th>
+                          <td>{column.type}</td>
+                          <td>
+                            {column.primaryKey
+                              ? "Primary key"
+                              : column.nullable
+                                ? "Nullable"
+                                : "Required"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <p>
-            Select a table in the list or diagram to inspect its fields and
-            example row shapes. Hover over a node for a quick preview.
-          </p>
-        )}
-      </section>
+              ) : (
+                <div className="schema-detail-content">
+                  <p>Illustrative data</p>
+                  <div className="schema-inspector-samples">
+                    <table>
+                      <thead>
+                        <tr>
+                          {selected.columns.map((column) => (
+                            <th key={column.name}>{column.name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[1, 2, 3, 4, 5].map((row) => (
+                          <tr key={row}>
+                            {selected.columns.map((column) => (
+                              <td key={column.name}>
+                                {illustrativeValue(column, row)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p>Select a table to inspect its columns and examples.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
