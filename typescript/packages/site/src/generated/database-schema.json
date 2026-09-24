@@ -21,7 +21,8 @@
     "0055_retire_legacy_enrichment_tables.sql",
     "0056_stage_database_identity.sql",
     "0057_retire_production_deployment_identity.sql",
-    "0058_source_revision_writer_cutover.sql"
+    "0058_source_revision_writer_cutover.sql",
+    "0059_retire_source_revision_pointer.sql"
   ],
   "localVersion": 45,
   "databases": [
@@ -948,53 +949,6 @@
             {
               "from": "poem_id",
               "table": "poem",
-              "to": "id"
-            }
-          ]
-        },
-        {
-          "name": "poem_source_pointer",
-          "columns": [
-            {
-              "name": "source_poem_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "revision_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "pointer_version",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "writer_epoch",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "updated_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "revision_id",
-              "table": "poem_source_revision",
-              "to": "id"
-            },
-            {
-              "from": "source_poem_id",
-              "table": "source_poem_identity",
               "to": "id"
             }
           ]

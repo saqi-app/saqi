@@ -392,7 +392,7 @@ function adoptPoem(
     .run("e".repeat(64), "d".repeat(64));
   database
     .prepare(
-      "INSERT INTO poem_source_pointer VALUES ('source-poem', ?, 1, 1, 1)",
+      "UPDATE source_poem_identity SET current_revision_id = ?, current_revision_version = 1, current_revision_writer_epoch = 1, current_revision_updated_at = 1 WHERE id = 'source-poem'",
     )
     .run("e".repeat(64));
   database

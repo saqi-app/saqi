@@ -162,9 +162,12 @@ describe("D1CorpusRevisionStore", () => {
     expect(scalar(database, "SELECT count(*) FROM poem_source_revision")).toBe(
       1,
     );
-    expect(scalar(database, "SELECT count(*) FROM poem_source_pointer")).toBe(
-      1,
-    );
+    expect(
+      scalar(
+        database,
+        "SELECT count(*) FROM source_poem_identity WHERE current_revision_id IS NOT NULL",
+      ),
+    ).toBe(1);
     expect(
       database
         .prepare(
@@ -305,9 +308,9 @@ describe("D1CorpusRevisionStore", () => {
       database
         .prepare(
           `SELECT source.external_id, source.canonical_poem_id,
-                  pointer.revision_id, poem.active_source_revision_id
+                  source.current_revision_id AS revision_id,
+                  poem.active_source_revision_id
              FROM source_poem_identity source
-             JOIN poem_source_pointer pointer ON pointer.source_poem_id = source.id
              JOIN poem ON poem.id = source.canonical_poem_id`,
         )
         .get(),
@@ -987,7 +990,9 @@ describe("D1CorpusRevisionStore", () => {
     ).resolves.toMatchObject({ state: "already_current" });
     expect(
       database
-        .prepare("SELECT writer_epoch FROM poem_source_pointer")
+        .prepare(
+          "SELECT current_revision_writer_epoch FROM source_poem_identity WHERE current_revision_id IS NOT NULL",
+        )
         .pluck()
         .get(),
     ).toBe(2);
@@ -1025,7 +1030,7 @@ describe("D1CorpusRevisionStore", () => {
     expect(
       database
         .prepare(
-          "SELECT pointer_version FROM poem_source_pointer WHERE source_poem_id = ?",
+          "SELECT current_revision_version FROM source_poem_identity WHERE id = ?",
         )
         .pluck()
         .get(replayPlan.items[0]?.sourcePoemKey),
@@ -1731,7 +1736,7 @@ describe("D1CorpusRevisionStore", () => {
     ).toMatchObject({ pointer_version: 2, writer_epoch: 2 });
   });
 
-  it("fences raw SQL writes to source pointers", async () => {
+  it("fences raw SQL writes to current source revisions", async () => {
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     const item = plan.items[0];
@@ -1740,36 +1745,40 @@ describe("D1CorpusRevisionStore", () => {
     expect(() =>
       database
         .prepare(
-          `UPDATE poem_source_pointer
-           SET pointer_version = pointer_version
-           WHERE source_poem_id = ?`,
+          `UPDATE source_poem_identity
+           SET current_revision_version = current_revision_version
+           WHERE id = ?`,
         )
         .run(item.sourcePoemKey),
-    ).toThrow(/SOURCE_POINTER_UPDATE_INVALID/u);
+    ).toThrow(/SOURCE_CURRENT_REVISION_TRANSITION_INVALID/u);
     expect(() =>
       database
-        .prepare("DELETE FROM poem_source_pointer WHERE source_poem_id = ?")
+        .prepare(
+          "UPDATE source_poem_identity SET current_revision_id = NULL WHERE id = ?",
+        )
         .run(item.sourcePoemKey),
-    ).toThrow(/SOURCE_POINTER_DELETE_FORBIDDEN/u);
+    ).toThrow(/SOURCE_CURRENT_REVISION_TRANSITION_INVALID/u);
 
     await store.advanceWriterEpoch(1, 2, "replacement-writer");
     expect(() =>
       database
         .prepare(
-          `UPDATE poem_source_pointer
-           SET pointer_version = pointer_version + 1, writer_epoch = 1,
-               updated_at = updated_at + 1
-           WHERE source_poem_id = ?`,
+          `UPDATE source_poem_identity
+           SET current_revision_version = current_revision_version + 1,
+               current_revision_writer_epoch = 1,
+               current_revision_updated_at = current_revision_updated_at + 1
+           WHERE id = ?`,
         )
         .run(item.sourcePoemKey),
-    ).toThrow(/SOURCE_POINTER_UPDATE_INVALID/u);
+    ).toThrow(/SOURCE_CURRENT_REVISION_TRANSITION_INVALID/u);
     expect(() =>
       database
         .prepare(
-          `UPDATE poem_source_pointer
-           SET pointer_version = pointer_version + 1, writer_epoch = 2,
-               updated_at = updated_at + 1
-           WHERE source_poem_id = ?`,
+          `UPDATE source_poem_identity
+           SET current_revision_version = current_revision_version + 1,
+               current_revision_writer_epoch = 2,
+               current_revision_updated_at = current_revision_updated_at + 1
+           WHERE id = ?`,
         )
         .run(item.sourcePoemKey),
     ).not.toThrow();
