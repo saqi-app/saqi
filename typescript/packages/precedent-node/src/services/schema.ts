@@ -360,50 +360,28 @@ export const LEGACY_ENRICHMENT_VALIDATION_TABLE = sqliteTable(
   ],
 );
 
-export const AI_VENDOR_TABLE = sqliteTable("ai_vendor", {
-  vendorKey: text("vendor_key").primaryKey(),
-  displayName: text("display_name").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
-
-export const AI_MODEL_TABLE = sqliteTable(
-  "ai_model",
-  {
-    modelKey: text("model_key").primaryKey(),
-    vendorKey: text("vendor_key")
-      .notNull()
-      .references(() => AI_VENDOR_TABLE.vendorKey),
-    familyKey: text("family_key").notNull(),
-    versionLabel: text("version_label").notNull(),
-    displayName: text("display_name").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    uniqueIndex("ai_model_vendor_family_version_unique").on(
-      table.vendorKey,
-      table.familyKey,
-      table.versionLabel,
-    ),
-  ],
-);
-
-export const INFERENCE_BACKEND_TABLE = sqliteTable("inference_backend", {
-  backendKey: text("backend_key").primaryKey(),
-  displayName: text("display_name").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
-
 export const ENRICHMENT_PROFILE_TABLE = sqliteTable(
   "enrichment_profile",
   {
     profileKey: text("profile_key").primaryKey(),
     publicTrackKey: text("public_track_key").notNull(),
-    modelKey: text("model_key")
-      .notNull()
-      .references(() => AI_MODEL_TABLE.modelKey),
-    backendKey: text("backend_key")
-      .notNull()
-      .references(() => INFERENCE_BACKEND_TABLE.backendKey),
+    modelKey: text("model_key").notNull(),
+    backendKey: text("backend_key").notNull(),
+    vendorKey: text("vendor_key").notNull(),
+    vendorDisplayName: text("vendor_display_name").notNull(),
+    vendorCreatedAt: integer("vendor_created_at", {
+      mode: "timestamp",
+    }).notNull(),
+    modelFamilyKey: text("model_family_key").notNull(),
+    modelVersionLabel: text("model_version_label").notNull(),
+    modelDisplayName: text("model_display_name").notNull(),
+    modelCreatedAt: integer("model_created_at", {
+      mode: "timestamp",
+    }).notNull(),
+    backendDisplayName: text("backend_display_name").notNull(),
+    backendCreatedAt: integer("backend_created_at", {
+      mode: "timestamp",
+    }).notNull(),
     runtimeModelId: text("runtime_model_id").notNull(),
     promptVersion: text("prompt_version").notNull(),
     reasoningEffort: text("reasoning_effort").notNull(),

@@ -11,7 +11,8 @@
     "0045_fold_legacy_attribution_and_retire_task.sql",
     "0046_fold_source_revision_fingerprint.sql",
     "0047_derive_artifact_profiles.sql",
-    "0048_fold_crawl_import_receipt.sql"
+    "0048_fold_crawl_import_receipt.sql",
+    "0049_fold_enrichment_dimensions.sql"
   ],
   "localVersion": 40,
   "databases": [
@@ -19,78 +20,6 @@
       "id": "corpus",
       "label": "Public corpus · Cloudflare D1",
       "tables": [
-        {
-          "name": "ai_model",
-          "columns": [
-            {
-              "name": "model_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "vendor_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "family_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "version_label",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "display_name",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": [
-            {
-              "from": "vendor_key",
-              "table": "ai_vendor",
-              "to": "vendor_key"
-            }
-          ]
-        },
-        {
-          "name": "ai_vendor",
-          "columns": [
-            {
-              "name": "vendor_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "display_name",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
         {
           "name": "author",
           "columns": [
@@ -483,6 +412,60 @@
               "primaryKey": false
             },
             {
+              "name": "vendor_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "vendor_display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "vendor_created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_family_key",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_version_label",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "model_created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "backend_display_name",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "backend_created_at",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
               "name": "runtime_model_id",
               "type": "TEXT",
               "nullable": false,
@@ -519,18 +502,7 @@
               "primaryKey": false
             }
           ],
-          "foreignKeys": [
-            {
-              "from": "backend_key",
-              "table": "inference_backend",
-              "to": "backend_key"
-            },
-            {
-              "from": "model_key",
-              "table": "ai_model",
-              "to": "model_key"
-            }
-          ]
+          "foreignKeys": []
         },
         {
           "name": "enrichment_validation",
@@ -603,30 +575,6 @@
               "to": "id"
             }
           ]
-        },
-        {
-          "name": "inference_backend",
-          "columns": [
-            {
-              "name": "backend_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "display_name",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
         },
         {
           "name": "insights_collection_month",

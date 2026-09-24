@@ -65,7 +65,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0048_fold_crawl_import_receipt.sql");
+    expect(first.at(-1)).toBe("0049_fold_enrichment_dimensions.sql");
     expect(
       database
         .prepare(
@@ -94,12 +94,146 @@ describe("production migration compatibility", () => {
     expect(schemaSnapshot(database)).toEqual(before);
   });
 
-  it("folds an existing promotion receipt into its bundle without changing counts", () => {
+  it("folds dimension metadata without changing published model labels", () => {
     const database = open();
     const files = migrationFiles();
     applyPending(
       database,
-      files.filter((name) => !name.startsWith("0048_")),
+      files.filter((name) => name < "0049_"),
+    );
+    const before = database
+      .prepare(
+        `SELECT profile.profile_key AS profileKey,
+                profile.model_key AS modelKey,
+                profile.backend_key AS backendKey,
+                vendor.vendor_key AS vendorKey,
+                vendor.display_name AS vendorName,
+                vendor.created_at AS vendorCreatedAt,
+                model.family_key AS modelFamilyKey,
+                model.version_label AS modelVersionLabel,
+                model.display_name AS modelName,
+                model.created_at AS modelCreatedAt,
+                backend.display_name AS backendName,
+                backend.created_at AS backendCreatedAt
+           FROM enrichment_profile profile
+           JOIN ai_model model ON model.model_key = profile.model_key
+           JOIN ai_vendor vendor ON vendor.vendor_key = model.vendor_key
+           JOIN inference_backend backend
+             ON backend.backend_key = profile.backend_key
+          ORDER BY profile.profile_key`,
+      )
+      .all();
+    expect(before).toHaveLength(18);
+
+    expect(applyPending(database, files)).toEqual([
+      "0049_fold_enrichment_dimensions.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT profile_key AS profileKey, model_key AS modelKey,
+                  backend_key AS backendKey, vendor_key AS vendorKey,
+                  vendor_display_name AS vendorName,
+                  vendor_created_at AS vendorCreatedAt,
+                  model_family_key AS modelFamilyKey,
+                  model_version_label AS modelVersionLabel,
+                  model_display_name AS modelName,
+                  model_created_at AS modelCreatedAt,
+                  backend_display_name AS backendName,
+                  backend_created_at AS backendCreatedAt
+             FROM enrichment_profile ORDER BY profile_key`,
+        )
+        .all(),
+    ).toEqual(before);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("retires unreferenced dimension rows without touching profiles", () => {
+    const database = open();
+    const files = migrationFiles();
+    applyPending(
+      database,
+      files.filter((name) => name < "0049_"),
+    );
+    database
+      .prepare(
+        `INSERT INTO inference_backend (backend_key, display_name, created_at)
+         VALUES ('unreferenced-backend', 'Unused Backend', 1)`,
+      )
+      .run();
+
+    const profilesBefore = database
+      .prepare(
+        "SELECT profile_key FROM enrichment_profile ORDER BY profile_key",
+      )
+      .pluck()
+      .all();
+    expect(applyPending(database, files)).toEqual([
+      "0049_fold_enrichment_dimensions.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'inference_backend'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare(
+          "SELECT profile_key FROM enrichment_profile ORDER BY profile_key",
+        )
+        .pluck()
+        .all(),
+    ).toEqual(profilesBefore);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("rejects a profile whose referenced model is missing", () => {
+    const database = open();
+    const files = migrationFiles();
+    applyPending(
+      database,
+      files.filter((name) => name < "0049_"),
+    );
+    database.pragma("foreign_keys = OFF");
+    database
+      .prepare(
+        `INSERT INTO enrichment_profile (
+           profile_key, public_track_key, model_key, backend_key,
+           runtime_model_id, prompt_version, reasoning_effort,
+           input_schema_version, output_schema_version, created_at
+         ) SELECT 'orphaned-profile', 'orphaned-track', 'missing-model',
+                  backend_key, 'missing-model', prompt_version,
+                  reasoning_effort, input_schema_version,
+                  output_schema_version, created_at
+             FROM enrichment_profile WHERE profile_key = 'sol-5.6/source-v2'`,
+      )
+      .run();
+    database.pragma("foreign_keys = ON");
+
+    expect(() => applyPending(database, files)).toThrow();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'ai_model'",
+        )
+        .get(),
+    ).toBeDefined();
+    expect(
+      database
+        .prepare("SELECT 1 FROM d1_migrations WHERE name LIKE '0049_%'")
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it("folds an existing promotion receipt into its bundle without changing counts", () => {
+    const database = open();
+    const files = migrationFiles();
+    const throughReceipt = files.filter((name) => !name.startsWith("0049_"));
+    applyPending(
+      database,
+      throughReceipt.filter((name) => !name.startsWith("0048_")),
     );
     database
       .prepare(
@@ -118,7 +252,7 @@ describe("production migration compatibility", () => {
         ) VALUES ('bundle-fold', ?, 1, 3, 4, 5, 6, 7)`,
       )
       .run("c".repeat(64));
-    expect(applyPending(database, files)).toEqual([
+    expect(applyPending(database, throughReceipt)).toEqual([
       "0048_fold_crawl_import_receipt.sql",
     ]);
     expect(
@@ -144,7 +278,7 @@ describe("production migration compatibility", () => {
         )
         .get(),
     ).toBeUndefined();
-    expect(applyPending(database, files)).toEqual([]);
+    expect(applyPending(database, throughReceipt)).toEqual([]);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -178,9 +312,10 @@ describe("production migration compatibility", () => {
   it("folds existing translation attribution and retires unused task state", () => {
     const database = open();
     const files = migrationFiles();
+    const throughLegacy = files.filter((name) => name < "0046_");
     applyPending(
       database,
-      files.filter((name) => !name.startsWith("0045_")),
+      throughLegacy.filter((name) => !name.startsWith("0045_")),
     );
     insertProductionRow(database);
     database
@@ -197,7 +332,7 @@ describe("production migration compatibility", () => {
       )
       .run("retired-task", "translate-poem", "completed", 1);
 
-    expect(applyPending(database, files)).toEqual([
+    expect(applyPending(database, throughLegacy)).toEqual([
       "0045_fold_legacy_attribution_and_retire_task.sql",
     ]);
     const stored = database
@@ -225,7 +360,7 @@ describe("production migration compatibility", () => {
           .get(name),
       ).toBeUndefined();
     }
-    expect(applyPending(database, files)).toEqual([]);
+    expect(applyPending(database, throughLegacy)).toEqual([]);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -603,12 +738,9 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     expect.arrayContaining([
       "crawl_import_bundle",
       "crawl_import_record",
-      "ai_model",
-      "ai_vendor",
       "enrichment_artifact",
       "enrichment_profile",
       "enrichment_validation",
-      "inference_backend",
       "model_enrichment_artifact",
       "model_enrichment_validation",
       "model_publication_receipt",
@@ -763,14 +895,10 @@ function expectModelProfileRegistry(database: Database.Database): void {
     .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
     .pluck()
     .all() as string[];
-  expect(tables).toEqual(
-    expect.arrayContaining([
-      "ai_model",
-      "ai_vendor",
-      "enrichment_profile",
-      "inference_backend",
-    ]),
-  );
+  expect(tables).toContain("enrichment_profile");
+  for (const retired of ["ai_model", "ai_vendor", "inference_backend"]) {
+    expect(tables).not.toContain(retired);
+  }
   expect(
     database.prepare("SELECT count(*) FROM enrichment_profile").pluck().get(),
   ).toBe(18);
