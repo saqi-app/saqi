@@ -109,6 +109,11 @@ export const CRAWL_IMPORT_BUNDLE_TABLE = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     sealedAt: integer("sealed_at", { mode: "timestamp" }),
     promotedAt: integer("promoted_at", { mode: "timestamp" }),
+    receiptCreatedAt: integer("receipt_created_at", { mode: "timestamp" }),
+    insertedRevisions: integer("inserted_revisions"),
+    reusedRevisions: integer("reused_revisions"),
+    advancedPointers: integer("advanced_pointers"),
+    unchangedPointers: integer("unchanged_pointers"),
   },
   (table) => [
     index("idx_crawl_import_bundle_status").on(table.status, table.createdAt),
@@ -586,16 +591,3 @@ export const MODEL_PUBLICATION_RECEIPT_TABLE = sqliteTable(
     ),
   ],
 );
-
-export const CRAWL_IMPORT_RECEIPT_TABLE = sqliteTable("crawl_import_receipt", {
-  bundleId: text("bundle_id")
-    .primaryKey()
-    .references(() => CRAWL_IMPORT_BUNDLE_TABLE.id),
-  planHash: text("plan_hash").notNull(),
-  writerEpoch: integer("writer_epoch").notNull(),
-  insertedRevisions: integer("inserted_revisions").notNull(),
-  reusedRevisions: integer("reused_revisions").notNull(),
-  advancedPointers: integer("advanced_pointers").notNull(),
-  unchangedPointers: integer("unchanged_pointers").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});

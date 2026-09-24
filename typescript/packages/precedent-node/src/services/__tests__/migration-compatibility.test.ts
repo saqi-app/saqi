@@ -65,7 +65,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0047_derive_artifact_profiles.sql");
+    expect(first.at(-1)).toBe("0048_fold_crawl_import_receipt.sql");
     expect(
       database
         .prepare(
@@ -92,6 +92,60 @@ describe("production migration compatibility", () => {
     const before = schemaSnapshot(database);
     expect(applyPending(database, migrationFiles())).toEqual([]);
     expect(schemaSnapshot(database)).toEqual(before);
+  });
+
+  it("folds an existing promotion receipt into its bundle without changing counts", () => {
+    const database = open();
+    const files = migrationFiles();
+    applyPending(
+      database,
+      files.filter((name) => !name.startsWith("0048_")),
+    );
+    database
+      .prepare(
+        `INSERT INTO crawl_import_bundle (
+          id, schema_version, manifest_hash, root_hash, plan_hash,
+          promotion_plan, expected_record_count, status, writer_epoch,
+          created_at, sealed_at
+        ) VALUES ('bundle-fold', 1, ?, ?, ?, '{}', 0, 'sealed', 1, 1, 2)`,
+      )
+      .run("a".repeat(64), "b".repeat(64), "c".repeat(64));
+    database
+      .prepare(
+        `INSERT INTO crawl_import_receipt (
+          bundle_id, plan_hash, writer_epoch, inserted_revisions,
+          reused_revisions, advanced_pointers, unchanged_pointers, created_at
+        ) VALUES ('bundle-fold', ?, 1, 3, 4, 5, 6, 7)`,
+      )
+      .run("c".repeat(64));
+    expect(applyPending(database, files)).toEqual([
+      "0048_fold_crawl_import_receipt.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT status, receipt_created_at, inserted_revisions,
+                  reused_revisions, advanced_pointers, unchanged_pointers
+             FROM crawl_import_bundle WHERE id = 'bundle-fold'`,
+        )
+        .get(),
+    ).toEqual({
+      status: "promoted",
+      receipt_created_at: 7,
+      inserted_revisions: 3,
+      reused_revisions: 4,
+      advanced_pointers: 5,
+      unchanged_pointers: 6,
+    });
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'crawl_import_receipt'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(applyPending(database, files)).toEqual([]);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("skips the baseline for the current deployed receipt without touching data", () => {
@@ -549,7 +603,6 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     expect.arrayContaining([
       "crawl_import_bundle",
       "crawl_import_record",
-      "crawl_import_receipt",
       "ai_model",
       "ai_vendor",
       "enrichment_artifact",
@@ -674,7 +727,8 @@ function expectCanonicalDataGuards(database: Database.Database): void {
       "enrichment_validation_document_insert",
       "model_enrichment_artifact_document_insert",
       "model_enrichment_validation_document_insert",
-      "crawl_import_receipt_canonical_hash_insert",
+      "crawl_import_bundle_receipt_insert_guard",
+      "crawl_import_bundle_receipt_update_guard",
     ]),
   );
 }
