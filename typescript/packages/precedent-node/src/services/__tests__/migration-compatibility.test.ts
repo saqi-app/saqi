@@ -101,22 +101,23 @@ describe("production migration compatibility", () => {
       database,
       files.filter((name) => !name.startsWith("0048_")),
     );
-    database.exec(`
-      INSERT INTO crawl_import_bundle (
-        id, schema_version, manifest_hash, root_hash, plan_hash,
-        promotion_plan, expected_record_count, status, writer_epoch,
-        created_at, sealed_at
-      ) VALUES (
-        'bundle-fold', 1, '${"a".repeat(64)}', '${"b".repeat(64)}',
-        '${"c".repeat(64)}', '{}', 0, 'sealed', 1, 1, 2
-      );
-      INSERT INTO crawl_import_receipt (
-        bundle_id, plan_hash, writer_epoch, inserted_revisions,
-        reused_revisions, advanced_pointers, unchanged_pointers, created_at
-      ) VALUES (
-        'bundle-fold', '${"c".repeat(64)}', 1, 3, 4, 5, 6, 7
-      );
-    `);
+    database
+      .prepare(
+        `INSERT INTO crawl_import_bundle (
+          id, schema_version, manifest_hash, root_hash, plan_hash,
+          promotion_plan, expected_record_count, status, writer_epoch,
+          created_at, sealed_at
+        ) VALUES ('bundle-fold', 1, ?, ?, ?, '{}', 0, 'sealed', 1, 1, 2)`,
+      )
+      .run("a".repeat(64), "b".repeat(64), "c".repeat(64));
+    database
+      .prepare(
+        `INSERT INTO crawl_import_receipt (
+          bundle_id, plan_hash, writer_epoch, inserted_revisions,
+          reused_revisions, advanced_pointers, unchanged_pointers, created_at
+        ) VALUES ('bundle-fold', ?, 1, 3, 4, 5, 6, 7)`,
+      )
+      .run("c".repeat(64));
     expect(applyPending(database, files)).toEqual([
       "0048_fold_crawl_import_receipt.sql",
     ]);
