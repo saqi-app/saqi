@@ -16,7 +16,10 @@ import { z } from "zod";
 
 import { collectionWorkKinds } from "../collection/collection-scheduler.js";
 import { canonicalAuthorUrl, currentSource } from "../source-adapter/index.js";
-import { LedgerMigrator } from "./migrations.js";
+import {
+  CURRENT_SCHEMA_VERSION as currentSchemaVersion,
+  LedgerMigrator,
+} from "./migrations.js";
 import { type PauseControlPort, PauseControls } from "./pause-controls.js";
 import {
   type Checkpoint,
@@ -2178,17 +2181,14 @@ export class Ledger {
     validateClaim("diagnostics", 1, [kind], requirements);
     if (errorCodes.length === 0) return 0;
     for (const code of errorCodes) requireErrorCode(code);
-    const profileErrorTable =
-      this.#schemaVersion() >= 45
-        ? "ledger_profile_count"
-        : "ledger_profile_error_count";
+    this.#assertCurrentSchema();
     const row = this.#database
       .prepare<string[], { count: number }>(
         `SELECT COALESCE(SUM(item_count), 0) AS count
-         FROM ${profileErrorTable}${profileErrorTable === "ledger_profile_count" ? " INDEXED BY ledger_profile_count_error" : ""}
+         FROM ledger_profile_count INDEXED BY ledger_profile_count_error
          WHERE kind = ? AND implementation_version = ? AND schema_version = ?
            AND error_code IN (${errorCodes.map(() => "?").join(",")})
-           ${profileErrorTable === "ledger_profile_count" ? "AND error_code <> ''" : ""}`,
+           AND error_code <> ''`,
       )
       .get(
         kind,
@@ -2208,14 +2208,11 @@ export class Ledger {
   ): KindProgress {
     validateClaim("diagnostics", 1, [kind], requirements);
     const counts = emptyWorkStateCounts();
-    const profileStateTable =
-      this.#schemaVersion() >= 45
-        ? "ledger_profile_count"
-        : "ledger_profile_state_count";
+    this.#assertCurrentSchema();
     const rows = this.#database
       .prepare<string[], { count: number; state: string }>(
         `SELECT state, SUM(item_count) AS count
-         FROM ${profileStateTable}
+         FROM ledger_profile_count
          WHERE kind = ? AND implementation_version = ? AND schema_version = ?
          GROUP BY state ORDER BY state`,
       )
@@ -4871,20 +4868,15 @@ export class Ledger {
 
   status(now = Date.now()): LedgerStatus {
     const schemaVersion = this.#schemaVersion();
-    const profileStateTable =
-      schemaVersion >= 45
-        ? "ledger_profile_count"
-        : "ledger_profile_state_count";
-    const profileErrorTable =
-      schemaVersion >= 45
-        ? "ledger_profile_count"
-        : "ledger_profile_error_count";
-    const errorPredicate = schemaVersion >= 45 ? "WHERE error_code <> ''" : "";
+    if (schemaVersion !== currentSchemaVersion)
+      throw new Error(
+        `Ledger status requires schema ${String(currentSchemaVersion)}; received ${String(schemaVersion)}`,
+      );
     const byState = emptyWorkStateCounts();
     const rows = this.#database
       .prepare<[], { count: number; state: string }>(
         `SELECT state, SUM(item_count) AS count
-         FROM ${profileStateTable} GROUP BY state ORDER BY state`,
+         FROM ledger_profile_count GROUP BY state ORDER BY state`,
       )
       .all();
     for (const row of rows)
@@ -4909,14 +4901,14 @@ export class Ledger {
     const errorRows = this.#database
       .prepare<[], { code: string; count: number }>(
         `SELECT error_code AS code, SUM(item_count) AS count
-         FROM ${profileErrorTable} ${errorPredicate} GROUP BY error_code
+         FROM ledger_profile_count WHERE error_code <> '' GROUP BY error_code
          ORDER BY count DESC, error_code LIMIT 50`,
       )
       .all();
     const kindErrorRows = this.#database
       .prepare<[], { code: string; count: number; kind: string }>(
         `SELECT kind, error_code AS code, SUM(item_count) AS count
-         FROM ${profileErrorTable} ${errorPredicate} GROUP BY kind, error_code
+         FROM ledger_profile_count WHERE error_code <> '' GROUP BY kind, error_code
          ORDER BY kind, count DESC, error_code LIMIT 5001`,
       )
       .all();
@@ -4937,9 +4929,9 @@ export class Ledger {
     const kindRows = this.#database
       .prepare<[], { count: number; kind: string; state: string }>(
         `SELECT kind, state, SUM(item_count) AS count
-         FROM ${profileStateTable}
+         FROM ledger_profile_count
          WHERE kind IN (
-           SELECT DISTINCT kind FROM ${profileStateTable} ORDER BY kind LIMIT 101
+           SELECT DISTINCT kind FROM ledger_profile_count ORDER BY kind LIMIT 101
          )
          GROUP BY kind, state ORDER BY kind, state`,
       )
@@ -4965,16 +4957,13 @@ export class Ledger {
         [],
         { last_failure_at: null | number; last_success_at: null | number }
       >(
-        schemaVersion >= 43
-          ? `SELECT
+        `SELECT
                (SELECT created_at FROM work_event INDEXED BY work_event_latest_success
                 WHERE event_type IN ('succeeded','imported')
                 ORDER BY sequence DESC LIMIT 1) AS last_success_at,
                (SELECT created_at FROM work_event INDEXED BY work_event_latest_failure
                 WHERE event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired')
-                ORDER BY sequence DESC LIMIT 1) AS last_failure_at`
-          : `SELECT last_success_at, last_failure_at FROM ledger_status_clock
-             WHERE singleton = 1`,
+                ORDER BY sequence DESC LIMIT 1) AS last_failure_at`,
       )
       .get();
     const origins = this.#database
@@ -5611,6 +5600,14 @@ export class Ledger {
       .get();
     if (!row) throw new Error("Local schema version missing");
     return row.version;
+  }
+
+  #assertCurrentSchema(): void {
+    const version = this.#schemaVersion();
+    if (version !== currentSchemaVersion)
+      throw new Error(
+        `Ledger query requires schema ${String(currentSchemaVersion)}; received ${String(version)}`,
+      );
   }
 
   #assertLease(claim: WorkClaim, now: number): void {
