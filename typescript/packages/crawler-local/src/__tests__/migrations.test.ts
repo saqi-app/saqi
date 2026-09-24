@@ -223,7 +223,7 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          "SELECT revision FROM source_author_metadata_revision WHERE singleton = 1",
+          "SELECT metadata_revision AS revision FROM local_source_identity WHERE singleton = 1",
         )
         .get(),
     ).toEqual({ revision: 1 });
@@ -236,7 +236,7 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          "SELECT revision FROM source_author_metadata_revision WHERE singleton = 1",
+          "SELECT metadata_revision AS revision FROM local_source_identity WHERE singleton = 1",
         )
         .get(),
     ).toEqual({ revision: 2 });
@@ -671,7 +671,10 @@ describe("ledger schema migrations", () => {
     ).toEqual([]);
     expect(
       database
-        .prepare(`SELECT state, item_count FROM paid_operation_state_count`)
+        .prepare(
+          `SELECT state, COUNT(*) AS item_count
+                  FROM paid_operation_reconciliation GROUP BY state`,
+        )
         .all(),
     ).toEqual([{ item_count: 1, state: "reconciled" }]);
     expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);

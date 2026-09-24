@@ -955,7 +955,8 @@ export class Ledger {
     const observedAt = LedgerTimestampSchema.parse(now);
     const rows = this.#database
       .prepare<[], { item_count: number; state: string }>(
-        `SELECT state, item_count FROM paid_operation_state_count`,
+        `SELECT state, COUNT(*) AS item_count
+         FROM paid_operation_reconciliation GROUP BY state`,
       )
       .all();
     const due = this.#database
@@ -1174,7 +1175,7 @@ export class Ledger {
   sourceAuthorMetadataRevision(): number {
     const row = this.#database
       .prepare<[], { revision: number }>(
-        `SELECT revision FROM source_author_metadata_revision
+        `SELECT metadata_revision AS revision FROM local_source_identity
          WHERE singleton = 1`,
       )
       .get();
@@ -4999,7 +5000,6 @@ export class Ledger {
         DELETE FROM ledger_profile_availability_count;
         DELETE FROM ledger_profile_error_count;
         DELETE FROM ledger_profile_success_clock;
-        DELETE FROM paid_operation_state_count;
 
         INSERT INTO ledger_profile_state_count(
           kind, implementation_version, schema_version, state, item_count
@@ -5043,8 +5043,6 @@ export class Ledger {
           WHERE work_event.event_type IN ('succeeded','imported')
           GROUP BY work_item.kind, work_item.implementation_version,
                    work_item.schema_version;
-        INSERT INTO paid_operation_state_count(state, item_count)
-          SELECT state, COUNT(*) FROM paid_operation_reconciliation GROUP BY state;
       `);
     });
   }

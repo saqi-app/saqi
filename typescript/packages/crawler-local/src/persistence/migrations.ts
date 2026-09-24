@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 38;
+export const CURRENT_SCHEMA_VERSION = 39;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1446,6 +1446,42 @@ export const MIGRATIONS: readonly Migration[] = [
       DROP TRIGGER IF EXISTS retired_scheduler_state_reject_delete;
       DROP TABLE retired_scheduler_state;
       DROP TABLE monitor_progress_history;
+    `,
+  },
+  {
+    version: 39,
+    statements: `
+      DROP TRIGGER ledger_status_paid_operation_insert;
+      DROP TRIGGER ledger_status_paid_operation_update;
+      DROP TABLE paid_operation_state_count;
+
+      DROP TRIGGER source_author_metadata_revision_insert;
+      DROP TRIGGER source_author_metadata_revision_update;
+      DROP TRIGGER local_source_identity_reject_update;
+      ALTER TABLE local_source_identity
+        ADD COLUMN metadata_revision INTEGER NOT NULL DEFAULT 0
+          CHECK(metadata_revision >= 0);
+      UPDATE local_source_identity
+        SET metadata_revision = (
+          SELECT revision FROM source_author_metadata_revision WHERE singleton = 1
+        )
+        WHERE singleton = 1;
+      DROP TABLE source_author_metadata_revision;
+      CREATE TRIGGER local_source_identity_reject_update
+      BEFORE UPDATE OF source_name, source_origin ON local_source_identity
+      BEGIN SELECT RAISE(ABORT, 'LOCAL_SOURCE_IDENTITY_IMMUTABLE'); END;
+      CREATE TRIGGER source_author_metadata_revision_insert
+      AFTER INSERT ON source_author_metadata
+      BEGIN
+        UPDATE local_source_identity
+        SET metadata_revision = metadata_revision + 1 WHERE singleton = 1;
+      END;
+      CREATE TRIGGER source_author_metadata_revision_update
+      AFTER UPDATE ON source_author_metadata
+      BEGIN
+        UPDATE local_source_identity
+        SET metadata_revision = metadata_revision + 1 WHERE singleton = 1;
+      END;
     `,
   },
 ];

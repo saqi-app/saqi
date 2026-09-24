@@ -49,7 +49,9 @@ function fixture(version: number) {
   }
   const source = currentSource();
   database
-    .prepare("INSERT INTO local_source_identity VALUES(1,?,?)")
+    .prepare(
+      "INSERT INTO local_source_identity(singleton, source_name, source_origin) VALUES(1,?,?)",
+    )
     .run(source.name, source.origin);
   database.exec(
     "INSERT INTO runtime_control VALUES('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1); INSERT INTO sol_paid_usage_budget VALUES('fixture-exhausted',3,3,'exhausted',1,1)",
