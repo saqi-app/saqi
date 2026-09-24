@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 44;
+export const CURRENT_SCHEMA_VERSION = 45;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1723,6 +1723,130 @@ export const MIGRATIONS: readonly Migration[] = [
         OR NEW.sol_import_source_bytes IS NULL
         OR NEW.sol_imported_at IS NULL
       BEGIN SELECT RAISE(ABORT, 'SOL_IMPORT_RECEIPT_IMMUTABLE'); END;
+    `,
+  },
+  {
+    version: 45,
+    statements: `
+      CREATE TABLE ledger_profile_count (
+        kind TEXT NOT NULL,
+        implementation_version TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('pending','running','retry_wait','quota_wait','succeeded','dead_letter','imported')),
+        error_code TEXT NOT NULL,
+        item_count INTEGER NOT NULL CHECK(item_count >= 0),
+        PRIMARY KEY(kind, implementation_version, schema_version, state, error_code)
+      ) STRICT, WITHOUT ROWID;
+      CREATE INDEX ledger_profile_count_error
+        ON ledger_profile_count(error_code, kind, implementation_version, schema_version, state)
+        WHERE error_code <> '';
+      CREATE TEMP TABLE _profile_count_guard(valid INTEGER NOT NULL CHECK(valid = 1));
+      INSERT INTO _profile_count_guard(valid)
+        SELECT CASE WHEN NOT EXISTS(
+          SELECT 1 FROM work_item WHERE last_error_code = ''
+        ) THEN 1 ELSE 0 END;
+      INSERT INTO ledger_profile_count(
+        kind, implementation_version, schema_version, state, error_code, item_count
+      )
+        SELECT kind, implementation_version, schema_version, state,
+               COALESCE(last_error_code, ''), COUNT(*)
+        FROM work_item
+        GROUP BY kind, implementation_version, schema_version, state,
+                 COALESCE(last_error_code, '');
+      INSERT INTO _profile_count_guard(valid)
+        SELECT CASE WHEN
+          NOT EXISTS(
+            SELECT kind, implementation_version, schema_version, state, item_count
+              FROM ledger_profile_state_count
+            EXCEPT
+            SELECT kind, implementation_version, schema_version, state, SUM(item_count)
+              FROM ledger_profile_count
+              GROUP BY kind, implementation_version, schema_version, state
+          )
+          AND NOT EXISTS(
+            SELECT kind, implementation_version, schema_version, state, SUM(item_count)
+              FROM ledger_profile_count
+              GROUP BY kind, implementation_version, schema_version, state
+            EXCEPT
+            SELECT kind, implementation_version, schema_version, state, item_count
+              FROM ledger_profile_state_count
+          )
+          AND NOT EXISTS(
+            SELECT kind, implementation_version, schema_version, error_code, item_count
+              FROM ledger_profile_error_count
+            EXCEPT
+            SELECT kind, implementation_version, schema_version, error_code, SUM(item_count)
+              FROM ledger_profile_count WHERE error_code <> ''
+              GROUP BY kind, implementation_version, schema_version, error_code
+          )
+          AND NOT EXISTS(
+            SELECT kind, implementation_version, schema_version, error_code, SUM(item_count)
+              FROM ledger_profile_count WHERE error_code <> ''
+              GROUP BY kind, implementation_version, schema_version, error_code
+            EXCEPT
+            SELECT kind, implementation_version, schema_version, error_code, item_count
+              FROM ledger_profile_error_count
+          ) THEN 1 ELSE 0 END;
+      DROP TABLE _profile_count_guard;
+      DROP TRIGGER ledger_status_work_insert;
+      DROP TRIGGER ledger_status_work_update;
+      DROP TABLE ledger_profile_state_count;
+      DROP TABLE ledger_profile_error_count;
+
+      CREATE TRIGGER ledger_status_work_insert
+      AFTER INSERT ON work_item
+      BEGIN
+        INSERT INTO ledger_profile_count(
+          kind, implementation_version, schema_version, state, error_code, item_count
+        ) VALUES(NEW.kind, NEW.implementation_version, NEW.schema_version,
+                 NEW.state, COALESCE(NEW.last_error_code, ''), 1)
+          ON CONFLICT(kind, implementation_version, schema_version, state, error_code)
+          DO UPDATE SET item_count = item_count + 1;
+        INSERT INTO ledger_profile_availability_count(
+          kind, implementation_version, schema_version, available_at, item_count
+        )
+          SELECT NEW.kind, NEW.implementation_version, NEW.schema_version,
+                 NEW.available_at, 1
+          WHERE NEW.state IN ('pending','retry_wait','quota_wait')
+          ON CONFLICT(kind, implementation_version, schema_version, available_at)
+          DO UPDATE SET item_count = item_count + 1;
+      END;
+
+      CREATE TRIGGER ledger_status_work_update
+      AFTER UPDATE OF state, kind, implementation_version, schema_version,
+                      available_at, last_error_code ON work_item
+      BEGIN
+        UPDATE ledger_profile_count SET item_count = item_count - 1
+          WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
+            AND schema_version = OLD.schema_version AND state = OLD.state
+            AND error_code = COALESCE(OLD.last_error_code, '');
+        DELETE FROM ledger_profile_count
+          WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
+            AND schema_version = OLD.schema_version AND state = OLD.state
+            AND error_code = COALESCE(OLD.last_error_code, '') AND item_count = 0;
+        UPDATE ledger_profile_availability_count SET item_count = item_count - 1
+          WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
+            AND schema_version = OLD.schema_version AND available_at = OLD.available_at
+            AND OLD.state IN ('pending','retry_wait','quota_wait');
+        DELETE FROM ledger_profile_availability_count
+          WHERE kind = OLD.kind AND implementation_version = OLD.implementation_version
+            AND schema_version = OLD.schema_version AND available_at = OLD.available_at
+            AND item_count = 0;
+        INSERT INTO ledger_profile_count(
+          kind, implementation_version, schema_version, state, error_code, item_count
+        ) VALUES(NEW.kind, NEW.implementation_version, NEW.schema_version,
+                 NEW.state, COALESCE(NEW.last_error_code, ''), 1)
+          ON CONFLICT(kind, implementation_version, schema_version, state, error_code)
+          DO UPDATE SET item_count = item_count + 1;
+        INSERT INTO ledger_profile_availability_count(
+          kind, implementation_version, schema_version, available_at, item_count
+        )
+          SELECT NEW.kind, NEW.implementation_version, NEW.schema_version,
+                 NEW.available_at, 1
+          WHERE NEW.state IN ('pending','retry_wait','quota_wait')
+          ON CONFLICT(kind, implementation_version, schema_version, available_at)
+          DO UPDATE SET item_count = item_count + 1;
+      END;
     `,
   },
 ];

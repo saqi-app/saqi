@@ -20,7 +20,7 @@
     "0054_retire_legacy_sol_insights_column.sql",
     "0055_retire_legacy_enrichment_tables.sql"
   ],
-  "localVersion": 44,
+  "localVersion": 45,
   "databases": [
     {
       "id": "corpus",
@@ -1660,43 +1660,7 @@
           "foreignKeys": []
         },
         {
-          "name": "ledger_profile_error_count",
-          "columns": [
-            {
-              "name": "kind",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "implementation_version",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "schema_version",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "error_code",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "item_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "ledger_profile_state_count",
+          "name": "ledger_profile_count",
           "columns": [
             {
               "name": "kind",
@@ -1718,6 +1682,12 @@
             },
             {
               "name": "state",
+              "type": "TEXT",
+              "nullable": false,
+              "primaryKey": true
+            },
+            {
+              "name": "error_code",
               "type": "TEXT",
               "nullable": false,
               "primaryKey": true

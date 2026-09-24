@@ -1604,9 +1604,8 @@ describe("work identity and fenced leases", () => {
 
     const raw = new Database(path);
     raw.exec(`
-      DELETE FROM ledger_profile_state_count;
+      DELETE FROM ledger_profile_count;
       DELETE FROM ledger_profile_availability_count;
-      DELETE FROM ledger_profile_error_count;
       DELETE FROM ledger_profile_success_clock;
     `);
     raw.close();
