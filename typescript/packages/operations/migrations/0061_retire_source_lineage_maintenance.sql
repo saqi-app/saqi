@@ -74,19 +74,17 @@ SELECT CASE WHEN
   )
 THEN 0 ELSE 1 END;
 
-INSERT INTO _source_lineage_retirement_guard (invalid_count) -- sarj-noqa: SARJ105 — Abort if a table, trigger, or view still depends on either retired table.
+-- D1 rejects table-valued PRAGMA introspection in remote migrations; scan
+-- stored definitions instead. False positives stop the retirement safely.
+INSERT INTO _source_lineage_retirement_guard (invalid_count) -- sarj-noqa: SARJ105 — Abort if any other SQL object references either retired table.
 SELECT count(*) FROM sqlite_schema schema
-WHERE (schema.type IN ('trigger', 'view')
-       AND (schema.sql LIKE '%source_lineage_maintenance_job%'
-         OR schema.sql LIKE '%source_lineage_conflict%'))
-   OR (schema.type = 'table' AND schema.name NOT IN (
-         'source_lineage_maintenance_job', 'source_lineage_conflict'
-       ) AND EXISTS (
-         SELECT 1 FROM pragma_foreign_key_list(schema.name) foreign_key
-         WHERE foreign_key."table" IN (
-           'source_lineage_maintenance_job', 'source_lineage_conflict'
-         )
-       ));
+WHERE schema.tbl_name NOT IN (
+    'source_lineage_maintenance_job', 'source_lineage_conflict'
+  )
+  AND (
+    schema.sql LIKE '%source_lineage_maintenance_job%'
+    OR schema.sql LIKE '%source_lineage_conflict%'
+  );
 
 DROP TABLE IF EXISTS _source_lineage_retirement_guard; -- sarj-noqa: SARJ119 — D1 rolls back the contract if the old lineage state changed after its read-only audit.
 DROP TABLE IF EXISTS source_lineage_maintenance_job;
