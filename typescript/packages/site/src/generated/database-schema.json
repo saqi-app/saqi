@@ -10,7 +10,8 @@
     "0044_remove_duplicate_legacy_attribution_index.sql",
     "0045_fold_legacy_attribution_and_retire_task.sql",
     "0046_fold_source_revision_fingerprint.sql",
-    "0047_derive_artifact_profiles.sql"
+    "0047_derive_artifact_profiles.sql",
+    "0048_fold_crawl_import_receipt.sql"
   ],
   "localVersion": 39,
   "databases": [
@@ -230,69 +231,39 @@
               "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "crawl_import_receipt",
-          "columns": [
-            {
-              "name": "bundle_id",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
             },
             {
-              "name": "plan_hash",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "writer_epoch",
+              "name": "receipt_created_at",
               "type": "INTEGER",
-              "nullable": false,
+              "nullable": true,
               "primaryKey": false
             },
             {
               "name": "inserted_revisions",
               "type": "INTEGER",
-              "nullable": false,
+              "nullable": true,
               "primaryKey": false
             },
             {
               "name": "reused_revisions",
               "type": "INTEGER",
-              "nullable": false,
+              "nullable": true,
               "primaryKey": false
             },
             {
               "name": "advanced_pointers",
               "type": "INTEGER",
-              "nullable": false,
+              "nullable": true,
               "primaryKey": false
             },
             {
               "name": "unchanged_pointers",
               "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
+              "nullable": true,
               "primaryKey": false
             }
           ],
-          "foreignKeys": [
-            {
-              "from": "bundle_id",
-              "table": "crawl_import_bundle",
-              "to": "id"
-            }
-          ]
+          "foreignKeys": []
         },
         {
           "name": "crawl_import_record",
