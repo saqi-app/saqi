@@ -30,7 +30,7 @@ test.each(["success", "abort", "run-failure", "close-failure"])(
     Ledger.initialize(path).close();
     const database = new Database(path);
     database.exec(
-      "INSERT INTO runtime_control VALUES('sol_operation_import_complete',1),('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1); INSERT INTO sol_operation_import_receipt VALUES(1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',0,0,1)",
+      "INSERT INTO runtime_control VALUES('sol_operation_import_complete',1),('global_paused',1),('paid_work_paused',1),('legacy_pause_imported',1); UPDATE local_schema SET sol_import_source_digest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sol_import_record_count = 0, sol_import_source_bytes = 0, sol_imported_at = 1 WHERE singleton = 1",
     );
     const controls = database
       .prepare("SELECT * FROM runtime_control ORDER BY control_key")

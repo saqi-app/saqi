@@ -68,7 +68,11 @@ test("fresh CLI initializes controls, explicitly imports empty history, and star
   const database = new Database(path);
   try {
     expect(
-      database.prepare("SELECT * FROM sol_operation_import_receipt").all(),
+      database
+        .prepare(
+          "SELECT sol_import_source_digest FROM local_schema WHERE sol_import_source_digest IS NOT NULL",
+        )
+        .all(),
     ).toEqual([]);
     expect(
       database.prepare("SELECT * FROM sol_paid_usage_budget").all(),
@@ -88,7 +92,11 @@ test("fresh CLI initializes controls, explicitly imports empty history, and star
       await command(root, "import-sol-operations", "--dry-run"),
     );
     expect(
-      database.prepare("SELECT * FROM sol_operation_import_receipt").all(),
+      database
+        .prepare(
+          "SELECT sol_import_source_digest FROM local_schema WHERE sol_import_source_digest IS NOT NULL",
+        )
+        .all(),
     ).toEqual([]);
     await expect(
       command(
@@ -145,7 +153,11 @@ test("init never creates a fabricated empty index beside existing legacy artifac
   });
   try {
     expect(
-      database.prepare("SELECT * FROM sol_operation_import_receipt").all(),
+      database
+        .prepare(
+          "SELECT sol_import_source_digest FROM local_schema WHERE sol_import_source_digest IS NOT NULL",
+        )
+        .all(),
     ).toEqual([]);
   } finally {
     database.close();

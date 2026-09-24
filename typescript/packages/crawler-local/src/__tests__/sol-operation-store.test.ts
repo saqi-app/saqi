@@ -41,7 +41,9 @@ function fixture() {
     "INSERT INTO runtime_control VALUES('sol_operation_import_complete', 1)",
   );
   connection
-    .prepare("INSERT INTO sol_operation_import_receipt VALUES(1, ?, 0, 0, 0)")
+    .prepare(
+      "UPDATE local_schema SET sol_import_source_digest = ?, sol_import_record_count = 0, sol_import_source_bytes = 0, sol_imported_at = 0 WHERE singleton = 1",
+    )
     .run("c".repeat(64));
   return { connection, path, store: new SolOperationStore(connection) };
 }
@@ -290,7 +292,7 @@ test("claim requires completed import and cannot treat database failure as permi
 test("marker without its immutable import receipt cannot authorize a claim", () => {
   const { connection, store } = fixture();
   connection.exec(
-    "DROP TRIGGER sol_operation_import_receipt_reject_delete; DELETE FROM sol_operation_import_receipt",
+    "DROP TRIGGER local_schema_sol_import_immutable; UPDATE local_schema SET sol_import_source_digest = NULL, sol_import_record_count = NULL, sol_import_source_bytes = NULL, sol_imported_at = NULL WHERE singleton = 1",
   );
   expect(() => store.assertImported()).toThrow();
   expect(() => store.claim(claim(), 1)).toThrow();

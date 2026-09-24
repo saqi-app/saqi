@@ -219,7 +219,9 @@ async function createFixture() {
   const database = new Database(join(root, "ledger.sqlite3"));
   try {
     database
-      .prepare("INSERT INTO sol_operation_import_receipt VALUES(1, ?, 0, 0, 0)")
+      .prepare(
+        "UPDATE local_schema SET sol_import_source_digest = ?, sol_import_record_count = 0, sol_import_source_bytes = 0, sol_imported_at = 0 WHERE singleton = 1",
+      )
       .run("a".repeat(64));
     database.exec(
       "INSERT INTO runtime_control VALUES('sol_operation_import_complete', 1)",

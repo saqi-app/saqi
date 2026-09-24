@@ -10,6 +10,7 @@ import {
 } from "./sol-operation-observation-schema.js";
 import {
   type SolImportReceipt,
+  solImportReceiptQuery,
   SolImportReceiptSchema,
 } from "./sol-operation-receipt-schema.js";
 import { queryOptional, queryRequired } from "./sqlite-query.js";
@@ -189,6 +190,13 @@ export class SolOperationStore
 
   /** Explicit readiness check; never creates a receipt or changes controls. */
   assertImported(): SolImportReceipt {
+    const version = z
+      .strictObject({ version: z.int().nonnegative() })
+      .parse(
+        this.#database
+          .prepare("SELECT version FROM local_schema WHERE singleton = 1")
+          .get(),
+      ).version;
     queryRequired(
       { operation: "solOperation.importComplete" },
       () =>
@@ -201,12 +209,7 @@ export class SolOperationStore
     );
     return queryRequired(
       { operation: "solOperation.importReceipt" },
-      () =>
-        this.#database
-          .prepare(
-            "SELECT source_digest AS sourceDigest, record_count AS records, source_bytes AS sourceBytes, imported_at AS importedAt FROM sol_operation_import_receipt WHERE singleton = 1",
-          )
-          .get(),
+      () => this.#database.prepare(solImportReceiptQuery(version)).get(),
       SolImportReceiptSchema,
     );
   }

@@ -4852,18 +4852,6 @@ export class Ledger {
                  last_error_code, COUNT(*)
           FROM work_item WHERE last_error_code IS NOT NULL
           GROUP BY kind, implementation_version, schema_version, last_error_code;
-        UPDATE ledger_status_clock SET
-          last_success_at = (
-            SELECT created_at FROM work_event
-            WHERE event_type IN ('succeeded','imported')
-            ORDER BY sequence DESC LIMIT 1
-          ),
-          last_failure_at = (
-            SELECT created_at FROM work_event
-            WHERE event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired')
-            ORDER BY sequence DESC LIMIT 1
-          )
-        WHERE singleton = 1;
         INSERT INTO ledger_profile_success_clock(
           kind, implementation_version, schema_version, last_success_at
         )
@@ -4879,6 +4867,7 @@ export class Ledger {
   }
 
   status(now = Date.now()): LedgerStatus {
+    const schemaVersion = this.#schemaVersion();
     const byState = emptyWorkStateCounts();
     const rows = this.#database
       .prepare<[], { count: number; state: string }>(
@@ -4964,8 +4953,16 @@ export class Ledger {
         [],
         { last_failure_at: null | number; last_success_at: null | number }
       >(
-        `SELECT last_success_at, last_failure_at FROM ledger_status_clock
-         WHERE singleton = 1`,
+        schemaVersion >= 43
+          ? `SELECT
+               (SELECT created_at FROM work_event INDEXED BY work_event_latest_success
+                WHERE event_type IN ('succeeded','imported')
+                ORDER BY sequence DESC LIMIT 1) AS last_success_at,
+               (SELECT created_at FROM work_event INDEXED BY work_event_latest_failure
+                WHERE event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired')
+                ORDER BY sequence DESC LIMIT 1) AS last_failure_at`
+          : `SELECT last_success_at, last_failure_at FROM ledger_status_clock
+             WHERE singleton = 1`,
       )
       .get();
     const origins = this.#database
@@ -5029,7 +5026,7 @@ export class Ledger {
         stopReason: row.stop_reason,
       })),
       ready,
-      schemaVersion: this.#schemaVersion(),
+      schemaVersion,
       total: Object.values(byState).reduce((sum, count) => sum + count, 0),
       truncated:
         progress.size > 100 ||

@@ -9,7 +9,7 @@ import {
   RuntimeOwnerRowSchema,
 } from "./runtime-owner-schema.js";
 
-const VersionSchema = z.strictObject({ version: z.literal(42) });
+const VersionSchema = z.strictObject({ version: z.literal(44) });
 export interface RuntimeOwnerFence {
   readonly epoch: number;
   readonly record: RuntimeOwnerRecord;

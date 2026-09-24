@@ -26,7 +26,7 @@ interface MigrationEnginePort {
   assertConfiguredSourceIdentity(): void;
 }
 
-export const CURRENT_SCHEMA_VERSION = 42;
+export const CURRENT_SCHEMA_VERSION = 44;
 const OwnerMigrationControlsSchema = z.strictObject({
   service: z.literal(0),
   global: z.literal(1),
@@ -1643,6 +1643,86 @@ export const MIGRATIONS: readonly Migration[] = [
           AND NEW.publication_created_at >= 0)
       )
       BEGIN SELECT RAISE(ABORT, 'CANONICAL_TRANSLATION_BINDING_INVALID'); END;
+    `,
+  },
+  {
+    version: 43,
+    statements: `
+      DROP TRIGGER ledger_status_event_insert;
+      DROP TABLE ledger_status_clock;
+      CREATE INDEX work_event_latest_success
+        ON work_event(sequence DESC, created_at)
+        WHERE event_type IN ('succeeded','imported');
+      CREATE INDEX work_event_latest_failure
+        ON work_event(sequence DESC, created_at)
+        WHERE event_type IN ('retry_wait','quota_wait','dead_letter','lease_expired');
+      CREATE TRIGGER ledger_status_event_insert
+      AFTER INSERT ON work_event
+      WHEN NEW.event_type IN ('succeeded','imported')
+      BEGIN
+        INSERT INTO ledger_profile_success_clock(
+          kind, implementation_version, schema_version, last_success_at
+        )
+          SELECT kind, implementation_version, schema_version, NEW.created_at
+          FROM work_item
+          WHERE work_key = NEW.work_key
+          ON CONFLICT(kind, implementation_version, schema_version)
+          DO UPDATE SET last_success_at = excluded.last_success_at;
+      END;
+    `,
+  },
+  {
+    version: 44,
+    statements: `
+      ALTER TABLE local_schema ADD COLUMN sol_import_source_digest TEXT
+        CHECK(sol_import_source_digest IS NULL OR
+          (length(sol_import_source_digest) = 64 AND sol_import_source_digest NOT GLOB '*[^0-9a-f]*'));
+      ALTER TABLE local_schema ADD COLUMN sol_import_record_count INTEGER
+        CHECK(sol_import_record_count IS NULL OR sol_import_record_count BETWEEN 0 AND 100000);
+      ALTER TABLE local_schema ADD COLUMN sol_import_source_bytes INTEGER
+        CHECK(sol_import_source_bytes IS NULL OR sol_import_source_bytes BETWEEN 0 AND 536870912);
+      ALTER TABLE local_schema ADD COLUMN sol_imported_at INTEGER
+        CHECK(sol_imported_at IS NULL OR sol_imported_at >= 0);
+
+      UPDATE local_schema SET
+        sol_import_source_digest = (SELECT source_digest FROM sol_operation_import_receipt WHERE singleton = 1),
+        sol_import_record_count = (SELECT record_count FROM sol_operation_import_receipt WHERE singleton = 1),
+        sol_import_source_bytes = (SELECT source_bytes FROM sol_operation_import_receipt WHERE singleton = 1),
+        sol_imported_at = (SELECT imported_at FROM sol_operation_import_receipt WHERE singleton = 1)
+      WHERE singleton = 1 AND EXISTS(SELECT 1 FROM sol_operation_import_receipt WHERE singleton = 1);
+
+      CREATE TEMP TABLE _sol_import_receipt_guard(valid INTEGER NOT NULL CHECK(valid = 1));
+      INSERT INTO _sol_import_receipt_guard(valid)
+        SELECT CASE WHEN
+          (SELECT COUNT(*) FROM sol_operation_import_receipt) =
+            (SELECT COUNT(*) FROM local_schema WHERE sol_import_source_digest IS NOT NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM sol_operation_import_receipt AS old
+            JOIN local_schema AS current ON current.singleton = old.singleton
+            WHERE current.sol_import_source_digest IS NOT old.source_digest
+               OR current.sol_import_record_count IS NOT old.record_count
+               OR current.sol_import_source_bytes IS NOT old.source_bytes
+               OR current.sol_imported_at IS NOT old.imported_at
+          )
+          AND ((SELECT COUNT(*) FROM runtime_control
+                 WHERE control_key = 'sol_operation_import_complete' AND enabled = 1) =
+               (SELECT COUNT(*) FROM local_schema WHERE sol_import_source_digest IS NOT NULL))
+          THEN 1 ELSE 0 END;
+      DROP TABLE _sol_import_receipt_guard;
+
+      DROP TRIGGER sol_operation_import_receipt_immutable;
+      DROP TRIGGER sol_operation_import_receipt_reject_delete;
+      DROP TABLE sol_operation_import_receipt;
+
+      CREATE TRIGGER local_schema_sol_import_immutable
+      BEFORE UPDATE OF sol_import_source_digest, sol_import_record_count,
+                       sol_import_source_bytes, sol_imported_at ON local_schema
+      WHEN OLD.sol_import_source_digest IS NOT NULL
+        OR NEW.sol_import_source_digest IS NULL
+        OR NEW.sol_import_record_count IS NULL
+        OR NEW.sol_import_source_bytes IS NULL
+        OR NEW.sol_imported_at IS NULL
+      BEGIN SELECT RAISE(ABORT, 'SOL_IMPORT_RECEIPT_IMMUTABLE'); END;
     `,
   },
 ];
