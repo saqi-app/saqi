@@ -33,7 +33,7 @@ describe("source admission v2 route", () => {
         prepare: (statement: string) => ({
           first: () =>
             Promise.resolve(
-              statement.includes("production_deployment_identity")
+              statement.includes("database_id AS databaseId")
                 ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
                 : { writer_epoch: 7 }
             ),

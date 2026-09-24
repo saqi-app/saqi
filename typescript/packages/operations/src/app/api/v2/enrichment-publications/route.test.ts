@@ -149,7 +149,7 @@ describe("bound enrichment publication v2 route", () => {
           }),
           first: () =>
             Promise.resolve(
-              query.includes("production_deployment_identity")
+              query.includes("database_id AS databaseId")
                 ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
                 : undefined
             ),
@@ -290,7 +290,7 @@ function cacheEnabledEnvironment() {
         }),
         first: () =>
           Promise.resolve(
-            query.includes("production_deployment_identity")
+            query.includes("database_id AS databaseId")
               ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
               : undefined
           ),
