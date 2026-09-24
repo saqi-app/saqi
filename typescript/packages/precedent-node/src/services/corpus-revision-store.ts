@@ -30,7 +30,6 @@ import type { Database } from "./db-types.js";
 import {
   AUTHOR_TABLE as author,
   CRAWL_IMPORT_BUNDLE_TABLE as bundle,
-  CRAWL_IMPORT_RECEIPT_TABLE as receipt,
   CRAWL_IMPORT_RECORD_TABLE as record,
   ENRICHMENT_ARTIFACT_TABLE as artifact,
   ENRICHMENT_VALIDATION_TABLE as validation,
@@ -1384,49 +1383,62 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     for (const [name, value] of Object.entries(counts)) {
       assertNonnegativeInteger(value, name);
     }
-    await this.#db
-      .insert(receipt)
-      .values({
-        bundleId: plan.bundleId,
-        planHash: plan.planHash,
-        writerEpoch: plan.writerEpoch,
-        ...counts,
-        createdAt: sql`(unixepoch())`,
-      })
-      .onConflictDoNothing();
-    const [stored] = await this.#db
-      .select()
-      .from(receipt)
-      .where(eq(receipt.bundleId, plan.bundleId))
-      .limit(1);
-    if (
-      stored?.planHash !== plan.planHash ||
-      stored.writerEpoch !== plan.writerEpoch ||
-      stored.insertedRevisions !== counts.insertedRevisions ||
-      stored.reusedRevisions !== counts.reusedRevisions ||
-      stored.advancedPointers !== counts.advancedPointers ||
-      stored.unchangedPointers !== counts.unchangedPointers
-    ) {
-      throw new CorpusRevisionConflictError("IMPORT_RECEIPT_CONFLICT");
-    }
     await this.#db.run(sql`
       UPDATE crawl_import_bundle
-      SET status = 'promoted', promoted_at = COALESCE(promoted_at, unixepoch())
+      SET status = 'promoted', promoted_at = COALESCE(promoted_at, unixepoch()),
+          receipt_created_at = unixepoch(),
+          inserted_revisions = ${counts.insertedRevisions},
+          reused_revisions = ${counts.reusedRevisions},
+          advanced_pointers = ${counts.advancedPointers},
+          unchanged_pointers = ${counts.unchangedPointers}
       WHERE id = ${plan.bundleId}
-        AND status IN ('sealed', 'promoted')
+        AND status = 'sealed'
+        AND receipt_created_at IS NULL
+        AND plan_hash = ${plan.planHash}
         AND writer_epoch = ${plan.writerEpoch}
         AND ${plan.writerEpoch} = (
           SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
         )
     `);
     const [promoted] = await this.#db
-      .select({ status: bundle.status })
+      .select({
+        status: bundle.status,
+        planHash: bundle.planHash,
+        writerEpoch: bundle.writerEpoch,
+        receiptCreatedAt: bundle.receiptCreatedAt,
+        insertedRevisions: bundle.insertedRevisions,
+        reusedRevisions: bundle.reusedRevisions,
+        advancedPointers: bundle.advancedPointers,
+        unchangedPointers: bundle.unchangedPointers,
+      })
       .from(bundle)
       .where(eq(bundle.id, plan.bundleId))
       .limit(1);
-    if (promoted?.status !== "promoted") {
+    if (
+      promoted?.receiptCreatedAt != null &&
+      (promoted.planHash !== plan.planHash ||
+        promoted.writerEpoch !== plan.writerEpoch ||
+        promoted.insertedRevisions !== counts.insertedRevisions ||
+        promoted.reusedRevisions !== counts.reusedRevisions ||
+        promoted.advancedPointers !== counts.advancedPointers ||
+        promoted.unchangedPointers !== counts.unchangedPointers)
+    ) {
+      throw new CorpusRevisionConflictError("IMPORT_RECEIPT_CONFLICT");
+    }
+    if (promoted?.status !== "promoted" || promoted.receiptCreatedAt == null) {
       throw new LostWriterEpochError();
     }
+    const fenced = await this.#db.all<{ id: string }>(sql`
+      UPDATE crawl_import_bundle SET status = status
+      WHERE id = ${plan.bundleId}
+        AND status = 'promoted'
+        AND writer_epoch = ${plan.writerEpoch}
+        AND ${plan.writerEpoch} = (
+          SELECT writer_epoch FROM scraper_writer_control WHERE singleton = 1
+        )
+      RETURNING id
+    `);
+    if (fenced.length !== 1) throw new LostWriterEpochError();
   }
 
   async putEnrichmentArtifact(input: EnrichmentArtifactInput): Promise<void> {

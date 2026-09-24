@@ -174,6 +174,10 @@ describe("D1CorpusRevisionStore", () => {
 
     const replayPlan = await store.planPromotion("bundle-1", 1);
     expect(replayPlan).toEqual(firstPlan);
+    await store.advanceWriterEpoch(1, 2, "replacement-writer");
+    await expect(store.recordImportReceipt(firstPlan, counts)).rejects.toThrow(
+      "SCRAPER_WRITER_EPOCH_LOST",
+    );
   });
 
   it("backfills exact active-source fingerprints in bounded resumable pages", async () => {
@@ -756,17 +760,17 @@ describe("D1CorpusRevisionStore", () => {
     ).toBe(1);
   });
 
-  it("atomically finalizes a bundle when its immutable receipt is inserted", async () => {
+  it("atomically finalizes a bundle with immutable receipt counts", async () => {
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     await store.promoteRecord(plan, plan.items[0]);
 
     database
       .prepare(
-        `INSERT INTO crawl_import_receipt (
-          bundle_id, plan_hash, writer_epoch, inserted_revisions,
-          reused_revisions, advanced_pointers, unchanged_pointers, created_at
-        ) VALUES (?, ?, 1, 1, 0, 1, 0, 1)`,
+        `UPDATE crawl_import_bundle SET status = 'promoted', promoted_at = 1,
+          receipt_created_at = 1, inserted_revisions = 1,
+          reused_revisions = 0, advanced_pointers = 1, unchanged_pointers = 0
+          WHERE id = ? AND plan_hash = ?`,
       )
       .run(plan.bundleId, plan.planHash);
 
@@ -804,7 +808,7 @@ describe("D1CorpusRevisionStore", () => {
     ).toBe("promoted");
   });
 
-  it("rejects a stale writer receipt before any partial finalization", async () => {
+  it("rejects a stale writer finalization before any partial change", async () => {
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     await store.promoteRecord(plan, plan.items[0]);
@@ -813,17 +817,17 @@ describe("D1CorpusRevisionStore", () => {
     expect(() =>
       database
         .prepare(
-          `INSERT INTO crawl_import_receipt (
-            bundle_id, plan_hash, writer_epoch, inserted_revisions,
-            reused_revisions, advanced_pointers, unchanged_pointers, created_at
-          ) VALUES (?, ?, 1, 1, 0, 1, 0, 1)`,
+          `UPDATE crawl_import_bundle SET status = 'promoted', promoted_at = 1,
+            receipt_created_at = 1, inserted_revisions = 1,
+            reused_revisions = 0, advanced_pointers = 1, unchanged_pointers = 0
+            WHERE id = ? AND plan_hash = ?`,
         )
         .run(plan.bundleId, plan.planHash),
     ).toThrow(/CRAWL_IMPORT_RECEIPT_BUNDLE_INVALID/u);
     expect(
       database
         .prepare(
-          "SELECT count(*) FROM crawl_import_receipt WHERE bundle_id = ?",
+          "SELECT count(*) FROM crawl_import_bundle WHERE id = ? AND receipt_created_at IS NOT NULL",
         )
         .pluck()
         .get(plan.bundleId),
@@ -1842,9 +1846,12 @@ describe("D1CorpusRevisionStore", () => {
     const first = await coordinator.promote("bundle-1", 1, plan.planHash);
     const replay = await coordinator.promote("bundle-1", 1, plan.planHash);
     expect(replay).toEqual(first);
-    expect(scalar(database, "SELECT count(*) FROM crawl_import_receipt")).toBe(
-      1,
-    );
+    expect(
+      scalar(
+        database,
+        "SELECT count(*) FROM crawl_import_bundle WHERE receipt_created_at IS NOT NULL",
+      ),
+    ).toBe(1);
   });
 });
 
