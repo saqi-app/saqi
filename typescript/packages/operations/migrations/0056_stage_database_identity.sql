@@ -1,11 +1,11 @@
 -- Stage the production identity on the existing writer control singleton.
 -- The old table remains until the new Worker is deployed and its guard is live.
-ALTER TABLE scraper_writer_control ADD COLUMN database_id TEXT CHECK (
+ALTER TABLE scraper_writer_control ADD COLUMN database_id TEXT CHECK ( -- sarj-noqa: SARJ102 — Wrangler applies this D1 migration once; SQLite has no ADD COLUMN IF NOT EXISTS.
   database_id IS NULL OR (
     length(database_id) = 36
     AND database_id GLOB '[0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*'
   )
-); -- sarj-noqa: SARJ102 — Wrangler applies this D1 migration once; SQLite has no ADD COLUMN IF NOT EXISTS.
+);
 
 CREATE TABLE IF NOT EXISTS _database_identity_fold_guard (
   invalid_count INTEGER NOT NULL CHECK (invalid_count = 0)
