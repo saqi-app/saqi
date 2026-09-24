@@ -2,7 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SAQI_PRODUCTION_DATABASE_ID } from "@saqi/precedent-iso";
+import {
+  approvedEnrichmentValidations,
+  LEGACY_ENRICHMENT_PROFILES,
+  SAQI_PRODUCTION_DATABASE_ID,
+} from "@saqi/precedent-iso";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -65,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0049_fold_enrichment_dimensions.sql");
+    expect(first.at(-1)).toBe("0050_retire_legacy_enrichment.sql");
     expect(
       database
         .prepare(
@@ -76,7 +80,7 @@ describe("production migration compatibility", () => {
     expectCorpusRevisionSchema(database);
     expectModelPublicationGuards(database);
     expectLegacySolPublicationPrecedence(database);
-    expectLegacyPointerGuards(database);
+    expectSourcePointerGuards(database);
     expectCanonicalDataGuards(database);
     expect(
       database
@@ -127,6 +131,7 @@ describe("production migration compatibility", () => {
 
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
+      "0050_retire_legacy_enrichment.sql",
     ]);
     expect(
       database
@@ -170,6 +175,7 @@ describe("production migration compatibility", () => {
       .all();
     expect(applyPending(database, files)).toEqual([
       "0049_fold_enrichment_dimensions.sql",
+      "0050_retire_legacy_enrichment.sql",
     ]);
     expect(
       database
@@ -186,6 +192,154 @@ describe("production migration compatibility", () => {
         .pluck()
         .all(),
     ).toEqual(profilesBefore);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("moves published legacy Sol content and validation into model tables", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0050_"),
+    );
+    const hash = "a".repeat(64);
+    insertProductionRow(database);
+    database
+      .prepare(
+        `INSERT INTO crawl_import_bundle (
+          id, schema_version, manifest_hash, expected_record_count, status,
+          writer_epoch, created_at
+        ) VALUES ('legacy-bundle', 1, ?, 1, 'open', 1, 1)`,
+      )
+      .run(hash);
+    database
+      .prepare(
+        `INSERT INTO crawl_import_record (
+          bundle_id, ordinal, record_hash, source_name, source_author_id,
+          source_author_url, author_name_arabic, canonical_author_id,
+          source_poem_id, source_poem_url, canonical_poem_id, title_arabic,
+          content_arabic, content_hash, observed_at
+        ) VALUES ('legacy-bundle', 0, ?, 'source', 'author',
+          'https://example.test/author', 'شاعر', ?, 'poem-42',
+          'https://example.test/poem', ?, 'قصيدة',
+          '{"content":["صدر","عجز"]}', ?, 1)`,
+      )
+      .run(
+        hash,
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        hash,
+      );
+    database.exec(`
+      INSERT INTO source_author_identity VALUES (
+        'legacy-author', 'source', 'author', 'https://example.test/author',
+        'شاعر', '00000000-0000-4000-8000-000000000001', 1, 1
+      );
+      INSERT INTO source_poem_identity VALUES (
+        'legacy-poem', 'source', 'poem-42', 'legacy-author',
+        'https://example.test/poem',
+        '00000000-0000-4000-8000-000000000002', 1, 1, NULL
+      );
+    `);
+    database
+      .prepare(
+        `INSERT INTO poem_source_revision (
+          id, source_poem_id, schema_version, content_hash, title_arabic,
+          content_arabic, observed_at, created_at, import_bundle_id,
+          import_ordinal
+        ) VALUES ('legacy-revision', 'legacy-poem', 1, ?, 'قصيدة',
+          '{"content":["صدر","عجز"]}', 1, 1, 'legacy-bundle', 0)`,
+      )
+      .run(hash);
+    const payload = JSON.stringify({
+      translation: { lines: ["First line", "Second line"] },
+      insights: {
+        summary: "A reading.",
+        themes: ["Memory"],
+        historicalContext: "An era.",
+        literaryDevices: ["Image"],
+        culturalSignificance: "A custom.",
+        notableLines: [{ line: "صدر", explanation: "An image." }],
+      },
+    });
+    database
+      .prepare(
+        `INSERT INTO enrichment_artifact (
+          id, source_revision_id, task_key, variant, schema_version,
+          prompt_version, model, reasoning_effort, payload_hash, payload,
+          created_at
+        ) VALUES ('legacy-artifact', 'legacy-revision', 'legacy-task', 0,
+          1, 'sol-enrichment-v1', 'gpt-5.6-sol', 'high', ?, ?, 1)`,
+      )
+      .run(hash, payload);
+    const profile = LEGACY_ENRICHMENT_PROFILES[0];
+    const validations = approvedEnrichmentValidations(profile).all;
+    for (const [index, validation] of validations.entries()) {
+      database
+        .prepare(
+          `INSERT INTO enrichment_validation (
+            id, artifact_id, validator_key, validator_version, attempt,
+            outcome, highest_severity, report_hash, report, created_at
+          ) VALUES (?, 'legacy-artifact', ?, ?, ?, 'pass', 'none', ?, '{}', 1)`,
+        )
+        .run(
+          `legacy-review-${String(index)}`,
+          validation.validatorKey,
+          validation.validatorVersion,
+          validation.attempt,
+          hash,
+        );
+    }
+    database.exec(`
+      UPDATE poem SET active_source_revision_id = 'legacy-revision',
+        active_enrichment_artifact_id = 'legacy-artifact'
+      WHERE id = '00000000-0000-4000-8000-000000000002';
+      INSERT INTO poem_publication_pointer VALUES (
+        '00000000-0000-4000-8000-000000000002', 'legacy-revision',
+        'legacy-artifact', 1, 1, 1
+      );
+    `);
+
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0050_retire_legacy_enrichment.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          `SELECT model_key, payload FROM model_enrichment_artifact
+           WHERE id = 'legacy/legacy-artifact'`,
+        )
+        .get(),
+    ).toEqual({ model_key: "sol-5.6", payload });
+    expect(
+      database
+        .prepare(
+          `SELECT count(*) FROM model_enrichment_validation
+           WHERE artifact_id = 'legacy/legacy-artifact'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe(2);
+    expect(
+      database
+        .prepare(
+          `SELECT enrichment_artifact_id FROM poem_model_publication_pointer
+           WHERE poem_id = '00000000-0000-4000-8000-000000000002'
+             AND model_key = 'sol-5.6'`,
+        )
+        .pluck()
+        .get(),
+    ).toBe("legacy/legacy-artifact");
+    for (const name of [
+      "enrichment_artifact",
+      "enrichment_validation",
+      "poem_publication_pointer",
+    ]) {
+      expect(
+        database
+          .prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?")
+          .get(name),
+      ).toBeUndefined();
+    }
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -738,13 +892,10 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     expect.arrayContaining([
       "crawl_import_bundle",
       "crawl_import_record",
-      "enrichment_artifact",
       "enrichment_profile",
-      "enrichment_validation",
       "model_enrichment_artifact",
       "model_enrichment_validation",
       "model_publication_receipt",
-      "poem_publication_pointer",
       "poem_model_publication_pointer",
       "poem_source_pointer",
       "poem_source_revision",
@@ -758,13 +909,14 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
     name: string;
   }[];
   expect(poemColumns.map(({ name }) => name)).toEqual(
-    expect.arrayContaining([
-      "active_enrichment_artifact_id",
-      "active_source_revision_id",
-      "insights_sol",
-      "translation_sol",
-    ]),
+    expect.arrayContaining(["active_source_revision_id"]),
   );
+  for (const retired of [
+    "active_enrichment_artifact_id",
+    "insights_sol",
+    "translation_sol",
+  ])
+    expect(poemColumns.map(({ name }) => name)).not.toContain(retired);
   const enrichmentColumns = database
     .prepare("PRAGMA table_info(model_enrichment_artifact)")
     .all() as { name: string }[];
@@ -820,21 +972,18 @@ function expectLegacySolPublicationPrecedence(
   ]);
 }
 
-function expectLegacyPointerGuards(database: Database.Database): void {
+function expectSourcePointerGuards(database: Database.Database): void {
   const triggerNames = database
     .prepare(
       `SELECT name FROM sqlite_schema
        WHERE type = 'trigger'
-         AND tbl_name IN ('poem_source_pointer', 'poem_publication_pointer')
+         AND tbl_name = 'poem_source_pointer'
        ORDER BY name`,
     )
     .pluck()
     .all() as string[];
   expect(triggerNames).toEqual(
     expect.arrayContaining([
-      "poem_publication_pointer_delete_forbidden",
-      "poem_publication_pointer_insert_guard",
-      "poem_publication_pointer_update_guard",
       "poem_source_pointer_delete_forbidden",
       "poem_source_pointer_insert_guard",
       "poem_source_pointer_update_guard",
@@ -855,8 +1004,6 @@ function expectCanonicalDataGuards(database: Database.Database): void {
       "crawl_import_bundle_canonical_hash_insert",
       "crawl_import_record_document_insert",
       "poem_source_revision_document_insert",
-      "enrichment_artifact_document_insert",
-      "enrichment_validation_document_insert",
       "model_enrichment_artifact_document_insert",
       "model_enrichment_validation_document_insert",
       "crawl_import_bundle_receipt_insert_guard",

@@ -123,7 +123,7 @@ void test("D1 catalog propagates non-schema session failures without replay", as
   assert.equal(fixture.sessionCalls(), 1);
 });
 
-void test("D1 catalog schema fallback keeps every native batch in the same session", async () => {
+void test("D1 catalog fails once when the current schema is unavailable", async () => {
   const failure = new Error("no such table: poem_model_publication");
   const fixture = sessionFixture(failure);
   await assert.rejects(
@@ -131,7 +131,7 @@ void test("D1 catalog schema fallback keeps every native batch in the same sessi
     (error) => error === failure,
   );
   assert.equal(fixture.sessionCalls(), 1);
-  assert.equal(fixture.batches.length, 3);
+  assert.equal(fixture.batches.length, 1);
   assert.deepEqual(fixture.batches.flat(), fixture.bound);
   assert.equal(fixture.allReceivers.length, 0);
 });

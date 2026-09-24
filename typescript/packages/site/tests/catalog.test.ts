@@ -241,25 +241,6 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
     assert.deepEqual(poemPage.poem.linesArabic, ["سطر أول", "سطر ثان"]);
     assert.equal(poemPage.poem.insights.summary, "A concise reading.");
     assert.equal(poemPage.poem.insightsTrack, "legacy");
-    sqlite
-      .prepare(
-        "UPDATE poem SET translation_sol = ?, insights_sol = ? WHERE id = 'p-valid'",
-      )
-      .run(
-        JSON.stringify({ content: ["Stale line one", "Stale line two"] }),
-        JSON.stringify({
-          summary: "A stale reading.",
-          themes: ["Memory"],
-          historicalContext: "A grounded setting.",
-          literaryDevices: ["Metaphor"],
-          culturalSignificance: "A cultural note.",
-          notableLines: [{ line: "سطر أول", explanation: "A notable image." }],
-        }),
-      );
-    const solPoemPage = await database.getPoemPage("good-poet", "p-valid");
-    assert.equal(solPoemPage?.poem.linesEnglishSol, undefined);
-    assert.equal(solPoemPage?.poem.insights?.summary, "A concise reading.");
-
     const artifactHash = "a".repeat(64);
     const normalizedPayload = JSON.stringify({
       insights: {
@@ -575,46 +556,6 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       [],
       "stale publication revisions do not advertise a model",
     );
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("catalog retries legacy queries when normalized model tables are absent", async () => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      DROP TABLE poem_model_publication_pointer;
-      DROP TABLE model_enrichment_validation;
-      DROP TABLE model_enrichment_artifact;
-      INSERT INTO author (id, slug, name_arabic, name, hidden)
-      VALUES ('a-legacy', 'legacy-poet', 'شاعر', 'Legacy Poet', 0);
-      INSERT INTO poem
-        (id, author_id, slug, verses, name_arabic, content_arabic,
-         translation, insights, hidden)
-      VALUES
-        ('p-legacy', 'a-legacy', 'legacy-poem', 1, 'قصيدة',
-         '{"content":["بيت"]}', '{"content":["A verse"]}',
-         '{"summary":"Reading","themes":["Memory"],
-           "historicalContext":"History","literaryDevices":["Metaphor"],
-           "culturalSignificance":"Culture","notableLines":[
-             {"line":"بيت","explanation":"Image"}]}', 0);
-    `);
-    const database = catalogRepository(sqlite);
-
-    const authorPage = await database.getAuthorPage("legacy-poet");
-    assert.ok(authorPage);
-    const [legacyPoem] = authorPage.poems;
-    assert.ok(legacyPoem);
-    assert.equal(legacyPoem.hasEnglish, true);
-    assert.equal(legacyPoem.hasInsights, true);
-
-    const poemPage = await database.getPoemPage("legacy-poet", "p-legacy");
-    assert.ok(poemPage);
-    assert.ok(poemPage.poem.insights);
-    assert.deepEqual(poemPage.poem.linesEnglish, ["A verse"]);
-    assert.equal(poemPage.poem.insights.summary, "Reading");
-    assert.deepEqual(poemPage.poem.modelEnrichments, undefined);
   } finally {
     sqlite.close();
   }

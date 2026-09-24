@@ -47,9 +47,6 @@ CREATE TABLE IF NOT EXISTS poem (
   has_insights INTEGER NOT NULL DEFAULT 0,
   sitemap_shard INTEGER NOT NULL DEFAULT 0,
   active_source_revision_id TEXT,
-  active_enrichment_artifact_id TEXT,
-  translation_sol TEXT,
-  insights_sol TEXT,
   legacy_translation_attributions TEXT
 );
 
@@ -178,11 +175,10 @@ describe("D1PoemStore", () => {
       );
     });
 
-    it("loads every current validated model and suppresses stale legacy Sol", async () => {
+    it("loads every current validated model", async () => {
       db.update(poem)
         .set({
           activeSourceRevisionId: "revision-current",
-          translationSol: { content: ["Legacy Sol"] },
         })
         .where(eq(poem.id, testPoemId))
         .run();
@@ -198,7 +194,6 @@ describe("D1PoemStore", () => {
 
       const result = await store.getById(testPoemId);
 
-      expect(result.linesEnglishSol).toBeUndefined();
       expect(result.modelEnrichments?.map(({ modelKey }) => modelKey)).toEqual(
         APPROVED_ENRICHMENT_PROFILES.map(({ modelKey }) => modelKey),
       );
@@ -213,7 +208,6 @@ describe("D1PoemStore", () => {
       db.update(poem)
         .set({
           activeSourceRevisionId: "revision-new",
-          translationSol: { content: ["Stale legacy Sol"] },
         })
         .where(eq(poem.id, testPoemId))
         .run();
@@ -228,7 +222,6 @@ describe("D1PoemStore", () => {
       const result = await store.getById(testPoemId);
 
       expect("modelEnrichments" in result).toBe(false);
-      expect("linesEnglishSol" in result).toBe(false);
     });
 
     it("rejects a model track when any stored review rejects it", async () => {
@@ -308,23 +301,6 @@ describe("D1PoemStore", () => {
       ]);
     });
 
-    it("falls back to legacy Sol only when normalized provenance tables are unavailable", async () => {
-      sqlite.exec(`
-        DROP TABLE poem_model_publication_pointer;
-        DROP TABLE model_enrichment_validation;
-        DROP TABLE model_enrichment_artifact;
-      `);
-      db.update(poem)
-        .set({ translationSol: { content: ["Legacy Sol"] } })
-        .where(eq(poem.id, testPoemId))
-        .run();
-
-      const result = await store.getById(testPoemId);
-
-      expect(result.linesEnglishSol).toEqual(["Legacy Sol"]);
-      expect(result.modelEnrichments).toBeUndefined();
-    });
-
     it("fails closed without crashing on a partial normalized schema", async () => {
       sqlite.exec(`
         DROP TABLE model_enrichment_validation;
@@ -336,7 +312,6 @@ describe("D1PoemStore", () => {
       db.update(poem)
         .set({
           activeSourceRevisionId: "revision-current",
-          translationSol: { content: ["Unverified legacy Sol"] },
         })
         .where(eq(poem.id, testPoemId))
         .run();
@@ -351,10 +326,7 @@ describe("D1PoemStore", () => {
 
       const result = await store.getById(testPoemId);
 
-      expect({
-        linesEnglishSol: result.linesEnglishSol,
-        modelEnrichments: result.modelEnrichments,
-      }).toEqual({ linesEnglishSol: undefined, modelEnrichments: undefined });
+      expect(result.modelEnrichments).toBeUndefined();
     });
   });
 
