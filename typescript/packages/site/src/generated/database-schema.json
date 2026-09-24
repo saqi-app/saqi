@@ -13,7 +13,8 @@
     "0047_derive_artifact_profiles.sql",
     "0048_fold_crawl_import_receipt.sql",
     "0049_fold_enrichment_dimensions.sql",
-    "0050_copy_legacy_enrichment.sql"
+    "0050_copy_legacy_enrichment.sql",
+    "0051_expand_source_revision_pointer.sql"
   ],
   "localVersion": 40,
   "databases": [
@@ -1515,9 +1516,38 @@
               "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
+            },
+            {
+              "name": "current_revision_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "current_revision_version",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "current_revision_writer_epoch",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "current_revision_updated_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
             }
           ],
           "foreignKeys": [
+            {
+              "from": "current_revision_id",
+              "table": "poem_source_revision",
+              "to": "id"
+            },
             {
               "from": "canonical_poem_id",
               "table": "poem",

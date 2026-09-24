@@ -306,7 +306,10 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       INSERT INTO source_author_identity VALUES
         ('source-author-1', 'source', 'author-1', 'https://example.test/author',
          'شاعر', 'a-good', 1, 1);
-      INSERT INTO source_poem_identity VALUES
+      INSERT INTO source_poem_identity (
+        id, source_name, external_id, source_author_id, canonical_url,
+        canonical_poem_id, first_observed_at, last_observed_at, tombstoned_at
+      ) VALUES
         ('source-poem-1', 'source', 'poem-1', 'source-author-1',
          'https://example.test/poem', 'p-valid', 1, 1, NULL);
     `);
