@@ -179,8 +179,8 @@ internal enum ProgressEstimator {
         }
         guard throughput.coverage.backfillComplete else {
             return throughput.published.last1h > 0
-                ? "ETA indexing · \(throughput.published.last1h)/hour published"
-                : "ETA indexing · no publications in last hour"
+                ? "ETA partial history · \(throughput.published.last1h)/hour published"
+                : "ETA partial history · no publications in last hour"
         }
         let remaining = throughput.remaining.endToEndPublication
         if remaining == 0 {

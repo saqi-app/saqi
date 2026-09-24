@@ -644,35 +644,35 @@
       "count": 1
     },
     {
-      "fingerprint": "360f7512d34b723ac840178d67552ffa408b26677bb1d745a29d271f129cbd11",
+      "fingerprint": "5f134951392e1abe4cff8ddb0f4b2cd16b3afab4b5c237a2fc2ed99a58046eac",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "53f4afea48af255f32233a09efda8b494b31e66bc7cc6d9d1f518064042f3821",
+      "fingerprint": "b0357e3ae84668f9fba1e81865b0aa30d1c435399ae3e9c074daf5e77e31f3c9",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "bf91246dfaaacceddf8d8b1bdc07d16051118bcf8877dc5cd0dc246e852e3375",
+      "fingerprint": "ccc160ff6fbce9e1e1032694b538fafa7bdb79461490794eebfee9b048984e3a",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "df9dd09e44eb68e160b14ae75e26d4065fb64a5cdc5542c40f08b284cae18554",
+      "fingerprint": "e36592251494a409be0ec7394c0b0c930fd7bca83ffbe20d1cd3df9fe0c17a02",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",
       "count": 1
     },
     {
-      "fingerprint": "e7e8e86acdfa74240cb04c8e1a21948339b83656dadc377681c887a6eae20980",
+      "fingerprint": "ea097252f99392a5bb95c162945a1dc4147bf9ca73843d9e363a1a522e399cb8",
       "source": "eslint",
       "ruleId": "@sarj/no-excessive-cognitive-complexity",
       "path": "typescript/packages/crawler-local/src/runtime/unified-rig.ts",

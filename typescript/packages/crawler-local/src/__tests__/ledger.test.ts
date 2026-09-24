@@ -187,12 +187,6 @@ test("tracks exact-profile Sol poem throughput without counting provider operati
   const artifactHash = "a".repeat(64);
   ledger.succeed(claim, artifactHash, now - 4 * 60_000);
 
-  expect(ledger.backfillSolPoemMilestones("succeeded", 10, now)).toMatchObject({
-    complete: true,
-  });
-  expect(ledger.backfillSolPoemMilestones("imported", 10, now)).toMatchObject({
-    complete: true,
-  });
   expect(ledger.poemThroughput(requirements, now)).toMatchObject({
     coverage: { backfillComplete: true },
     generated: { last15m: 1, last1h: 1, last5m: 1, lastAt: now - 4 * 60_000 },

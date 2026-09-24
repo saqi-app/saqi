@@ -269,9 +269,6 @@ const FANOUT_MINIMUM_CADENCE_MS = 5_000;
 const RETENTION_SCAN_CONTINUATION_INTERVAL_MS = 30_000;
 const RETENTION_SCAN_INTERVAL_MS = 60 * 60_000;
 const RETENTION_SCAN_BATCH_SIZE = 250;
-const SOL_MILESTONE_BACKFILL_BATCH_SIZE = 250;
-const SOL_MILESTONE_BACKFILL_CONTINUATION_INTERVAL_MS = 5_000;
-const SOL_MILESTONE_BACKFILL_COMPLETE_INTERVAL_MS = 60 * 60_000;
 
 function providerPoemThroughput(
   throughput: ReturnType<Ledger["poemThroughput"]>,
@@ -280,7 +277,7 @@ function providerPoemThroughput(
     ...throughput,
     coverage: {
       ...throughput.coverage,
-      state: throughput.coverage.backfillComplete ? "complete" : "backfilling",
+      state: throughput.coverage.backfillComplete ? "complete" : "partial",
     },
   };
 }
@@ -1185,7 +1182,6 @@ export class UnifiedRigRuntime {
       });
     }
     this.#createRetentionLane(lanes, ledger);
-    this.#createSolPoemMilestoneBackfillLane(lanes, ledger);
     return lanes;
   }
 
@@ -2606,45 +2602,6 @@ export class UnifiedRigRuntime {
           nextWakeAt: completedRound ? nextCachedWake : now,
           result: report.applied ? "archived" : "dry_run",
         };
-      },
-    });
-  }
-
-  #createSolPoemMilestoneBackfillLane(
-    lanes: SupervisorLane[],
-    ledger: Ledger,
-  ): void {
-    const eventTypes = ["succeeded", "imported"] as const;
-    const complete = new Set<(typeof eventTypes)[number]>();
-    let eventIndex = 0;
-    lanes.push({
-      name: "maintenance-sol-poem-milestones",
-      close: () => undefined,
-      honorNextWakeAt: true,
-      maximumSleepMs: SOL_MILESTONE_BACKFILL_COMPLETE_INTERVAL_MS,
-      runOnce: () => {
-        const now = this.#now();
-        const eventType = eventTypes[eventIndex];
-        if (!eventType) throw new Error("SOL_MILESTONE_EVENT_TYPE_MISSING");
-        const result = ledger.backfillSolPoemMilestones(
-          eventType,
-          SOL_MILESTONE_BACKFILL_BATCH_SIZE,
-          now,
-        );
-        if (result.complete) complete.add(eventType);
-        else complete.delete(eventType);
-        eventIndex = (eventIndex + 1) % eventTypes.length;
-        const backfillComplete = complete.size === eventTypes.length;
-        return Promise.resolve({
-          nextWakeAt:
-            now +
-            (backfillComplete
-              ? SOL_MILESTONE_BACKFILL_COMPLETE_INTERVAL_MS
-              : result.complete
-                ? 0
-                : SOL_MILESTONE_BACKFILL_CONTINUATION_INTERVAL_MS),
-          result: backfillComplete ? "complete" : "backfilling",
-        });
       },
     });
   }

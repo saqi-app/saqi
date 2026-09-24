@@ -147,7 +147,7 @@ extension ModelsTests {
 
         XCTAssertEqual(
             ProgressEstimator.eta(provider: presentationEntry(throughput: throughput)),
-            "ETA indexing · 10/hour published",
+            "ETA partial history · 10/hour published",
         )
     }
 
@@ -160,7 +160,7 @@ extension ModelsTests {
 
         XCTAssertEqual(
             ProgressEstimator.eta(provider: presentationEntry(throughput: throughput)),
-            "ETA indexing · no publications in last hour",
+            "ETA partial history · no publications in last hour",
         )
     }
 
@@ -351,7 +351,7 @@ extension ModelsTests {
             coverage: ProviderPoemThroughputCoverage(
                 backfillComplete: backfillComplete,
                 highWatermark: 100,
-                state: backfillComplete ? "complete" : "backfilling",
+                state: backfillComplete ? "complete" : "partial",
             ),
             generated: PoemMilestoneWindow(last15m: 4, last1h: 12, last5m: 1, lastAt: 999_000_000),
             published: PoemMilestoneWindow(

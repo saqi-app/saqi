@@ -26,7 +26,7 @@ const SchedulerStateSchema = z.enum([
   "circuit_open",
 ]);
 const ProgressStateSchema = z.enum(["active", "recent", "stalled", "idle"]);
-const CoverageStateSchema = z.enum(["backfilling", "complete"]);
+const CoverageStateSchema = z.enum(["partial", "complete"]);
 const CredentialChangeSchema = z.enum([
   "none",
   "material_refresh",

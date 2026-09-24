@@ -414,7 +414,7 @@ describe("ledger schema migrations", () => {
     database.close();
   });
 
-  test("adds a bounded Sol milestone projection without startup history backfill", () => {
+  test("keeps historical Sol milestone coverage partial without a startup backfill", () => {
     const database = new Database(":memory:");
     database.exec(`
       CREATE TABLE local_schema(
@@ -467,24 +467,20 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          `SELECT event_type, cursor_sequence, high_watermark, completed_at
-             FROM sol_poem_milestone_backfill ORDER BY event_type`,
+          "SELECT sol_milestone_history_complete, sol_milestone_high_watermark FROM local_schema WHERE singleton = 1",
         )
-        .all(),
-    ).toEqual([
-      {
-        completed_at: null,
-        cursor_sequence: 0,
-        event_type: "imported",
-        high_watermark: 2,
-      },
-      {
-        completed_at: null,
-        cursor_sequence: 0,
-        event_type: "succeeded",
-        high_watermark: 2,
-      },
-    ]);
+        .get(),
+    ).toEqual({
+      sol_milestone_history_complete: 0,
+      sol_milestone_high_watermark: 2,
+    });
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sol_poem_milestone_backfill'",
+        )
+        .get(),
+    ).toBeUndefined();
     const insertEvent = database.prepare(
       `INSERT INTO work_event(
         event_id, work_key, event_type, payload_json, created_at
@@ -516,27 +512,17 @@ describe("ledger schema migrations", () => {
       { completed_at: 40, milestone: "published" },
     ]);
     const ledger = new Ledger(database);
-    expect(ledger.backfillSolPoemMilestones("succeeded", 1, 50)).toMatchObject({
-      complete: false,
-      inserted: 1,
-      processed: 1,
-    });
-    expect(ledger.backfillSolPoemMilestones("succeeded", 1, 51)).toMatchObject({
-      complete: true,
-      inserted: 0,
-      processed: 0,
-    });
-    expect(ledger.backfillSolPoemMilestones("imported", 1, 51)).toMatchObject({
-      complete: false,
-      invalid: 1,
-      inserted: 0,
-      processed: 1,
-    });
-    expect(ledger.backfillSolPoemMilestones("imported", 1, 52)).toMatchObject({
-      complete: true,
-      invalid: 0,
-      inserted: 0,
-      processed: 0,
+    expect(
+      ledger.poemThroughput(
+        {
+          implementationVersion: "sol-v1",
+          schemaVersion: "input@1",
+        },
+        50,
+      ).coverage,
+    ).toEqual({
+      backfillComplete: false,
+      highWatermark: 2,
     });
     expect(
       database
@@ -546,7 +532,6 @@ describe("ledger schema migrations", () => {
         )
         .all(),
     ).toEqual([
-      { completed_at: 10, milestone: "generated", work_key: historicalKey },
       { completed_at: 20, milestone: "generated", work_key: liveKey },
       { completed_at: 40, milestone: "published", work_key: liveKey },
     ]);
@@ -558,18 +543,45 @@ describe("ledger schema migrations", () => {
       )
       .all("sol-v1", "input@1", "generated", 0, 100);
     expect(JSON.stringify(plan)).toContain("sol_poem_milestone_profile_time");
-    const highWatermarkPlan = database
-      .prepare(
-        `EXPLAIN QUERY PLAN
-         WITH high_watermark(value) AS (
-           SELECT COALESCE(MAX(sequence), 0) FROM work_event
-         )
-         SELECT 'succeeded', value FROM high_watermark
-         UNION ALL SELECT 'imported', value FROM high_watermark`,
-      )
-      .all();
-    expect(JSON.stringify(highWatermarkPlan)).not.toContain("SCAN work_event");
     ledger.close();
+  });
+
+  test("preserves completed Sol milestone coverage while dropping its backfill table", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE local_schema(singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT;
+      INSERT INTO local_schema VALUES(1, 39);
+      CREATE TABLE sol_poem_milestone_backfill(
+        event_type TEXT PRIMARY KEY,
+        cursor_sequence INTEGER NOT NULL,
+        high_watermark INTEGER NOT NULL,
+        completed_at INTEGER
+      ) STRICT;
+      INSERT INTO sol_poem_milestone_backfill VALUES
+        ('succeeded', 7, 7, 100), ('imported', 7, 7, 101);
+    `);
+    const migration = MIGRATIONS.find(({ version }) => version === 40);
+    if (!migration) throw new Error("Expected schema 40 migration");
+    database.exec(migration.statements);
+    expect(
+      database
+        .prepare(
+          `SELECT sol_milestone_history_complete, sol_milestone_high_watermark
+             FROM local_schema WHERE singleton = 1`,
+        )
+        .get(),
+    ).toEqual({
+      sol_milestone_history_complete: 1,
+      sol_milestone_high_watermark: 7,
+    });
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sol_poem_milestone_backfill'",
+        )
+        .get(),
+    ).toBeUndefined();
+    database.close();
   });
 
   test("backfills version-eighteen status aggregates and maintains them", () => {
