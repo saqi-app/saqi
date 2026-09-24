@@ -1253,18 +1253,6 @@ describe("D1CorpusRevisionStore", () => {
     expect(
       scalar(database, "SELECT count(*) FROM poem_model_publication_pointer"),
     ).toBe(1);
-    expect(
-      database
-        .prepare("SELECT active_enrichment_artifact_id FROM poem WHERE id = ?")
-        .pluck()
-        .get("poem-1"),
-    ).toBeNull();
-    expect(
-      database
-        .prepare("SELECT translation_sol FROM poem WHERE id = ?")
-        .pluck()
-        .get("poem-1"),
-    ).toBeNull();
     await store.advanceWriterEpoch(1, 2, "replacement-writer");
     await expect(
       store.publishEnrichment({
@@ -1731,7 +1719,7 @@ describe("D1CorpusRevisionStore", () => {
     ).toMatchObject({ pointer_version: 2, writer_epoch: 2 });
   });
 
-  it("fences raw SQL writes to legacy source and publication pointers", async () => {
+  it("fences raw SQL writes to source pointers", async () => {
     await stageSealedBundle(store);
     const plan = await store.planPromotion("bundle-1", 1);
     const item = plan.items[0];
@@ -1751,36 +1739,6 @@ describe("D1CorpusRevisionStore", () => {
         .prepare("DELETE FROM poem_source_pointer WHERE source_poem_id = ?")
         .run(item.sourcePoemKey),
     ).toThrow(/SOURCE_POINTER_DELETE_FORBIDDEN/u);
-
-    const insertPublication = database.prepare(
-      `INSERT INTO poem_publication_pointer (
-        poem_id, source_revision_id, enrichment_artifact_id,
-        pointer_version, writer_epoch, updated_at
-      ) VALUES ('poem-1', ?, NULL, ?, ?, 1)`,
-    );
-    expect(() => insertPublication.run(item.revisionId, 2, 1)).toThrow(
-      /PUBLICATION_POINTER_INSERT_INVALID/u,
-    );
-    expect(() => insertPublication.run(item.revisionId, 1, 2)).toThrow(
-      /PUBLICATION_POINTER_INSERT_INVALID/u,
-    );
-    expect(() => insertPublication.run(item.revisionId, 1, 1)).not.toThrow();
-    expect(() =>
-      database
-        .prepare(
-          `UPDATE poem_publication_pointer
-           SET pointer_version = pointer_version
-           WHERE poem_id = 'poem-1'`,
-        )
-        .run(),
-    ).toThrow(/PUBLICATION_POINTER_UPDATE_INVALID/u);
-    expect(() =>
-      database
-        .prepare(
-          "DELETE FROM poem_publication_pointer WHERE poem_id = 'poem-1'",
-        )
-        .run(),
-    ).toThrow(/PUBLICATION_POINTER_DELETE_FORBIDDEN/u);
 
     await store.advanceWriterEpoch(1, 2, "replacement-writer");
     expect(() =>
@@ -1802,26 +1760,6 @@ describe("D1CorpusRevisionStore", () => {
            WHERE source_poem_id = ?`,
         )
         .run(item.sourcePoemKey),
-    ).not.toThrow();
-    expect(() =>
-      database
-        .prepare(
-          `UPDATE poem_publication_pointer
-           SET pointer_version = pointer_version + 1, writer_epoch = 1,
-               updated_at = updated_at + 1
-           WHERE poem_id = 'poem-1'`,
-        )
-        .run(),
-    ).toThrow(/PUBLICATION_POINTER_UPDATE_INVALID/u);
-    expect(() =>
-      database
-        .prepare(
-          `UPDATE poem_publication_pointer
-           SET pointer_version = pointer_version + 1, writer_epoch = 2,
-               updated_at = updated_at + 1
-           WHERE poem_id = 'poem-1'`,
-        )
-        .run(),
     ).not.toThrow();
   });
 

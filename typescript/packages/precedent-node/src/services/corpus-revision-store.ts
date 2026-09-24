@@ -2014,16 +2014,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
       SET name_arabic = ${titleArabic},
           content_arabic = ${JSON.stringify(contentArabic)},
           verses = ${verses},
-          active_source_revision_id = ${revisionId},
-          active_enrichment_artifact_id = CASE
-            WHEN active_source_revision_id = ${revisionId}
-            THEN active_enrichment_artifact_id ELSE NULL END,
-          translation_sol = CASE
-            WHEN active_source_revision_id = ${revisionId}
-            THEN translation_sol ELSE NULL END,
-          insights_sol = CASE
-            WHEN active_source_revision_id = ${revisionId}
-            THEN insights_sol ELSE NULL END
+          active_source_revision_id = ${revisionId}
       WHERE id = ${canonicalPoemId}
         AND EXISTS (
           SELECT 1 FROM poem_source_pointer

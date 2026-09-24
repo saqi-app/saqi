@@ -1,9 +1,6 @@
 import {
   APPROVED_ENRICHMENT_PROFILES,
-  type ApprovedEnrichmentProfile,
-  approvedEnrichmentProfileByModelKey,
   approvedEnrichmentValidations,
-  LEGACY_ENRICHMENT_PROFILES,
   PoemEnrichmentOutputV3Schema,
   PoemWordGlossesSchema,
   READABLE_ENRICHMENT_PROFILES,
@@ -187,14 +184,6 @@ const validatedModelArtifactSql = (profile: ReadableEnrichmentProfile) =>
       .all.map((validation) => approvedValidationSql(validation))
       .join("\n    AND ")}`;
 
-const requiredModelProfile = (modelKey: string): ApprovedEnrichmentProfile => {
-  const profile = approvedEnrichmentProfileByModelKey(modelKey);
-  if (!profile)
-    throw new Error(`Missing approved enrichment profile: ${modelKey}`);
-  return profile;
-};
-const SOL_PROFILE = requiredModelProfile("sol-5.6");
-const LEGACY_SOL_PROFILE = LEGACY_ENRICHMENT_PROFILES[0];
 const VALIDATED_MODEL_PUBLICATION = READABLE_ENRICHMENT_PROFILES.map(
   (profile) => `(${validatedModelPublicationSql(profile)})`,
 ).join("\n    OR ");
@@ -206,38 +195,6 @@ const MODEL_DISPLAY_ORDER_SQL = APPROVED_ENRICHMENT_PROFILES.map(
     `WHEN ${sqlText(profile.modelKey)} THEN ${String(profile.displayOrder)}`,
 ).join("\n      ");
 const MAX_PUBLIC_MODEL_TRACKS = 20;
-const LEGACY_VALIDATED_SOL_PUBLICATION = `p.active_source_revision_id IS NOT NULL
-  AND EXISTS (
-    SELECT 1
-    FROM poem_publication_pointer publication
-    JOIN enrichment_artifact artifact
-      ON artifact.id = publication.enrichment_artifact_id
-    WHERE publication.poem_id = p.id
-      AND publication.source_revision_id = p.active_source_revision_id
-      AND artifact.source_revision_id = p.active_source_revision_id
-      AND artifact.model = ${sqlText(LEGACY_SOL_PROFILE.model)}
-      AND artifact.reasoning_effort = ${sqlText(LEGACY_SOL_PROFILE.reasoningEffort)}
-      AND artifact.prompt_version = ${sqlText(LEGACY_SOL_PROFILE.promptVersion)}
-      AND ${approvedEnrichmentValidations(LEGACY_SOL_PROFILE)
-        .all.map((validation) =>
-          approvedValidationSql(validation, "enrichment_validation"),
-        )
-        .join("\n      AND ")}
-  )`;
-const LEGACY_SOL_ENRICHMENT_COLUMN = `CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    THEN (SELECT json_object(
-      'model', artifact.model,
-      'modelKey', ${sqlText(SOL_PROFILE.modelKey)},
-      'reasoningEffort', artifact.reasoning_effort,
-      'payload', json(artifact.payload)
-    )
-    FROM poem_publication_pointer publication
-    JOIN enrichment_artifact artifact
-      ON artifact.id = publication.enrichment_artifact_id
-    WHERE publication.poem_id = p.id
-    LIMIT 1)
-    ELSE NULL END`;
-
 const MODEL_AVAILABILITY_METADATA_SQL = (
   field: "displayName" | "modelVendorKey",
 ) =>
@@ -335,17 +292,10 @@ const PoemRowSchema = z.object({
   nameEnglish: z.string().nullable(),
   nameEnglishLegacy: z.string().nullable(),
   contentArabic: z.string(),
-  enrichmentAgy: z.string().nullable(),
-  enrichmentClaude: z.string().nullable(),
-  enrichmentSol: z.string().nullable(),
   translation: z.string().nullable(),
   legacyTranslationAttributions: z.string().nullable(),
   translationGemini: z.string().nullable(),
-  translationSol: z.string().nullable(),
   insights: z.string().nullable(),
-  insightsSol: z.string().nullable(),
-  solModel: z.string().nullable(),
-  solReasoningEffort: z.string().nullable(),
 });
 
 const SafeCatalogLineSchema = z
@@ -634,7 +584,6 @@ function optionalModelEnrichment(
   }
 }
 
-// eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing legacy and current poem display branches remain stable while attribution storage moves onto poem.
 function poemFromRow(
   raw: unknown,
   dynamicModelEnrichments: readonly string[] = [],
@@ -675,42 +624,20 @@ function poemFromRow(
     sourceLines.length,
     retainedLineIndexes,
   );
-  const englishSol = optionalLines(
-    row.translationSol,
-    sourceLines.length,
-    retainedLineIndexes,
-  );
-  const modelEnrichments = [
-    ...dynamicModelEnrichments.map((enrichment) =>
+  const modelEnrichments = dynamicModelEnrichments
+    .map((enrichment) =>
       optionalModelEnrichment(
         enrichment,
         sourceLines.length,
         retainedLineIndexes,
       ),
-    ),
-    optionalModelEnrichment(
-      row.enrichmentSol,
-      sourceLines.length,
-      retainedLineIndexes,
-    ),
-    optionalModelEnrichment(
-      row.enrichmentClaude,
-      sourceLines.length,
-      retainedLineIndexes,
-    ),
-    optionalModelEnrichment(
-      row.enrichmentAgy,
-      sourceLines.length,
-      retainedLineIndexes,
-    ),
-  ].filter((value): value is NonNullable<typeof value> => value !== undefined);
+    )
+    .filter((value): value is NonNullable<typeof value> => value !== undefined);
   const primaryModelEnrichment = modelEnrichments.at(0);
-  const solInsights = optionalInsights(row.insightsSol);
   const insights =
     (primaryModelEnrichment && "insights" in primaryModelEnrichment
       ? primaryModelEnrichment.insights
       : undefined) ??
-    solInsights ??
     optionalInsights(row.insights);
   const parsedPoem = SnapshotPoemSchema.safeParse({
     id: row.id,
@@ -737,41 +664,20 @@ function poemFromRow(
     ...(englishGemini?.model
       ? { linesEnglishGeminiModel: englishGemini.model }
       : {}),
-    ...(englishSol ? { linesEnglishSol: englishSol.lines } : {}),
     ...(modelEnrichments.length > 0 ? { modelEnrichments } : {}),
-    ...((row.solModel ?? englishSol?.model)
-      ? { linesEnglishSolModel: row.solModel ?? englishSol?.model }
-      : {}),
-    ...((row.solReasoningEffort ?? englishSol?.reasoningEffort)
-      ? {
-          linesEnglishSolReasoningEffort:
-            row.solReasoningEffort ?? englishSol?.reasoningEffort,
-        }
-      : {}),
     ...(insights ? { insights } : {}),
     ...(insights
       ? {
           insightsTrack: primaryModelEnrichment
             ? ("model" as const)
-            : solInsights
-              ? ("sol" as const)
-              : ("legacy" as const),
+            : ("legacy" as const),
         }
       : {}),
-    ...((primaryModelEnrichment?.model ?? (solInsights ? row.solModel : null))
-      ? {
-          insightsModel:
-            primaryModelEnrichment?.model ?? row.solModel ?? undefined,
-        }
+    ...(primaryModelEnrichment?.model
+      ? { insightsModel: primaryModelEnrichment.model }
       : {}),
-    ...((primaryModelEnrichment?.reasoningEffort ??
-    (solInsights ? row.solReasoningEffort : null))
-      ? {
-          insightsReasoningEffort:
-            primaryModelEnrichment?.reasoningEffort ??
-            row.solReasoningEffort ??
-            undefined,
-        }
+    ...(primaryModelEnrichment?.reasoningEffort
+      ? { insightsReasoningEffort: primaryModelEnrichment.reasoningEffort }
       : {}),
   });
   return parsedPoem.success ? parsedPoem.data : undefined;
@@ -850,42 +756,7 @@ const BASE_POEM_COLUMNS = `p.id,
   p.insights`;
 
 const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
-  p.legacy_translation_attributions AS legacyTranslationAttributions,
-  NULL AS enrichmentAgy,
-  NULL AS enrichmentClaude,
-  NULL AS enrichmentSol,
-  NULL AS translationSol,
-  NULL AS insightsSol,
-  NULL AS solModel,
-  NULL AS solReasoningEffort`;
-
-const LEGACY_ENRICHMENT_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
-  NULL AS legacyTranslationAttributions,
-  NULL AS enrichmentAgy,
-  NULL AS enrichmentClaude,
-  ${LEGACY_SOL_ENRICHMENT_COLUMN} AS enrichmentSol,
-  CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    THEN p.translation_sol ELSE NULL END AS translationSol,
-  CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    THEN p.insights_sol ELSE NULL END AS insightsSol,
-  CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    THEN (SELECT model FROM enrichment_artifact
-          WHERE id = p.active_enrichment_artifact_id)
-    ELSE NULL END AS solModel,
-  CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    THEN (SELECT reasoning_effort FROM enrichment_artifact
-          WHERE id = p.active_enrichment_artifact_id)
-    ELSE NULL END AS solReasoningEffort`;
-
-const MINIMAL_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
-  NULL AS legacyTranslationAttributions,
-  NULL AS enrichmentAgy,
-  NULL AS enrichmentClaude,
-  NULL AS enrichmentSol,
-  NULL AS translationSol,
-  NULL AS insightsSol,
-  NULL AS solModel,
-  NULL AS solReasoningEffort`;
+  p.legacy_translation_attributions AS legacyTranslationAttributions`;
 
 const BASE_POEM_SUMMARY_COLUMNS = `p.id,
   p.slug,
@@ -906,21 +777,6 @@ const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
     OR (${VALIDATED_MODEL_PUBLICATION})
     THEN 1 ELSE 0 END AS hasInsights`;
 
-const LEGACY_ENRICHMENT_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
-  ${LEGACY_AVAILABILITY_COLUMNS},
-  CASE WHEN ${LEGACY_VALIDATED_SOL_PUBLICATION}
-    AND ${validTranslationSql("p.translation_sol")} = 1
-    THEN ${sqlText(JSON.stringify([{ key: "sol", model: SOL_PROFILE.displayName, provider: SOL_PROFILE.modelVendorKey }]))}
-    ELSE '[]' END AS translationModels,
-  CASE WHEN ${validInsightsSql("p.insights")} = 1
-    OR (${LEGACY_VALIDATED_SOL_PUBLICATION})
-    THEN 1 ELSE 0 END AS hasInsights`;
-
-const MINIMAL_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
-  ${LEGACY_AVAILABILITY_COLUMNS},
-  '[]' AS translationModels,
-  ${validInsightsSql("p.insights")} AS hasInsights`;
-
 const MISSING_SCHEMA_PATTERN =
   /(?:no such (?:table|column)|has no column named)/iu;
 
@@ -933,24 +789,6 @@ function isMissingSchemaError(error: unknown): boolean {
     (typeof cause === "string" && MISSING_SCHEMA_PATTERN.test(cause)) ||
     (cause instanceof Error && MISSING_SCHEMA_PATTERN.test(cause.message))
   );
-}
-
-async function withCatalogSchemaFallback<Result>(
-  normalized: () => Promise<Result>,
-  legacyEnrichment: () => Promise<Result>,
-  minimal: () => Promise<Result>,
-): Promise<Result> {
-  try {
-    return await normalized();
-  } catch (error) {
-    if (!isMissingSchemaError(error)) throw error;
-  }
-  try {
-    return await legacyEnrichment();
-  } catch (error) {
-    if (!isMissingSchemaError(error)) throw error;
-  }
-  return minimal();
 }
 
 async function sha256Utf8Exact(value: string): Promise<string> {
@@ -1045,11 +883,7 @@ export class CatalogRepository implements CatalogReader {
         .bind(slug, AUTHOR_PAGE_SIZE, offset);
       return this.#database.batch([authorStatement, poemsStatement]);
     };
-    const pageResults = await withCatalogSchemaFallback(
-      () => loadPage(NORMALIZED_POEM_SUMMARY_COLUMNS),
-      () => loadPage(LEGACY_ENRICHMENT_POEM_SUMMARY_COLUMNS),
-      () => loadPage(MINIMAL_POEM_SUMMARY_COLUMNS),
-    );
+    const pageResults = await loadPage(NORMALIZED_POEM_SUMMARY_COLUMNS);
     const authorRow = pageResults.at(0)?.results.at(0);
     if (!authorRow) return undefined;
     const parsedAuthor = AuthorPageRowSchema.parse(authorRow);
@@ -1097,11 +931,7 @@ export class CatalogRepository implements CatalogReader {
         )
         .bind(authorSlug, poemId)
         .all();
-    const result = await withCatalogSchemaFallback(
-      () => loadPoem(NORMALIZED_POEM_COLUMNS),
-      () => loadPoem(LEGACY_ENRICHMENT_POEM_COLUMNS),
-      () => loadPoem(MINIMAL_POEM_COLUMNS),
-    );
+    const result = await loadPoem(NORMALIZED_POEM_COLUMNS);
     const row = result.results[0];
     if (!row) return undefined;
     const parsedRow = PoemRowSchema.safeParse(row);

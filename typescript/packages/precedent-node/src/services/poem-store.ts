@@ -92,12 +92,6 @@ function rowToLoadedPoem(
   const translationGeminiParsed = PoemContentSchema.safeParse(
     row.translationGemini,
   );
-  const translationSolParsed = PoemContentSchema.safeParse(row.translationSol);
-  const hasNormalizedSol = modelEnrichments.some(
-    ({ modelKey }) => modelKey === "sol-5.6",
-  );
-  const allowLegacySol =
-    row.activeSourceRevisionId === null && !hasNormalizedSol;
   return {
     ...poemSummary,
     linesArabic: contentArabicParsed.success
@@ -109,9 +103,6 @@ function rowToLoadedPoem(
     linesEnglishGemini: translationGeminiParsed.success
       ? translationGeminiParsed.data.content
       : undefined,
-    ...(allowLegacySol && translationSolParsed.success
-      ? { linesEnglishSol: translationSolParsed.data.content }
-      : {}),
     ...(modelEnrichments.length > 0
       ? { modelEnrichments: [...modelEnrichments] }
       : {}),

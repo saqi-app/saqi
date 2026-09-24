@@ -64,9 +64,6 @@ export const POEM_TABLE = sqliteTable(
       .default(false),
     sitemapShard: integer("sitemap_shard").notNull().default(0),
     activeSourceRevisionId: text("active_source_revision_id"),
-    activeEnrichmentArtifactId: text("active_enrichment_artifact_id"),
-    translationSol: text("translation_sol", { mode: "json" }),
-    insightsSol: text("insights_sol", { mode: "json" }),
     legacyTranslationAttributions: text("legacy_translation_attributions", {
       mode: "json",
     }),
@@ -292,74 +289,6 @@ export const POEM_SOURCE_POINTER_TABLE = sqliteTable("poem_source_pointer", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
-export const LEGACY_ENRICHMENT_ARTIFACT_TABLE = sqliteTable(
-  "enrichment_artifact",
-  {
-    id: text("id").primaryKey(),
-    sourceRevisionId: text("source_revision_id")
-      .notNull()
-      .references(() => POEM_SOURCE_REVISION_TABLE.id),
-    taskKey: text("task_key").notNull(),
-    variant: integer("variant").notNull(),
-    schemaVersion: integer("schema_version").notNull(),
-    promptVersion: text("prompt_version").notNull(),
-    model: text("model").notNull(),
-    reasoningEffort: text("reasoning_effort").notNull(),
-    payloadHash: text("payload_hash").notNull(),
-    payload: text("payload", { mode: "json" })
-      .notNull()
-      .$type<Record<string, unknown>>(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    uniqueIndex("enrichment_artifact_task_variant_unique").on(
-      table.taskKey,
-      table.variant,
-    ),
-    uniqueIndex("enrichment_artifact_revision_payload_unique").on(
-      table.sourceRevisionId,
-      table.payloadHash,
-    ),
-    index("idx_enrichment_artifact_revision").on(
-      table.sourceRevisionId,
-      table.createdAt,
-    ),
-  ],
-);
-
-export const LEGACY_ENRICHMENT_VALIDATION_TABLE = sqliteTable(
-  "enrichment_validation",
-  {
-    id: text("id").primaryKey(),
-    artifactId: text("artifact_id")
-      .notNull()
-      .references(() => LEGACY_ENRICHMENT_ARTIFACT_TABLE.id),
-    validatorKey: text("validator_key").notNull(),
-    validatorVersion: text("validator_version").notNull(),
-    attempt: integer("attempt").notNull(),
-    outcome: text("outcome").notNull(),
-    highestSeverity: text("highest_severity").notNull(),
-    reportHash: text("report_hash").notNull(),
-    report: text("report", { mode: "json" })
-      .notNull()
-      .$type<Record<string, unknown>>(),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    uniqueIndex("enrichment_validation_attempt_unique").on(
-      table.artifactId,
-      table.validatorKey,
-      table.validatorVersion,
-      table.attempt,
-    ),
-    index("idx_enrichment_validation_artifact").on(
-      table.artifactId,
-      table.outcome,
-      table.highestSeverity,
-    ),
-  ],
-);
-
 export const ENRICHMENT_PROFILE_TABLE = sqliteTable(
   "enrichment_profile",
   {
@@ -482,24 +411,6 @@ export const ENRICHMENT_VALIDATION_TABLE = sqliteTable(
       table.highestSeverity,
     ),
   ],
-);
-
-export const POEM_PUBLICATION_POINTER_TABLE = sqliteTable(
-  "poem_publication_pointer",
-  {
-    poemId: text("poem_id")
-      .primaryKey()
-      .references(() => POEM_TABLE.id),
-    sourceRevisionId: text("source_revision_id")
-      .notNull()
-      .references(() => POEM_SOURCE_REVISION_TABLE.id),
-    enrichmentArtifactId: text("enrichment_artifact_id").references(
-      () => LEGACY_ENRICHMENT_ARTIFACT_TABLE.id,
-    ),
-    pointerVersion: integer("pointer_version").notNull(),
-    writerEpoch: integer("writer_epoch").notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  },
 );
 
 export const POEM_MODEL_PUBLICATION_POINTER_TABLE = sqliteTable(
