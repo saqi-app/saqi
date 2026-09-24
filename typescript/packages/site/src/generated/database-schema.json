@@ -23,7 +23,8 @@
     "0057_retire_production_deployment_identity.sql",
     "0058_source_revision_writer_cutover.sql",
     "0059_retire_source_revision_pointer.sql",
-    "0060_restore_catalog_publishability.sql"
+    "0060_restore_catalog_publishability.sql",
+    "0061_retire_source_lineage_maintenance_job.sql"
   ],
   "localVersion": 45,
   "databases": [

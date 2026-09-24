@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0060_restore_catalog_publishability.sql");
+    expect(first.at(-1)).toBe("0061_retire_source_lineage_maintenance_job.sql");
     expect(
       database
         .prepare(
@@ -158,6 +158,63 @@ describe("production migration compatibility", () => {
         .prepare("SELECT 1 FROM catalog_unsafe_control WHERE value = ?")
         .get("x"),
     ).toBeDefined();
+  });
+
+  it("retires the observed idle lineage job without changing corpus rows", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    insertProductionRow(database);
+    insertObservedLegacyLineageJob(database);
+    const poemsBefore = database
+      .prepare("SELECT count(*) FROM poem")
+      .pluck()
+      .get();
+
+    expect(applyPending(database, migrationFiles())).toEqual([
+      "0061_retire_source_lineage_maintenance_job.sql",
+    ]);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_maintenance_job'",
+        )
+        .get(),
+    ).toBeUndefined();
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(
+      poemsBefore,
+    );
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("keeps the lineage job if its observed state changed", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0061_"),
+    );
+    insertObservedLegacyLineageJob(database);
+    database.exec(
+      "UPDATE source_lineage_maintenance_job SET updated_at = updated_at + 1",
+    );
+
+    expect(() => applyPending(database, migrationFiles())).toThrow();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_lineage_maintenance_job'",
+        )
+        .get(),
+    ).toBeDefined();
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM d1_migrations WHERE name = '0061_retire_source_lineage_maintenance_job.sql'",
+        )
+        .get(),
+    ).toBeUndefined();
   });
 
   it("backfills current revisions and tracks writes from older Workers", () => {
@@ -345,6 +402,7 @@ describe("production migration compatibility", () => {
     expect(applyPending(database, migrationFiles())).toEqual([
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance_job.sql",
     ]);
     expect(
       database
@@ -435,6 +493,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance_job.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -512,6 +571,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance_job.sql",
     ]);
     expect(
       database
@@ -566,6 +626,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance_job.sql",
     ]);
     expect(
       database
@@ -756,6 +817,7 @@ describe("production migration compatibility", () => {
       "0058_source_revision_writer_cutover.sql",
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
+      "0061_retire_source_lineage_maintenance_job.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1326,6 +1388,29 @@ function applyPending(
 
 function recordApplied(database: Database.Database, name: string): void {
   database.prepare("INSERT INTO d1_migrations(name) VALUES (?)").run(name);
+}
+
+function insertObservedLegacyLineageJob(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE source_lineage_maintenance_job (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      state TEXT NOT NULL CHECK (state IN ('idle', 'active', 'blocked', 'failed', 'complete')),
+      cursor_poem_id TEXT REFERENCES poem(id) ON DELETE RESTRICT,
+      pass INTEGER NOT NULL DEFAULT 0 CHECK (pass >= 0),
+      lease_owner TEXT,
+      lease_token TEXT,
+      lease_epoch INTEGER NOT NULL DEFAULT 0 CHECK (lease_epoch >= 0),
+      lease_expires_at INTEGER,
+      scanned_total INTEGER NOT NULL DEFAULT 0 CHECK (scanned_total >= 0),
+      adopted_total INTEGER NOT NULL DEFAULT 0 CHECK (adopted_total >= 0),
+      last_error_code TEXT,
+      updated_at INTEGER NOT NULL CHECK (updated_at >= 0)
+    ) STRICT;
+    INSERT INTO source_lineage_maintenance_job (
+      singleton, state, pass, lease_epoch, scanned_total, adopted_total,
+      updated_at
+    ) VALUES (1, 'idle', 0, 3383, 65950, 63521, 1790167946843);
+  `);
 }
 
 function insertProductionRow(database: Database.Database): void {
