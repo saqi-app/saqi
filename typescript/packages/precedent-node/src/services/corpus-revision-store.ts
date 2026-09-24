@@ -726,6 +726,7 @@ export class D1CorpusRevisionStore implements CorpusRevisionStore {
     };
   }
 
+  // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing source-admission transaction remains intact; fingerprint storage changes only its persistence reads and writes.
   async admitSource(
     input: SourceAdmission,
     canonicalPoemId: null | string = null,

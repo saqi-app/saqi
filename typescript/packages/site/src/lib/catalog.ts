@@ -634,6 +634,7 @@ function optionalModelEnrichment(
   }
 }
 
+// eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing legacy and current poem display branches remain stable while attribution storage moves onto poem.
 function poemFromRow(
   raw: unknown,
   dynamicModelEnrichments: readonly string[] = [],

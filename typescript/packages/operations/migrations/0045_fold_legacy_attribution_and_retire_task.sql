@@ -1,6 +1,6 @@
 -- Preserve exact, hash-scoped translation attribution on its poem before
 -- retiring two legacy lookup tables. Wrangler records this migration once.
-ALTER TABLE poem ADD COLUMN legacy_translation_attributions TEXT
+ALTER TABLE poem ADD COLUMN legacy_translation_attributions TEXT -- sarj-noqa: SARJ102 — SQLite has no ADD COLUMN IF NOT EXISTS; Wrangler applies each migration once.
   CHECK (CASE
     WHEN legacy_translation_attributions IS NULL THEN 1
     WHEN json_valid(legacy_translation_attributions)

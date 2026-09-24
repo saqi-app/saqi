@@ -575,6 +575,7 @@ export class D1PoemStore implements PoemStore {
     return PoemScrapeSelectionRowsSchema.parse(rows);
   }
 
+  // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing model-enrichment reader branches preserve legacy poem display during the schema fold.
   async #modelEnrichments(
     poemIds: readonly string[],
   ): Promise<Map<string, PoemModelEnrichment[]>> {

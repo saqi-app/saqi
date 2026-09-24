@@ -5572,6 +5572,7 @@ export class Ledger {
     });
     if (prepared.length === 0) return { conflicts: [], results: [] };
 
+    // eslint-disable-next-line @sarj/no-excessive-cognitive-complexity -- Existing transactional seed and conflict handling is unchanged by the counter migration; splitting it requires a separate behavior-preserving refactor.
     return this.#immediate(() => {
       const latestInventoryByAuthor = new Map<
         string,

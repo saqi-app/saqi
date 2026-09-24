@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS _artifact_profile_fold_guard (
   unmatched INTEGER NOT NULL CHECK (unmatched = 0)
 );
 
-INSERT INTO _artifact_profile_fold_guard (unmatched)
+INSERT INTO _artifact_profile_fold_guard (unmatched) -- sarj-noqa: SARJ105 — A mismatch must abort the one-time migration, never upsert away evidence of provenance drift.
 SELECT count(*) FROM model_enrichment_artifact artifact
 LEFT JOIN poem_source_revision revision
   ON revision.id = artifact.source_revision_id
@@ -20,7 +20,7 @@ LEFT JOIN enrichment_profile profile
  AND profile.output_schema_version = artifact.schema_version
 WHERE profile.profile_key IS NULL;
 
-DROP TABLE _artifact_profile_fold_guard;
+DROP TABLE IF EXISTS _artifact_profile_fold_guard;
 
 DROP TRIGGER IF EXISTS model_enrichment_artifact_profile_bind;
 DROP TRIGGER IF EXISTS model_publication_profile_insert_guard;

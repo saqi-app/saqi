@@ -1,9 +1,9 @@
 -- A fingerprint is optional until its revision has been backfilled. Keep the
 -- one-time append semantics while storing it on the revision itself.
-ALTER TABLE poem_source_revision ADD COLUMN fingerprint_algorithm TEXT;
-ALTER TABLE poem_source_revision ADD COLUMN fingerprint_created_at INTEGER;
-ALTER TABLE poem_source_revision ADD COLUMN line_nfc_hash TEXT;
-ALTER TABLE poem_source_revision ADD COLUMN prompt_material_hash TEXT;
+ALTER TABLE poem_source_revision ADD COLUMN fingerprint_algorithm TEXT; -- sarj-noqa: SARJ102 — SQLite has no ADD COLUMN IF NOT EXISTS; Wrangler applies each migration once.
+ALTER TABLE poem_source_revision ADD COLUMN fingerprint_created_at INTEGER; -- sarj-noqa: SARJ102 — SQLite has no ADD COLUMN IF NOT EXISTS; Wrangler applies each migration once.
+ALTER TABLE poem_source_revision ADD COLUMN line_nfc_hash TEXT; -- sarj-noqa: SARJ102 — SQLite has no ADD COLUMN IF NOT EXISTS; Wrangler applies each migration once.
+ALTER TABLE poem_source_revision ADD COLUMN prompt_material_hash TEXT; -- sarj-noqa: SARJ102 — SQLite has no ADD COLUMN IF NOT EXISTS; Wrangler applies each migration once.
 
 DROP TRIGGER IF EXISTS poem_source_revision_immutable_update;
 
@@ -31,9 +31,9 @@ WHERE EXISTS (
 
 DROP TABLE IF EXISTS source_revision_fingerprint;
 
-CREATE INDEX IF NOT EXISTS idx_source_revision_fingerprint_line_nfc
+CREATE INDEX IF NOT EXISTS idx_source_revision_fingerprint_line_nfc -- sarj-noqa: SARJ108 — D1 SQLite does not support CONCURRENTLY; Wrangler serializes this migration.
 ON poem_source_revision(line_nfc_hash, id);
-CREATE INDEX IF NOT EXISTS idx_source_revision_fingerprint_prompt_material
+CREATE INDEX IF NOT EXISTS idx_source_revision_fingerprint_prompt_material -- sarj-noqa: SARJ108 — D1 SQLite does not support CONCURRENTLY; Wrangler serializes this migration.
 ON poem_source_revision(prompt_material_hash, id);
 
 CREATE TRIGGER poem_source_revision_fingerprint_insert_guard
