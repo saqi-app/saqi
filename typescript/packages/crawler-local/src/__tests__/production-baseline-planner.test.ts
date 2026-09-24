@@ -226,7 +226,6 @@ describe("production baseline planner", () => {
       });
       expect(first.report).toMatchObject({
         authors: 1,
-        duplicateSolWork: 0,
         duplicateEnrichmentWork: 0,
         currentProfileWork: 0,
         missingInsights: 10_000,
@@ -234,7 +233,6 @@ describe("production baseline planner", () => {
         noTranslation: 27_184,
         poems: 100_064,
         seededEnrichmentWork: 100_064,
-        seededSolWork: 100_064,
         skippedComplete: 62_880,
       });
       expect(first.canonicalPoemIds.size).toBe(100_064);
@@ -257,9 +255,7 @@ describe("production baseline planner", () => {
       });
       expect(replay.report).toMatchObject({
         duplicateEnrichmentWork: 100_064,
-        duplicateSolWork: 100_064,
         seededEnrichmentWork: 0,
-        seededSolWork: 0,
       });
       expect(replay.report.planHash).toBe(first.report.planHash);
       expect(
@@ -469,7 +465,7 @@ describe("production baseline planner", () => {
     });
     expect(result.report).toMatchObject({
       noTranslation: 1,
-      seededSolWork: 1,
+      seededEnrichmentWork: 1,
     });
     ledger.close();
   });
@@ -511,7 +507,7 @@ describe("production baseline planner", () => {
       ],
       ineligiblePoems: 1,
       poems: 2,
-      seededSolWork: 1,
+      seededEnrichmentWork: 1,
     });
     expect(ledger.status().total).toBe(1);
     ledger.close();
