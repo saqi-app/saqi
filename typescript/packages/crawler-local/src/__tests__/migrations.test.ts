@@ -19,6 +19,203 @@ const migrate = (database: Database.Database): number =>
   migrateHistoricalFixture(database);
 
 describe("ledger schema migrations", () => {
+  test("schema 45 refuses ambiguous empty error codes without changing schema 44", () => {
+    const database = new Database(":memory:");
+    try {
+      initializeLegacyLedgerSchema(database, 44);
+      database
+        .prepare(
+          `INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, last_error_code,
+        created_at, updated_at
+      ) VALUES(?, 'author-manifest', '{}', ?, 'input@1', 'crawler@1',
+        'retry_wait', 1, '', 1, 1)`,
+        )
+        .run("a".repeat(64), "b".repeat(64));
+      expect(() => migrate(database)).toThrow();
+      expect(
+        database
+          .prepare("SELECT version FROM local_schema WHERE singleton=1")
+          .get(),
+      ).toEqual({ version: 44 });
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name='ledger_profile_error_count'",
+          )
+          .get(),
+      ).toEqual({ name: "ledger_profile_error_count" });
+      expect(
+        database
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name='ledger_profile_count'",
+          )
+          .get(),
+      ).toBeUndefined();
+    } finally {
+      database.close();
+    }
+  });
+
+  test("schema 45 preserves populated profile counts across upgrade and restart", () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "saqi-profile-count-migration-")),
+      "ledger.sqlite3",
+    );
+    const database = new Database(path);
+    try {
+      initializeLegacyLedgerSchema(database, 44);
+      database.pragma("foreign_keys = ON");
+      const insert = database.prepare(`INSERT INTO work_item(
+        work_key, kind, input_json, input_hash, schema_version,
+        implementation_version, state, available_at, last_error_code,
+        created_at, updated_at
+      ) VALUES(?, 'author-manifest', '{}', ?, 'input@1', 'crawler@1',
+        ?, 1, ?, 1, 1)`);
+      insert.run("a".repeat(64), "e".repeat(64), "pending", null);
+      insert.run(
+        "b".repeat(64),
+        "f".repeat(64),
+        "retry_wait",
+        "SOURCE_TIMEOUT",
+      );
+      insert.run(
+        "c".repeat(64),
+        "1".repeat(64),
+        "dead_letter",
+        "SOURCE_TIMEOUT",
+      );
+      insert.run(
+        "d".repeat(64),
+        "2".repeat(64),
+        "dead_letter",
+        "SOURCE_INVALID",
+      );
+      const oldStates = database
+        .prepare(
+          `SELECT state, SUM(item_count) AS item_count
+          FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
+        )
+        .all();
+      const oldErrors = database
+        .prepare(
+          `SELECT error_code, SUM(item_count) AS item_count
+          FROM ledger_profile_error_count GROUP BY error_code ORDER BY error_code`,
+        )
+        .all();
+
+      expect(migrate(database)).toBe(CURRENT_SCHEMA_VERSION);
+      expect(
+        database
+          .prepare(
+            `SELECT state, SUM(item_count) AS item_count
+          FROM ledger_profile_count GROUP BY state ORDER BY state`,
+          )
+          .all(),
+      ).toEqual(oldStates);
+      expect(
+        database
+          .prepare(
+            `SELECT error_code, SUM(item_count) AS item_count
+          FROM ledger_profile_count WHERE error_code <> ''
+          GROUP BY error_code ORDER BY error_code`,
+          )
+          .all(),
+      ).toEqual(oldErrors);
+      expect(
+        database
+          .prepare(
+            `SELECT name FROM sqlite_schema WHERE type='table'
+          AND name IN ('ledger_profile_state_count','ledger_profile_error_count')`,
+          )
+          .all(),
+      ).toEqual([]);
+      const errorQuery = `SELECT COALESCE(SUM(item_count), 0) AS count
+        FROM ledger_profile_count INDEXED BY ledger_profile_count_error
+        WHERE kind = 'author-manifest' AND implementation_version = 'crawler@1'
+          AND schema_version = 'input@1' AND error_code IN ('SOURCE_TIMEOUT')
+          AND error_code <> ''`;
+      expect(database.prepare(errorQuery).get()).toEqual({ count: 2 });
+      expect(
+        database.prepare(`EXPLAIN QUERY PLAN ${errorQuery}`).all(),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: expect.stringContaining("ledger_profile_count_error"),
+          }),
+        ]),
+      );
+      expect(
+        database
+          .prepare(
+            `EXPLAIN QUERY PLAN SELECT state, SUM(item_count)
+            FROM ledger_profile_count
+            WHERE kind='author-manifest' AND implementation_version='crawler@1'
+              AND schema_version='input@1' GROUP BY state`,
+          )
+          .all(),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: expect.stringContaining("USING PRIMARY KEY"),
+          }),
+        ]),
+      );
+      expect(
+        database
+          .prepare(
+            `EXPLAIN QUERY PLAN SELECT error_code, SUM(item_count)
+            FROM ledger_profile_count WHERE error_code <> ''
+            GROUP BY error_code`,
+          )
+          .all(),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: expect.stringContaining("ledger_profile_count_error"),
+          }),
+        ]),
+      );
+      database
+        .prepare(
+          `UPDATE work_item SET state='succeeded',
+        last_error_code=NULL, updated_at=2 WHERE work_key=?`,
+        )
+        .run("b".repeat(64));
+      expect(database.prepare(errorQuery).get()).toEqual({ count: 1 });
+      expect(
+        database
+          .prepare(
+            `SELECT COUNT(*) AS count FROM ledger_profile_count
+        WHERE item_count = 0`,
+          )
+          .get(),
+      ).toEqual({ count: 0 });
+      expect(database.pragma("foreign_key_check")).toEqual([]);
+    } finally {
+      database.close();
+    }
+    const reopened = Ledger.open(path);
+    try {
+      expect(reopened.status(2)).toMatchObject({
+        affectedByErrorCode: [
+          { code: "SOURCE_INVALID", count: 1 },
+          { code: "SOURCE_TIMEOUT", count: 1 },
+        ],
+        total: 4,
+      });
+      expect(
+        reopened.countErrors("author-manifest", ["SOURCE_TIMEOUT"], {
+          implementationVersion: "crawler@1",
+          schemaVersion: "input@1",
+        }),
+      ).toBe(1);
+    } finally {
+      reopened.close();
+    }
+  });
+
   test("schema 43 derives populated status clocks from event sequence", () => {
     const database = new Database(":memory:");
     try {
@@ -404,7 +601,7 @@ describe("ledger schema migrations", () => {
         database
           .prepare(
             `SELECT state, SUM(item_count) AS item_count
-             FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
+             FROM ledger_profile_count GROUP BY state ORDER BY state`,
           )
           .all();
       expect(counts()).toEqual([{ item_count: 2, state: "pending" }]);
@@ -940,7 +1137,7 @@ describe("ledger schema migrations", () => {
       database
         .prepare(
           `SELECT state, SUM(item_count) AS item_count
-           FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
+           FROM ledger_profile_count GROUP BY state ORDER BY state`,
         )
         .all(),
     ).toEqual([
@@ -950,7 +1147,8 @@ describe("ledger schema migrations", () => {
     expect(
       database
         .prepare(
-          `SELECT error_code, item_count FROM ledger_profile_error_count`,
+          `SELECT error_code, SUM(item_count) AS item_count FROM ledger_profile_count
+           WHERE error_code <> '' GROUP BY error_code`,
         )
         .get(),
     ).toEqual({ error_code: "SOURCE_TIMEOUT", item_count: 1 });
@@ -976,7 +1174,9 @@ describe("ledger schema migrations", () => {
       )
       .run("e".repeat(64));
     expect(
-      database.prepare(`SELECT * FROM ledger_profile_error_count`).all(),
+      database
+        .prepare(`SELECT * FROM ledger_profile_count WHERE error_code <> ''`)
+        .all(),
     ).toEqual([]);
     expect(
       database.prepare(`SELECT * FROM ledger_profile_availability_count`).all(),

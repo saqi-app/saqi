@@ -1474,7 +1474,7 @@ export class Ledger {
       () =>
         this.#database
           .prepare(
-            `SELECT schema_version FROM ledger_profile_state_count
+            `SELECT DISTINCT schema_version FROM ledger_profile_count
          WHERE kind = 'poem-enrichment-sol' AND implementation_version = 'sol-word-gloss-v2'
            AND state = 'pending' AND item_count > 0`,
           )
@@ -2178,12 +2178,17 @@ export class Ledger {
     validateClaim("diagnostics", 1, [kind], requirements);
     if (errorCodes.length === 0) return 0;
     for (const code of errorCodes) requireErrorCode(code);
+    const profileErrorTable =
+      this.#schemaVersion() >= 45
+        ? "ledger_profile_count"
+        : "ledger_profile_error_count";
     const row = this.#database
       .prepare<string[], { count: number }>(
         `SELECT COALESCE(SUM(item_count), 0) AS count
-         FROM ledger_profile_error_count
+         FROM ${profileErrorTable}${profileErrorTable === "ledger_profile_count" ? " INDEXED BY ledger_profile_count_error" : ""}
          WHERE kind = ? AND implementation_version = ? AND schema_version = ?
-           AND error_code IN (${errorCodes.map(() => "?").join(",")})`,
+           AND error_code IN (${errorCodes.map(() => "?").join(",")})
+           ${profileErrorTable === "ledger_profile_count" ? "AND error_code <> ''" : ""}`,
       )
       .get(
         kind,
@@ -2203,12 +2208,16 @@ export class Ledger {
   ): KindProgress {
     validateClaim("diagnostics", 1, [kind], requirements);
     const counts = emptyWorkStateCounts();
+    const profileStateTable =
+      this.#schemaVersion() >= 45
+        ? "ledger_profile_count"
+        : "ledger_profile_state_count";
     const rows = this.#database
       .prepare<string[], { count: number; state: string }>(
-        `SELECT state, item_count AS count
-         FROM ledger_profile_state_count
+        `SELECT state, SUM(item_count) AS count
+         FROM ${profileStateTable}
          WHERE kind = ? AND implementation_version = ? AND schema_version = ?
-         ORDER BY state`,
+         GROUP BY state ORDER BY state`,
       )
       .all(
         kind,
@@ -4827,17 +4836,18 @@ export class Ledger {
   rebuildStatusCounters(): void {
     this.#immediate(() => {
       this.#database.exec(`
-        DELETE FROM ledger_profile_state_count;
+        DELETE FROM ledger_profile_count;
         DELETE FROM ledger_profile_availability_count;
-        DELETE FROM ledger_profile_error_count;
         DELETE FROM ledger_profile_success_clock;
 
-        INSERT INTO ledger_profile_state_count(
-          kind, implementation_version, schema_version, state, item_count
+        INSERT INTO ledger_profile_count(
+          kind, implementation_version, schema_version, state, error_code, item_count
         )
-          SELECT kind, implementation_version, schema_version, state, COUNT(*)
+          SELECT kind, implementation_version, schema_version, state,
+                 COALESCE(last_error_code, ''), COUNT(*)
           FROM work_item
-          GROUP BY kind, implementation_version, schema_version, state;
+          GROUP BY kind, implementation_version, schema_version, state,
+                   COALESCE(last_error_code, '');
         INSERT INTO ledger_profile_availability_count(
           kind, implementation_version, schema_version, available_at, item_count
         )
@@ -4845,13 +4855,6 @@ export class Ledger {
           FROM work_item
           WHERE state IN ('pending','retry_wait','quota_wait')
           GROUP BY kind, implementation_version, schema_version, available_at;
-        INSERT INTO ledger_profile_error_count(
-          kind, implementation_version, schema_version, error_code, item_count
-        )
-          SELECT kind, implementation_version, schema_version,
-                 last_error_code, COUNT(*)
-          FROM work_item WHERE last_error_code IS NOT NULL
-          GROUP BY kind, implementation_version, schema_version, last_error_code;
         INSERT INTO ledger_profile_success_clock(
           kind, implementation_version, schema_version, last_success_at
         )
@@ -4868,11 +4871,20 @@ export class Ledger {
 
   status(now = Date.now()): LedgerStatus {
     const schemaVersion = this.#schemaVersion();
+    const profileStateTable =
+      schemaVersion >= 45
+        ? "ledger_profile_count"
+        : "ledger_profile_state_count";
+    const profileErrorTable =
+      schemaVersion >= 45
+        ? "ledger_profile_count"
+        : "ledger_profile_error_count";
+    const errorPredicate = schemaVersion >= 45 ? "WHERE error_code <> ''" : "";
     const byState = emptyWorkStateCounts();
     const rows = this.#database
       .prepare<[], { count: number; state: string }>(
         `SELECT state, SUM(item_count) AS count
-         FROM ledger_profile_state_count GROUP BY state ORDER BY state`,
+         FROM ${profileStateTable} GROUP BY state ORDER BY state`,
       )
       .all();
     for (const row of rows)
@@ -4897,14 +4909,14 @@ export class Ledger {
     const errorRows = this.#database
       .prepare<[], { code: string; count: number }>(
         `SELECT error_code AS code, SUM(item_count) AS count
-         FROM ledger_profile_error_count GROUP BY error_code
+         FROM ${profileErrorTable} ${errorPredicate} GROUP BY error_code
          ORDER BY count DESC, error_code LIMIT 50`,
       )
       .all();
     const kindErrorRows = this.#database
       .prepare<[], { code: string; count: number; kind: string }>(
         `SELECT kind, error_code AS code, SUM(item_count) AS count
-         FROM ledger_profile_error_count GROUP BY kind, error_code
+         FROM ${profileErrorTable} ${errorPredicate} GROUP BY kind, error_code
          ORDER BY kind, count DESC, error_code LIMIT 5001`,
       )
       .all();
@@ -4925,9 +4937,9 @@ export class Ledger {
     const kindRows = this.#database
       .prepare<[], { count: number; kind: string; state: string }>(
         `SELECT kind, state, SUM(item_count) AS count
-         FROM ledger_profile_state_count
+         FROM ${profileStateTable}
          WHERE kind IN (
-           SELECT DISTINCT kind FROM ledger_profile_state_count ORDER BY kind LIMIT 101
+           SELECT DISTINCT kind FROM ${profileStateTable} ORDER BY kind LIMIT 101
          )
          GROUP BY kind, state ORDER BY kind, state`,
       )
