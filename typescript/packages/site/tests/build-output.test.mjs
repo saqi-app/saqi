@@ -36,7 +36,14 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
     0,
     "unused sessions must remain disabled",
   );
-  assert.ok(clientFiles.length <= 10, "public reader artifact must stay tiny");
+  const isSchemaExplorerAsset = (file) =>
+    /\/(?:schema-explorer\.|react-dom\.|client\.|docs\.)/u.test(file.pathname);
+  const readerFiles = clientFiles.filter(
+    (file) => !isSchemaExplorerAsset(file),
+  );
+  const schemaFiles = clientFiles.filter(isSchemaExplorerAsset);
+  assert.ok(readerFiles.length <= 10, "public reader artifact must stay tiny");
+  assert.ok(schemaFiles.length >= 3, "schema explorer must have route assets");
   assert.doesNotMatch(entry, /_next\/|elevenlabs|favorite/iu);
   const serverSource = await Promise.all(
     serverFiles
@@ -54,12 +61,18 @@ void test("build emits a compact Cloudflare SSR Worker", async () => {
     "edge HTML must remain eligible for Brotli and gzip compression",
   );
 
-  let bytes = 0;
+  let readerBytes = 0;
+  let schemaBytes = 0;
   for (const file of clientFiles) {
     const fileStat = await stat(file);
-    bytes += fileStat.size;
+    if (isSchemaExplorerAsset(file)) schemaBytes += fileStat.size;
+    else readerBytes += fileStat.size;
   }
-  assert.ok(bytes < 141_000, "public reader assets must stay under 141 KB");
+  assert.ok(
+    readerBytes < 141_000,
+    "public reader assets must stay under 141 KB",
+  );
+  assert.ok(schemaBytes < 500_000, "schema explorer assets must stay bounded");
 });
 
 void test("static assets retain immutable and strict security headers", async () => {

@@ -185,23 +185,6 @@ export const SOURCE_AUTHOR_IDENTITY_TABLE = sqliteTable(
   ],
 );
 
-export const SOURCE_AUTHOR_ALIAS_TABLE = sqliteTable(
-  "source_author_alias",
-  {
-    sourceAuthorId: text("source_author_id")
-      .notNull()
-      .references(() => SOURCE_AUTHOR_IDENTITY_TABLE.id),
-    aliasUrl: text("alias_url").notNull(),
-    firstObservedAt: integer("first_observed_at", {
-      mode: "timestamp",
-    }).notNull(),
-    lastObservedAt: integer("last_observed_at", {
-      mode: "timestamp",
-    }).notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.sourceAuthorId, table.aliasUrl] })],
-);
-
 export const SOURCE_POEM_IDENTITY_TABLE = sqliteTable(
   "source_poem_identity",
   {

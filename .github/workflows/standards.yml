@@ -40,4 +40,4 @@ jobs:
         run: corepack enable && yarn install --immutable --mode=skip-build
         working-directory: "typescript"
       - name: Run standards
-        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --trust-repository-code --format github
+        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check . --trust-repository-code --format github

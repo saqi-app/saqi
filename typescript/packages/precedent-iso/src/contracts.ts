@@ -177,6 +177,16 @@ export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
     audience: "public",
+    id: "public.database-schema",
+    method: "GET",
+    path: "/docs",
+    responses: [HTML_RESPONSE],
+    service: "public-site",
+    summary: "Explore the database schema generated from migrations",
+  },
+  {
+    ...EMPTY_INPUT,
+    audience: "public",
     id: "public.legacy-author-page",
     method: "GET",
     params: z.strictObject({ pageNumber: PositiveIntegerSegmentSchema }),

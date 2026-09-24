@@ -3547,15 +3547,24 @@ describe("collector coordinator", () => {
     const ledger = Ledger.open(path);
     const replacementLedger = Ledger.open(path);
     const takeover = (): void => {
-      const future = Date.now() + 10_000;
-      replacementLedger.recoverExpired(future);
-      replacementLedger.claim("replacement", future, 30_000);
+      const expiresAt = ledger.get(seeded.workKey)?.leaseExpiresAt;
+      if (expiresAt === null || expiresAt === undefined)
+        throw new Error("Expected an active work lease before takeover");
+      const takeoverAt = expiresAt + 1;
+      replacementLedger.recoverExpired(takeoverAt);
+      const replacement = replacementLedger.claim(
+        "replacement",
+        takeoverAt,
+        30_000,
+      );
+      if (replacement?.work.workKey !== seeded.workKey)
+        throw new Error("Replacement worker did not claim the expired work");
     };
     const coordinator = new CollectorCoordinator({
       artifacts: testArtifactStore(root),
       browser: new SlowBrowser(15, takeover),
-      leaseDurationMs: 100,
-      leaseHeartbeatMs: 5,
+      leaseDurationMs: 30_000,
+      leaseHeartbeatMs: 5_000,
       ledger,
       minimumOriginGapMs: 0,
     });

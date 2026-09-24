@@ -65,12 +65,19 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0042_retire_daily_insight_rollups.sql");
+    expect(first.at(-1)).toBe("0043_retire_unused_schema.sql");
     expectCorpusRevisionSchema(database);
     expectModelPublicationGuards(database);
     expectLegacySolPublicationPrecedence(database);
     expectLegacyPointerGuards(database);
     expectCanonicalDataGuards(database);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'source_author_alias'",
+        )
+        .get(),
+    ).toBeUndefined();
     expectModelProfileRegistry(database);
     expectProductionDeploymentIdentity(database);
     expectSlugIndexesReduced(database);
@@ -151,7 +158,7 @@ describe("production migration compatibility", () => {
     },
   );
 
-  it("rejects noncanonical hashes, malformed source envelopes, and alias rewrites", () => {
+  it("rejects noncanonical hashes and malformed source envelopes", () => {
     const database = open();
     applyPending(database, migrationFiles());
     database
@@ -215,50 +222,6 @@ describe("production migration compatibility", () => {
           "c".repeat(64),
         ),
     ).toThrow(/CRAWL_IMPORT_RECORD_DOCUMENT_INVALID/u);
-
-    database
-      .prepare(
-        `INSERT INTO source_author_identity (
-          id, source_name, external_id, canonical_url, name_arabic,
-          canonical_author_id, first_observed_at, last_observed_at
-        ) VALUES (
-          'source-author-guard', 'source', 'author-source', 'https://a.test',
-          'شاعر', 'author-guard', 1, 1
-        )`,
-      )
-      .run();
-    expect(() =>
-      database
-        .prepare(
-          `INSERT INTO source_author_alias (
-            source_author_id, alias_url, first_observed_at, last_observed_at
-          ) VALUES ('source-author-guard', 'https://alias.test', 2, 1)`,
-        )
-        .run(),
-    ).toThrow(/SOURCE_AUTHOR_ALIAS_INVALID/u);
-    database
-      .prepare(
-        `INSERT INTO source_author_alias (
-          source_author_id, alias_url, first_observed_at, last_observed_at
-        ) VALUES ('source-author-guard', 'https://alias.test', 1, 1)`,
-      )
-      .run();
-    expect(() =>
-      database
-        .prepare(
-          `UPDATE source_author_alias SET alias_url = 'https://rewrite.test'
-           WHERE source_author_id = 'source-author-guard'`,
-        )
-        .run(),
-    ).toThrow(/SOURCE_AUTHOR_ALIAS_IMMUTABLE/u);
-    expect(() =>
-      database
-        .prepare(
-          `DELETE FROM source_author_alias
-           WHERE source_author_id = 'source-author-guard'`,
-        )
-        .run(),
-    ).toThrow(/SOURCE_AUTHOR_ALIAS_IMMUTABLE/u);
   });
 
   it("enforces title-aware revision-v2 envelopes without rewriting v1", () => {
@@ -587,9 +550,6 @@ function expectCanonicalDataGuards(database: Database.Database): void {
       "model_enrichment_artifact_document_insert",
       "model_enrichment_validation_document_insert",
       "crawl_import_receipt_canonical_hash_insert",
-      "source_author_alias_insert_guard",
-      "source_author_alias_update_guard",
-      "source_author_alias_delete_forbidden",
     ]),
   );
 }
