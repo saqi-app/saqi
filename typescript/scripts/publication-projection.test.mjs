@@ -56,6 +56,36 @@ test("an apply pass refuses to start without a D1 restore bookmark", async () =>
   assert.match(result.stderr, /Time Travel bookmark is required/u);
 });
 
+test("verify-empty rejects skipped publication candidates", async () => {
+  const server = createServer((_request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        ok: true,
+        afterId: "poem-skipped",
+        complete: true,
+        scanned: 1,
+        eligible: 0,
+        shadowed: 0,
+        skipped: ["poem-skipped"],
+        mismatched: [],
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const port = server.address()?.port;
+    const result = await runScript(["--expect-empty"], {
+      SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
+    });
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /1 candidate skipped/u);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("read-only cursor resumes after a transient Worker failure", async () => {
   let calls = 0;
   const server = createServer((_request, response) => {
