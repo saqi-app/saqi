@@ -92,9 +92,9 @@ describe("corpus resolution route", () => {
         })
       ),
     };
-    expect(Buffer.byteLength(JSON.stringify(maximum))).toBeLessThanOrEqual(
-      MAX_PRODUCTION_RESOLUTION_REQUEST_BYTES
-    );
+    expect(
+      new TextEncoder().encode(JSON.stringify(maximum)).byteLength
+    ).toBeLessThanOrEqual(MAX_PRODUCTION_RESOLUTION_REQUEST_BYTES);
 
     const result = await POST(request({}, maximum));
 

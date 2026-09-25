@@ -17,10 +17,12 @@ import {
   LEGACY_GEMINI_MODEL_ESTIMATE,
   LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
   LEGACY_TRANSLATION_MODEL_ESTIMATE,
+  poemTranslationTracks,
   translationModelName,
   type TranslationModelProvider,
   translationModelProvider,
 } from "./poem-translations";
+import { PublicationSnapshotSchema } from "./publication-snapshot";
 import {
   type Author,
   type Poem,
@@ -276,6 +278,7 @@ const PoemSummaryRowSchema = z.object({
   geminiModel: z.unknown(),
   legacyModel: z.unknown(),
   translationModels: z.string(),
+  publicationJson: z.string().nullable(),
 });
 const SitemapPoemRowSchema = z.object({
   authorId: z.string(),
@@ -406,6 +409,30 @@ const TranslationAvailabilitySchema = z.object({
 function summaryTranslationModels(
   row: z.infer<typeof PoemSummaryRowSchema>,
 ): TranslationAvailability[] {
+  const projected = activePublicationSnapshot(row.publicationJson);
+  if (projected) {
+    return poemTranslationTracks(projected.fields).flatMap((track) =>
+      track.model && track.provider
+        ? [
+            {
+              key: track.key,
+              model: track.model,
+              provider: track.provider,
+              ...(track.attributionCertainty ||
+              (track.key === "gemini" && track.attributionNote)
+                ? {
+                    attributionCertainty:
+                      track.attributionCertainty ?? "user_supplied",
+                  }
+                : {}),
+              ...(track.attributionNote
+                ? { attributionNote: track.attributionNote }
+                : {}),
+            },
+          ]
+        : [],
+    );
+  }
   const models: TranslationAvailability[] =
     TranslationAvailabilitySchema.array().parse(
       JSON.parse(row.translationModels),
@@ -443,6 +470,16 @@ function summaryTranslationModels(
     });
   }
   return models;
+}
+
+function activePublicationSnapshot(raw: null | string) {
+  if (!raw) return undefined;
+  try {
+    const parsed = PublicationSnapshotSchema.safeParse(JSON.parse(raw));
+    return parsed.success && parsed.data.active ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function storedModelLabel(value: unknown): string | undefined {
@@ -627,13 +664,15 @@ function poemFromRow(
   const linesArabic = retainedLineIndexes.map(
     (index) => sourceLines[index] ?? "",
   );
-  const currentPublication = currentPublicationPoem(
-    row,
-    sourceLines,
-    retainedLineIndexes,
-    linesArabic,
-    dynamicModelEnrichments.length === 0,
-  );
+  const currentPublication =
+    publicationSnapshotPoem(row, linesArabic) ??
+    currentPublicationPoem(
+      row,
+      sourceLines,
+      retainedLineIndexes,
+      linesArabic,
+      dynamicModelEnrichments.length === 0,
+    );
   if (currentPublication) return currentPublication;
   const english = optionalLines(
     row.translation,
@@ -701,6 +740,25 @@ function poemFromRow(
       : {}),
   });
   return parsedPoem.success ? parsedPoem.data : undefined;
+}
+
+function publicationSnapshotPoem(
+  row: z.infer<typeof PoemRowSchema>,
+  linesArabic: readonly string[],
+): Poem | undefined {
+  const snapshot = activePublicationSnapshot(row.publicationJson);
+  if (!snapshot) return undefined;
+  const parsed = SnapshotPoemSchema.safeParse({
+    id: row.id,
+    slug: row.slug,
+    authorId: row.authorId,
+    verses: Math.ceil(linesArabic.length / 2),
+    nameArabic: row.nameArabic,
+    ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
+    linesArabic,
+    ...snapshot.fields,
+  });
+  return parsed.success ? parsed.data : undefined;
 }
 
 function currentPublicationPoem(
@@ -789,21 +847,28 @@ function optionalLines(
       parsed.data.content.length === retainedLineIndexes.length
         ? parsed.data.content
         : retainedLineIndexes.map((index) => parsed.data.content[index] ?? "");
-    return {
+    const result: {
+      lines: string[];
+      model?: string;
+      reasoningEffort?: string;
+    } = {
       lines,
-      ...(typeof parsed.data.model === "string" &&
+    };
+    if (
+      typeof parsed.data.model === "string" &&
       parsed.data.model.trim().length > 0 &&
       parsed.data.model.trim().length <= 100 &&
       !UNSAFE_CONTROL.test(parsed.data.model)
-        ? { model: parsed.data.model.trim() }
-        : {}),
-      ...(typeof parsed.data.reasoningEffort === "string" &&
+    )
+      result.model = parsed.data.model.trim();
+    if (
+      typeof parsed.data.reasoningEffort === "string" &&
       parsed.data.reasoningEffort.trim().length > 0 &&
       parsed.data.reasoningEffort.trim().length <= 100 &&
       !UNSAFE_CONTROL.test(parsed.data.reasoningEffort)
-        ? { reasoningEffort: parsed.data.reasoningEffort.trim() }
-        : {}),
-    };
+    )
+      result.reasoningEffort = parsed.data.reasoningEffort.trim();
+    return result;
   } catch {
     return undefined;
   }
@@ -886,6 +951,7 @@ const VALID_CURRENT_PUBLICATION_SQL = `(
 )`;
 
 const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
+  p.publication_json AS publicationJson,
   ${LEGACY_AVAILABILITY_COLUMNS},
   CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
     THEN 1 ELSE 0 END AS hasCurrentPublication,
@@ -1008,10 +1074,13 @@ export class CatalogRepository implements CatalogReader {
         .parse(pageResults.at(1)?.results ?? [])
         .map((row) => {
           const translationModels = summaryTranslationModels(row);
+          const publication = activePublicationSnapshot(row.publicationJson);
           return {
             authorId: row.authorId,
             hasEnglish: translationModels.length > 0,
-            hasInsights: row.hasInsights === 1,
+            hasInsights: publication
+              ? publication.fields.insights !== undefined
+              : row.hasInsights === 1,
             id: row.id,
             nameArabic: row.nameArabic,
             ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
@@ -1046,13 +1115,18 @@ export class CatalogRepository implements CatalogReader {
     if (!row) return undefined;
     const parsedRow = PoemRowSchema.safeParse(row);
     if (!parsedRow.success) return undefined;
-    const [dynamicModelEnrichments, legacyAttribution] = await Promise.all([
-      this.#loadRegistryModelEnrichments(poemId),
-      this.#loadLegacyModelAttribution(
-        parsedRow.data.translation,
-        parsedRow.data.legacyTranslationAttributions,
-      ),
-    ]);
+    const activeSnapshot = activePublicationSnapshot(
+      parsedRow.data.publicationJson,
+    );
+    const [dynamicModelEnrichments, legacyAttribution] = activeSnapshot
+      ? ([[], undefined] as const)
+      : await Promise.all([
+          this.#loadRegistryModelEnrichments(poemId),
+          this.#loadLegacyModelAttribution(
+            parsedRow.data.translation,
+            parsedRow.data.legacyTranslationAttributions,
+          ),
+        ]);
     const poem = poemFromRow(row, dynamicModelEnrichments, legacyAttribution);
     return poem ? { author: authorFromJoinedRow(row), poem } : undefined;
   }

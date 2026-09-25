@@ -42,6 +42,22 @@ export const PublicCachePurgeRequestSchema = z.strictObject({
   authorSlug: z.string().min(1).max(128),
   poemId: z.string().min(1).max(128),
 });
+export const PublicationProjectionRequestSchema = z.discriminatedUnion(
+  "action",
+  [
+    z.strictObject({
+      action: z.literal("backfill"),
+      afterId: z.string().max(200).default(""),
+      apply: z.boolean().default(false),
+      limit: z.number().int().min(1).max(10).default(10),
+    }),
+    z.strictObject({
+      action: z.literal("audit"),
+      afterId: z.string().max(200).default(""),
+      limit: z.number().int().min(1).max(10).default(10),
+    }),
+  ],
+);
 export const SitemapRouteParamsSchema = z.strictObject({
   shard: PositiveIntegerSegmentSchema,
 });
@@ -507,6 +523,22 @@ export const HTTP_CONTRACTS = [
     ],
     service: "operations",
     summary: "Atomically publish bound, approved enrichment artifacts",
+  },
+  {
+    audience: "authenticated",
+    body: PublicationProjectionRequestSchema,
+    id: "operations.publication-projection",
+    method: "POST",
+    params: EmptyHttpPartSchema,
+    path: "/api/publication-projection",
+    query: EmptyHttpPartSchema,
+    responses: [200, 400, 403, 415, 503].map((status) => ({
+      body: z.unknown(),
+      contentType: "application/json",
+      status,
+    })),
+    service: "operations",
+    summary: "Backfill and audit inactive public poem projections",
   },
   {
     audience: "authenticated",
