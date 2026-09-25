@@ -56,6 +56,50 @@ test("an apply pass refuses to start without a D1 restore bookmark", async () =>
   assert.match(result.stderr, /Time Travel bookmark is required/u);
 });
 
+test("read-only cursor resumes after a transient Worker failure", async () => {
+  let calls = 0;
+  const server = createServer((_request, response) => {
+    calls += 1;
+    if (calls === 1) {
+      response.writeHead(503).end();
+      return;
+    }
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        ok: true,
+        afterId: "poem-2",
+        complete: true,
+        scanned: 1,
+        eligible: 1,
+        shadowed: 0,
+        skipped: [],
+        mismatched: [],
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const port = server.address()?.port;
+    const result = await runScript([], {
+      SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
+      SAQI_PROJECTION_AFTER_ID: "poem-1",
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(calls, 2);
+    assert.match(result.stdout, /"startAfterId":"poem-1"/u);
+    const rejected = await runScript(["--apply"], {
+      SAQI_PROJECTION_AFTER_ID: "poem-1",
+      SAQI_D1_RESTORE_BOOKMARK: "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
+    });
+    assert.notEqual(rejected.code, 0);
+    assert.match(rejected.stderr, /only for read-only/u);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 function runScript(args, environment = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [script.pathname, ...args], {

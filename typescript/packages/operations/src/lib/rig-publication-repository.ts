@@ -1,6 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { z } from "zod";
 
+import { PublicationSnapshotSchema } from "../../../site/src/lib/publication-snapshot";
+
 const UnsafeControl =
   // eslint-disable-next-line no-control-regex -- These exact control characters cannot be published.
   /[\u{0000}-\u{0008}\u{000b}\u{000c}\u{000e}-\u{001f}\u{007f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
@@ -186,11 +188,26 @@ export class RigPublicationRepository
       )
     )
       throw new Error("INSIGHT_LINE_NOT_IN_SOURCE");
-    const publication = JSON.stringify({
-      model: checkpoint.model,
-      provider: "openai",
-      ...output,
-    });
+    const publication = JSON.stringify(
+      PublicationSnapshotSchema.parse({
+        schemaVersion: 2,
+        active: true,
+        fields: {
+          modelEnrichments: [
+            {
+              lines: output.translation.lines,
+              model: checkpoint.model,
+              modelKey: "current",
+              reasoningEffort: "unknown",
+              vendorKey: "openai",
+            },
+          ],
+          insights: output.insights,
+          insightsModel: checkpoint.model,
+          insightsTrack: "model",
+        },
+      })
+    );
     const digest = await crypto.subtle.digest(
       "SHA-256",
       new TextEncoder().encode(publication)

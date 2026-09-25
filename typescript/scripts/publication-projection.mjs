@@ -8,6 +8,8 @@ const endpoint =
 const clientId = process.env.CF_ACCESS_CLIENT_ID;
 const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 const bookmark = process.env.SAQI_D1_RESTORE_BOOKMARK;
+const startAfterId = process.env.SAQI_PROJECTION_AFTER_ID ?? "";
+const batchLimit = Number(process.env.SAQI_PROJECTION_BATCH_LIMIT ?? 10);
 const action = process.argv.includes("--audit") ? "audit" : "backfill";
 const apply = process.argv.includes("--apply");
 const expectEmpty = process.argv.includes("--expect-empty");
@@ -24,38 +26,28 @@ if (action === "audit" && apply)
   throw new Error("Audit is read-only; omit --apply");
 if (expectEmpty && (action === "audit" || apply))
   throw new Error("--expect-empty requires a read-only backfill pass");
+if (startAfterId && (apply || action === "audit" || expectEmpty))
+  throw new Error("A starting cursor is only for read-only backfill inventory");
+if (startAfterId.length > 200)
+  throw new Error("Starting cursor is too long");
+if (!Number.isSafeInteger(batchLimit) || batchLimit < 1 || batchLimit > 10)
+  throw new Error("Batch limit must be between 1 and 10");
 if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 20_000)
   throw new Error("--max-batches must be between 1 and 20000");
 if (apply && !/^[0-9a-f-]{40,100}$/u.test(bookmark ?? ""))
   throw new Error("A current D1 Time Travel bookmark is required for --apply");
 
-let afterId = "";
+let afterId = startAfterId;
 let totalScanned = 0;
 let totalEligible = 0;
 let totalShadowed = 0;
 let totalSkipped = 0;
 let complete = false;
 for (let batch = 1; batch <= maxBatches; batch += 1) {
-  const body = { action, afterId, limit: 10 };
+  const body = { action, afterId, limit: batchLimit };
   if (apply) body.apply = true;
   // eslint-disable-next-line no-await-in-loop -- Each response advances the durable D1 cursor before the next request.
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "CF-Access-Client-Id": clientId,
-      "CF-Access-Client-Secret": clientSecret,
-      Origin: new URL(endpoint).origin,
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45_000),
-  });
-  if (!response.ok)
-    throw new Error(
-      `Projection API rejected batch ${batch}: ${response.status}`,
-    );
+  const response = await fetchBatch(body, batch);
   // eslint-disable-next-line no-await-in-loop -- Validate this batch before advancing the cursor.
   const result = await response.json();
   if (
@@ -113,9 +105,51 @@ process.stdout.write(
     complete,
     action,
     apply,
+    startAfterId,
     totalScanned,
     totalEligible,
     totalShadowed,
     totalSkipped,
   })}\n`,
 );
+
+async function fetchBatch(body, batch) {
+  for (let retry = 0; retry <= 3; retry += 1) {
+    // eslint-disable-next-line no-await-in-loop -- Retries are bounded and preserve this batch's cursor.
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "CF-Access-Client-Id": clientId,
+        "CF-Access-Client-Secret": clientSecret,
+        Origin: new URL(endpoint).origin,
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
+    }).catch((error) => {
+      if (retry >= 3) throw error;
+      return null;
+    });
+    if (
+      retry < 3 &&
+      (!response || [429, 502, 503, 504].includes(response.status))
+    ) {
+      process.stderr.write(
+        `${JSON.stringify({ batch, retry: retry + 1, status: response?.status ?? "network" })}\n`,
+      );
+      // eslint-disable-next-line no-await-in-loop -- Release a failed response before retrying.
+      await response?.body?.cancel();
+      // eslint-disable-next-line no-await-in-loop -- Bound backoff reduces bursts against the Worker.
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** retry));
+      continue;
+    }
+    if (!response?.ok)
+      throw new Error(
+        `Projection API rejected batch ${batch}: ${response?.status ?? "network"}`,
+      );
+    return response;
+  }
+  throw new Error(`Projection API exhausted retries for batch ${batch}`);
+}
