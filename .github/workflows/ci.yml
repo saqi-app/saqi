@@ -39,6 +39,7 @@ jobs:
         working-directory: .
         run: |
           node typescript/scripts/configure-ops-secrets.test.mjs
+          node --test typescript/scripts/publication-projection.test.mjs
           .github/scripts/affected-artifacts.test.sh
           .github/scripts/successful-deployment-base.test.sh
 

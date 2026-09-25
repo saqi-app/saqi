@@ -42,12 +42,13 @@ function wrangler(args) {
       ],
       { cwd: packageDir, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
     );
-    return JSON.parse(output);
+    // Wrangler prefixes --file JSON with a human-readable upload progress
+    // line. The SQL result remains the final JSON array.
+    const jsonStart = output.indexOf("[");
+    if (jsonStart < 0) throw new Error("Wrangler omitted its JSON result");
+    return JSON.parse(output.slice(jsonStart));
   } catch (error) {
-    const message = error?.stdout
-      ? JSON.parse(error.stdout)?.error?.notes?.[0]?.text
-      : null;
-    throw new Error(message ?? "Wrangler D1 command failed");
+    throw new Error("Wrangler D1 command failed", { cause: error });
   }
 }
 

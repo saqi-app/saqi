@@ -1,0 +1,88 @@
+name: Backfill public poem projections
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full main SHA approved for this production pass
+        required: true
+        type: string
+      operation:
+        description: Backfill, verify no work remains, or audit against the live catalog
+        required: true
+        default: audit
+        type: choice
+        options:
+          - audit
+          - backfill
+          - verify-empty
+      apply:
+        description: Write inactive snapshots (backfill only)
+        required: true
+        default: false
+        type: boolean
+      restore_bookmark:
+        description: Fresh D1 Time Travel bookmark, required when apply is true
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  projection:
+    name: Run bounded remote projection
+    if: >-
+      github.repository == 'saqi-app/saqi' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'nmaswood'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Require the approved production commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: typescript/.nvmrc
+
+      - name: Backfill or audit inactive projections
+        env:
+          OPERATION: ${{ inputs.operation }}
+          APPLY: ${{ inputs.apply }}
+          SAQI_D1_RESTORE_BOOKMARK: ${{ inputs.restore_bookmark }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
+        run: |
+          case "$OPERATION" in
+            audit) test "$APPLY" = 'false'; node typescript/scripts/publication-projection.mjs --audit ;;
+            verify-empty) test "$APPLY" = 'false'; node typescript/scripts/publication-projection.mjs --expect-empty ;;
+            backfill)
+              if test "$APPLY" = 'true'; then
+                node typescript/scripts/publication-projection.mjs --apply
+              else
+                node typescript/scripts/publication-projection.mjs
+              fi
+              ;;
+            *) exit 2 ;;
+          esac
