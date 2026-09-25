@@ -70,6 +70,12 @@ const PUBLISHABLE_AUTHOR = `a.hidden = 0
   AND instr(a.slug, '%') = 0
   AND ${SAFE_IDENTITY_SQL("a.name_arabic")}
   AND (a.name IS NULL OR trim(a.name) = '' OR ${SAFE_IDENTITY_SQL("a.name")})`;
+const PUBLIC_POEM_COUNT = `(SELECT count(*) FROM poem public_poem
+  WHERE public_poem.author_id = a.id
+    AND public_poem.hidden = 0 AND public_poem.publishable = 1)`;
+const HAS_PUBLIC_POEM = `EXISTS (SELECT 1 FROM poem public_poem
+  WHERE public_poem.author_id = a.id
+    AND public_poem.hidden = 0 AND public_poem.publishable = 1)`;
 const validTranslationSql = (column: string) => `CASE WHEN
   json_valid(${column})
   AND json_type(${column}, '$.content') = 'array'
@@ -991,10 +997,10 @@ export class CatalogRepository implements CatalogReader {
   async listAuthors(): Promise<IndexedAuthor[]> {
     const result = await this.#database
       .prepare(
-        `SELECT ${AUTHOR_COLUMNS}, a.public_poem_count AS poemCount
+        `SELECT ${AUTHOR_COLUMNS}, ${PUBLIC_POEM_COUNT} AS poemCount
          FROM author a
         WHERE ${PUBLISHABLE_AUTHOR}
-          AND a.public_poem_count > 0
+          AND ${HAS_PUBLIC_POEM}
         ORDER BY a.sort_name_arabic, a.id`,
       )
       .all();
@@ -1023,11 +1029,11 @@ export class CatalogRepository implements CatalogReader {
     const loadPage = (poemColumns: string) => {
       const authorStatement = this.#database
         .prepare(
-          `SELECT ${AUTHOR_COLUMNS}, a.public_poem_count AS poemCount
+          `SELECT ${AUTHOR_COLUMNS}, ${PUBLIC_POEM_COUNT} AS poemCount
            FROM author a
           WHERE a.slug = ?1
             AND ${PUBLISHABLE_AUTHOR}
-            AND a.public_poem_count > 0
+            AND ${HAS_PUBLIC_POEM}
           LIMIT 1`,
         )
         .bind(slug);
@@ -1041,7 +1047,7 @@ export class CatalogRepository implements CatalogReader {
             FROM author a
            WHERE a.slug = ?1
              AND ${PUBLISHABLE_AUTHOR}
-             AND a.public_poem_count > 0
+             AND ${HAS_PUBLIC_POEM}
            LIMIT 1
         )
           AND ${PUBLISHABLE_POEM}

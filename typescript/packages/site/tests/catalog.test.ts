@@ -305,6 +305,9 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
         ('p-malformed-author', 'a-malformed', 'bad-author', 1, 'قصيدة', '{"content":["بيت"]}', NULL, 0),
         ('p-hidden-author', 'a-hidden', 'hidden-author', 1, 'خفية', '{"content":["بيت"]}', NULL, 0);
     `);
+    // Readers derive the live count even if the old write-maintained counter
+    // is stale during the eventual counter-column cutover.
+    sqlite.prepare("UPDATE author SET public_poem_count = 0").run();
     const database = catalogRepository(sqlite);
 
     const authors = await database.listAuthors();
