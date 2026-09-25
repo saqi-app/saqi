@@ -43,7 +43,6 @@ void describe("public Worker cache purge", () => {
     assert.deepEqual(tags, [
       "saqi-poem-id-1",
       "saqi-author-poet",
-      "saqi-insights",
     ]);
   });
 

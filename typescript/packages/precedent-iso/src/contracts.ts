@@ -167,16 +167,6 @@ export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
     audience: "public",
-    id: "public.collection-insights",
-    method: "GET",
-    path: "/insights",
-    responses: [HTML_RESPONSE],
-    service: "public-site",
-    summary: "Show collection progress and enrichment counts",
-  },
-  {
-    ...EMPTY_INPUT,
-    audience: "public",
     id: "public.database-schema",
     method: "GET",
     path: "/docs",
@@ -248,7 +238,7 @@ export const HTTP_CONTRACTS = [
       status,
     })),
     service: "public-site",
-    summary: "Purge published poem, author listing, and insights cache tags",
+    summary: "Purge published poem and author listing cache tags",
   },
   {
     ...EMPTY_INPUT,
@@ -517,6 +507,22 @@ export const HTTP_CONTRACTS = [
     ],
     service: "operations",
     summary: "Atomically publish bound, approved enrichment artifacts",
+  },
+  {
+    audience: "authenticated",
+    body: z.looseObject({ action: z.string().min(1) }),
+    id: "operations.rig-state",
+    method: "POST",
+    params: EmptyHttpPartSchema,
+    path: "/api/rig/state",
+    query: EmptyHttpPartSchema,
+    responses: [200, 400, 403, 409, 415, 503].map((status) => ({
+      body: z.unknown(),
+      contentType: "application/json",
+      status,
+    })),
+    service: "operations",
+    summary: "Claim, recover, and publish one canonical poem",
   },
 ] as const satisfies readonly HttpContract[];
 

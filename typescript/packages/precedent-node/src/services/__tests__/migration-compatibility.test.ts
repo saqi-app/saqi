@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0061_retire_source_lineage_maintenance.sql");
+    expect(first.at(-1)).toBe("0064_retire_collection_dashboard.sql");
     expect(
       database
         .prepare(
@@ -176,6 +176,9 @@ describe("production migration compatibility", () => {
 
     expect(applyPending(database, migrationFiles())).toEqual([
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     expect(
       database
@@ -275,6 +278,9 @@ describe("production migration compatibility", () => {
     database.exec("DROP TABLE lineage_dependency");
     expect(applyPending(database, migrationFiles())).toEqual([
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
   });
 
@@ -464,6 +470,9 @@ describe("production migration compatibility", () => {
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     expect(
       database
@@ -555,6 +564,9 @@ describe("production migration compatibility", () => {
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -633,6 +645,9 @@ describe("production migration compatibility", () => {
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     expect(
       database
@@ -688,6 +703,9 @@ describe("production migration compatibility", () => {
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     expect(
       database
@@ -879,6 +897,9 @@ describe("production migration compatibility", () => {
       "0059_retire_source_revision_pointer.sql",
       "0060_restore_catalog_publishability.sql",
       "0061_retire_source_lineage_maintenance.sql",
+      "0062_expand_canonical_rig_state.sql",
+      "0063_backfill_known_source_identity.sql",
+      "0064_retire_collection_dashboard.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
