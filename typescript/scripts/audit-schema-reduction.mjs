@@ -10,9 +10,6 @@ const publicTables = [
   "crawl_import_bundle",
   "crawl_import_record",
   "enrichment_profile",
-  "insights_collection_month",
-  "insights_model_count",
-  "insights_rollup",
   "model_enrichment_artifact",
   "model_enrichment_validation",
   "model_publication_receipt",
@@ -85,6 +82,12 @@ SELECT
        AS poems_with_gemini_translation_payload,
   (SELECT COUNT(*) FROM poem WHERE insights IS NOT NULL)
        AS poems_with_legacy_insights_payload,
+  (SELECT COUNT(*) FROM poem WHERE publication_json IS NOT NULL)
+       AS poems_with_canonical_publication,
+  (SELECT COUNT(*) FROM author WHERE source_name IS NOT NULL)
+       AS authors_with_canonical_source_identity,
+  (SELECT COUNT(*) FROM poem WHERE source_name IS NOT NULL)
+       AS poems_with_canonical_source_identity,
   (SELECT COUNT(DISTINCT pointer.poem_id)
      FROM poem_model_publication_pointer pointer
      JOIN poem poem ON poem.id = pointer.poem_id
