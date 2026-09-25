@@ -25,6 +25,15 @@ on:
         description: Fresh D1 Time Travel bookmark, required when apply is true
         required: false
         type: string
+      after_id:
+        description: Optional cursor for a partial read-only inventory after a failed batch
+        required: false
+        type: string
+      batch_limit:
+        description: Poems per Worker request (1-10; use 1 to isolate a bad row)
+        required: true
+        default: '10'
+        type: string
 
 permissions:
   contents: read
@@ -71,6 +80,8 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           APPLY: ${{ inputs.apply }}
           SAQI_D1_RESTORE_BOOKMARK: ${{ inputs.restore_bookmark }}
+          SAQI_PROJECTION_AFTER_ID: ${{ inputs.after_id }}
+          SAQI_PROJECTION_BATCH_LIMIT: ${{ inputs.batch_limit }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
         run: |

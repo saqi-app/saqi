@@ -22,6 +22,8 @@ There are 26,049 poems without an established source identity. Inferring one fro
 
 The additive backfill preflight found zero mapped poems with a null source version and zero authors/poems with multiple established source keys. Its unique indexes and non-null source_version column are therefore compatible with the observed production mappings; rerun this read-only preflight immediately before migration.
 
+The bounded source-identity copy completed on 25 September: a fresh read-only D1 check found zero remaining eligible author, poem, or current-hash rows; 1,212 established author identities and 78,911 established poem identities match canonical columns, with 78,908 matching current hashes and zero FK violations. The other three hashes are the pre-existing revision-pointer disagreements, not silently backfilled. A first read-only publication inventory scanned 310 candidates before the Worker returned 503 on batch 32. No publication snapshot was written. Diagnose that batch with a one-row cursor pass, then repeat the full inventory before allowing a write pass.
+
 ## Target schema and paths
 
 author: id primary key, slug unique, Arabic/English names, hidden, source_name + source_author_id unique when present, source_url, collected_at. Keep only display/sort fields that indexed live queries prove necessary.

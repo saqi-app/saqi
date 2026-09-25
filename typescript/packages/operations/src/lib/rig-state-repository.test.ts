@@ -128,15 +128,25 @@ test("a lost dispatch response cannot cause a second Codex invocation", async ()
   await expect(publisher.publish("poem-1", recovered!.version)).resolves.toBe(
     true
   );
-  expect(
-    sqlite
-      .prepare(
-        "SELECT publication_json AS publicationJson, rig_status AS rigStatus FROM poem WHERE id = ?"
-      )
-      .get("poem-1")
-  ).toMatchObject({
+  const published = sqlite
+    .prepare(
+      "SELECT publication_json AS publicationJson, rig_status AS rigStatus FROM poem WHERE id = ?"
+    )
+    .get("poem-1") as { publicationJson: string; rigStatus: string };
+  expect(published).toMatchObject({
     rigStatus: "complete",
     publicationJson: expect.stringContaining('"translated"'),
+  });
+  expect(JSON.parse(published.publicationJson)).toMatchObject({
+    schemaVersion: 2,
+    active: true,
+    fields: {
+      modelEnrichments: [
+        { lines: ["translated"], model: "Codex Sol", vendorKey: "openai" },
+      ],
+      insightsTrack: "model",
+      insightsModel: "Codex Sol",
+    },
   });
   await expect(repository.claimNextPoem(owner, 205)).resolves.toMatchObject({
     poemId: "poem-2",
