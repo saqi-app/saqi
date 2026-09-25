@@ -24,7 +24,10 @@
     "0058_source_revision_writer_cutover.sql",
     "0059_retire_source_revision_pointer.sql",
     "0060_restore_catalog_publishability.sql",
-    "0061_retire_source_lineage_maintenance.sql"
+    "0061_retire_source_lineage_maintenance.sql",
+    "0062_expand_canonical_rig_state.sql",
+    "0063_backfill_known_source_identity.sql",
+    "0064_retire_collection_dashboard.sql"
   ],
   "localVersion": 46,
   "databases": [
@@ -93,6 +96,30 @@
               "name": "sort_name_arabic",
               "type": "TEXT",
               "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_author_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_url",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "collected_at",
+              "type": "INTEGER",
+              "nullable": true,
               "primaryKey": false
             }
           ],
@@ -443,72 +470,6 @@
             },
             {
               "name": "created_at",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "insights_collection_month",
-          "columns": [
-            {
-              "name": "month",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "poem_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "insights_model_count",
-          "columns": [
-            {
-              "name": "model_key",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "poem_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "insights_rollup",
-          "columns": [
-            {
-              "name": "singleton",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": true
-            },
-            {
-              "name": "author_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "poem_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "source_poem_count",
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
@@ -886,6 +847,114 @@
             {
               "name": "legacy_translation_attributions",
               "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_name",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_poem_id",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_url",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "collected_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_json",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_source_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_hash",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "publication_cache_dirty",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_status",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_version",
+              "type": "INTEGER",
+              "nullable": false,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_lease_token",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_lease_expires_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_checkpoint_json",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_last_error",
+              "type": "TEXT",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "rig_updated_at",
+              "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
             }

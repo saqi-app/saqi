@@ -9,7 +9,6 @@ export const GET: APIRoute = async ({ site }) => {
   const authors = await CatalogRepository.fromD1(env.DB).listAuthors();
   const urls = [
     new URL("/", site).href,
-    new URL("/insights", site).href,
     ...authors.flatMap(({ author, poemCount }) =>
       Array.from(
         { length: Math.ceil(poemCount / AUTHOR_PAGE_SIZE) },

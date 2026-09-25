@@ -10,7 +10,6 @@ export function cacheTags(pathname: string): string[] {
     const authorSlug = AUTHOR_PATH.exec(pathname)?.[1];
     if (authorSlug) tags.push(`saqi-author-${authorSlug}`);
   }
-  if (pathname === "/insights") tags.push("saqi-insights");
   return tags;
 }
 
@@ -23,6 +22,5 @@ export function publicationCacheTags(
   return [
     `saqi-poem-${encodeURIComponent(poemId)}`,
     `saqi-author-${encodeURIComponent(authorSlug)}`,
-    "saqi-insights",
   ];
 }

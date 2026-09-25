@@ -50,16 +50,11 @@ if [[ "$public_content_available" == true ]]; then
   curl_probe 'public sitemap' --fail --retry 2 --retry-all-errors \
     --output "${canary_dir}/sitemap-index.xml" \
     https://saqi.app/sitemap-index.xml
-  curl_probe 'public collection insights' --fail --retry 2 --retry-all-errors \
-    --output "${canary_dir}/insights.html" \
-    https://saqi.app/insights
 
   grep -Fq 'rel="canonical" href="https://saqi.app/author/poet-abn-rumi"' \
     "${canary_dir}/author.html"
   grep -Fq 'lang="ar"' "${canary_dir}/poem.html"
   grep -Fq '<sitemapindex' "${canary_dir}/sitemap-index.xml"
-  grep -Fq 'Collection insights' "${canary_dir}/insights.html"
-  grep -Fq 'Published enrichment by model' "${canary_dir}/insights.html"
   if grep -Fq 'cloudflareinsights' "${canary_dir}/home.html"; then
     echo 'public homepage unexpectedly contains Cloudflare browser analytics' >&2
     exit 1

@@ -96,12 +96,6 @@ void describe("withResponseHeaders", () => {
       true,
       "/author/poet/page/2",
     );
-    const insights = withResponseHeaders(
-      new Response("insights"),
-      "GET",
-      true,
-      "/insights",
-    );
     assert.match(
       poem.headers.get("Cloudflare-CDN-Cache-Control") ?? "",
       /max-age=86400/u,
@@ -110,10 +104,6 @@ void describe("withResponseHeaders", () => {
     assert.equal(
       author.headers.get("Cache-Tag"),
       "saqi-corpus,saqi-author-poet",
-    );
-    assert.equal(
-      insights.headers.get("Cache-Tag"),
-      "saqi-corpus,saqi-insights",
     );
   });
 });

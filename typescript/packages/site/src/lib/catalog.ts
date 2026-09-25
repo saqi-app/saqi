@@ -270,6 +270,7 @@ const PoemSummaryRowSchema = z.object({
   nameEnglish: z.string().nullable(),
   nameEnglishLegacy: z.string().nullable(),
   hasInsights: z.literal([0, 1]),
+  hasCurrentPublication: z.literal([0, 1]),
   hasLegacyTranslation: z.literal([0, 1]),
   hasGeminiTranslation: z.literal([0, 1]),
   geminiModel: z.unknown(),
@@ -284,6 +285,7 @@ const SitemapPoemRowSchema = z.object({
 
 const PoemRowSchema = z.object({
   activeSourceRevisionId: z.string().nullable(),
+  hasActivePointer: z.literal([0, 1]),
   id: z.string(),
   slug: z.string(),
   authorId: z.string(),
@@ -296,12 +298,22 @@ const PoemRowSchema = z.object({
   legacyTranslationAttributions: z.string().nullable(),
   translationGemini: z.string().nullable(),
   insights: z.string().nullable(),
+  publicationJson: z.string().nullable(),
 });
 
 const SafeCatalogLineSchema = z
   .string()
   .max(5_000)
   .refine((line) => !UNSAFE_CONTROL.test(line));
+const CurrentPublicationSchema = z.strictObject({
+  insights: SnapshotPoemInsightsSchema.optional(),
+  model: z.string().trim().min(1).max(100),
+  provider: z.enum(["anthropic", "google", "openai", "other"]),
+  translation: z.strictObject({
+    lines: z.array(SafeCatalogLineSchema).min(1).max(2_000),
+  }),
+  wordGlosses: PoemWordGlossesSchema.optional(),
+});
 const TranslationContentSchema = z.object({
   content: z
     .array(SafeCatalogLineSchema)
@@ -398,6 +410,7 @@ function summaryTranslationModels(
     TranslationAvailabilitySchema.array().parse(
       JSON.parse(row.translationModels),
     );
+  if (row.hasCurrentPublication === 1) return models;
   if (row.hasLegacyTranslation === 1) {
     // Exact legacy attribution is hash-scoped on detail reads. Do not attach a
     // poem-level attribution to list metadata without verifying its payload hash.
@@ -614,6 +627,66 @@ function poemFromRow(
   const linesArabic = retainedLineIndexes.map(
     (index) => sourceLines[index] ?? "",
   );
+  // During the additive rollout, never let a one-track projection replace an
+  // existing visible legacy, Gemini, or model selection. Those require a
+  // multi-track projection and exhaustive parity before the graph is dropped.
+  if (
+    row.publicationJson &&
+    !row.translation &&
+    !row.translationGemini &&
+    row.hasActivePointer === 0 &&
+    dynamicModelEnrichments.length === 0
+  ) {
+    try {
+      const published = CurrentPublicationSchema.safeParse(
+        JSON.parse(row.publicationJson),
+      );
+      if (
+        published.success &&
+        published.data.translation.lines.length <= sourceLines.length &&
+        !published.data.translation.lines.some((line) =>
+          GENERATION_FAILURE_PATTERN.test(line),
+        )
+      ) {
+        const source = published.data.translation.lines;
+        const lines =
+          source.length === retainedLineIndexes.length
+            ? source
+            : retainedLineIndexes.map((index) => source[index] ?? "");
+        const projected = SnapshotPoemSchema.safeParse({
+          id: row.id,
+          slug: row.slug,
+          authorId: row.authorId,
+          verses: Math.ceil(linesArabic.length / 2),
+          nameArabic: row.nameArabic,
+          ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
+          linesArabic,
+          modelEnrichments: [
+            {
+              lines,
+              model: published.data.model,
+              modelKey: "current",
+              reasoningEffort: "unknown",
+              vendorKey: published.data.provider,
+              ...(published.data.wordGlosses
+                ? { wordGlosses: published.data.wordGlosses }
+                : {}),
+            },
+          ],
+          ...(published.data.insights
+            ? {
+                insights: published.data.insights,
+                insightsModel: published.data.model,
+                insightsTrack: "model",
+              }
+            : {}),
+        });
+        if (projected.success) return projected.data;
+      }
+    } catch {
+      // A bad projection never hides an existing published translation.
+    }
+  }
   const english = optionalLines(
     row.translation,
     sourceLines.length,
@@ -743,6 +816,11 @@ const JOINED_AUTHOR_COLUMNS = `a.id AS catalogAuthorId,
 
 const BASE_POEM_COLUMNS = `p.id,
   p.active_source_revision_id AS activeSourceRevisionId,
+  CASE WHEN EXISTS (
+    SELECT 1 FROM poem_model_publication_pointer existing
+    WHERE existing.poem_id = p.id
+      AND existing.source_revision_id = p.active_source_revision_id
+  ) THEN 1 ELSE 0 END AS hasActivePointer,
   p.slug,
   p.author_id AS authorId,
   p.verses,
@@ -752,7 +830,8 @@ const BASE_POEM_COLUMNS = `p.id,
   p.content_arabic AS contentArabic,
   p.translation,
   p.translation_gemini AS translationGemini,
-  p.insights`;
+  p.insights,
+  p.publication_json AS publicationJson`;
 
 const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
   p.legacy_translation_attributions AS legacyTranslationAttributions`;
@@ -769,12 +848,43 @@ const BASE_POEM_SUMMARY_COLUMNS = `p.id,
   NULLIF(trim(p.name_english), '') AS nameEnglish,
   NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy`;
 
+const SAFE_CURRENT_PUBLICATION_JSON = `(CASE
+  WHEN json_valid(p.publication_json) THEN p.publication_json
+  ELSE '{}' END)`;
+const VALID_CURRENT_PUBLICATION_SQL = `(
+  p.translation IS NULL
+  AND p.translation_gemini IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM poem_model_publication_pointer existing
+    WHERE existing.poem_id = p.id
+      AND existing.source_revision_id = p.active_source_revision_id
+  )
+  AND
+  json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.translation.lines') = 'array'
+  AND json_array_length(${SAFE_CURRENT_PUBLICATION_JSON}, '$.translation.lines')
+    BETWEEN 1 AND 2000
+  AND json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model') = 'text'
+  AND length(trim(json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model')))
+    BETWEEN 1 AND 100
+  AND json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.provider')
+    IN ('anthropic', 'google', 'openai', 'other')
+)`;
+
 const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
   ${LEGACY_AVAILABILITY_COLUMNS},
-  ${MODEL_AVAILABILITY_SQL} AS translationModels,
-  CASE WHEN ${validInsightsSql("p.insights")} = 1
-    OR (${VALIDATED_MODEL_PUBLICATION})
-    THEN 1 ELSE 0 END AS hasInsights`;
+  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
+    THEN 1 ELSE 0 END AS hasCurrentPublication,
+  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
+    THEN json_array(json_object('key', 'current',
+      'model', json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model'),
+      'provider', json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.provider')))
+    ELSE ${MODEL_AVAILABILITY_SQL} END AS translationModels,
+  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
+    THEN CASE WHEN json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.insights') = 'object'
+      THEN 1 ELSE 0 END
+    WHEN ${validInsightsSql("p.insights")} = 1
+      OR (${VALIDATED_MODEL_PUBLICATION})
+      THEN 1 ELSE 0 END AS hasInsights`;
 
 async function sha256Utf8Exact(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(

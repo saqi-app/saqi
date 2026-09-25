@@ -44,7 +44,6 @@ describe("contract registry", () => {
   it("documents every public and operations route", () => {
     expect(HTTP_CONTRACTS.map(({ id }) => id)).toEqual([
       "public.author-index",
-      "public.collection-insights",
       "public.database-schema",
       "public.legacy-author-page",
       "public.author",
@@ -66,6 +65,7 @@ describe("contract registry", () => {
       "operations.corpus-resolution",
       "operations.source-admissions-v2",
       "operations.enrichment-publications-v2",
+      "operations.rig-state",
     ]);
     expect(generateContractCatalog().queues).toEqual([]);
   });

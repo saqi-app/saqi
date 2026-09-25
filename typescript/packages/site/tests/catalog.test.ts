@@ -71,6 +71,60 @@ function createDatabase() {
   return database;
 }
 
+void test("a projected track cannot hide an existing published translation", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author(id, slug, name_arabic, name, hidden)
+      VALUES ('a-current', 'current-poet', 'شاعر', 'Poet', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
+        content_arabic, translation, hidden)
+      VALUES ('p-current', 'a-current', 'current', 1, 'قصيدة',
+        '{"content":["بيت"]}', '{"content":["Old English"]}', 0);
+    `);
+    const publication = {
+      model: "Codex Sol",
+      provider: "openai",
+      translation: { lines: ["Current English"] },
+    };
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-current'")
+      .run(JSON.stringify(publication));
+    const reader = catalogRepository(sqlite);
+    const detail = await reader.getPoemPage("current-poet", "p-current");
+    assert.deepEqual(detail?.poem.linesEnglish, ["Old English"]);
+    const summary = await reader.getAuthorPage("current-poet");
+    assert.deepEqual(
+      summary?.poems[0]?.translationModels.map(({ key }) => key),
+      ["legacy"],
+    );
+    sqlite.exec("UPDATE poem SET translation = NULL WHERE id = 'p-current'");
+    const projected = await reader.getPoemPage("current-poet", "p-current");
+    assert.deepEqual(
+      projected?.poem.modelEnrichments?.map(({ lines }) => lines),
+      [["Current English"]],
+    );
+    assert.equal(projected?.poem.linesEnglish, undefined);
+    const projectedSummary = await reader.getAuthorPage("current-poet");
+    assert.deepEqual(
+      projectedSummary?.poems[0]?.translationModels.map(({ key }) => key),
+      ["current"],
+    );
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ?, translation = ? WHERE id = 'p-current'")
+      .run('{"model":"Broken"}', '{"content":["Old English"]}');
+    const fallback = await reader.getPoemPage("current-poet", "p-current");
+    assert.deepEqual(fallback?.poem.linesEnglish, ["Old English"]);
+    const fallbackSummary = await reader.getAuthorPage("current-poet");
+    assert.deepEqual(
+      fallbackSummary?.poems[0]?.translationModels.map(({ key }) => key),
+      ["legacy"],
+    );
+  } finally {
+    sqlite.close();
+  }
+});
+
 void test("legacy attribution requires the exact stored payload hash", async () => {
   const sqlite = createDatabase();
   try {
@@ -355,12 +409,6 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       INSERT INTO poem_model_publication_pointer VALUES
         ('p-valid', 'sol-5.6', 'revision-1', 'artifact-1', 1, 1, 1);
     `);
-    assert.deepEqual(
-      sqlite
-        .prepare("SELECT model_key, poem_count FROM insights_model_count")
-        .all(),
-      [{ model_key: "sol-5.6", poem_count: 1 }],
-    );
     const publishedSolPage = await database.getPoemPage("good-poet", "p-valid");
     const availableModels = async () => {
       const page = await database.getAuthorPage("good-poet");
