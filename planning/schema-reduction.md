@@ -30,6 +30,8 @@ The bounded source-identity copy completed on 25 September: a fresh read-only D1
 
 The updated production audit at 20:42 UTC measured 1,168,609,280 D1 bytes and 15 application tables. Canonical counts remained 1,391 authors and 104,960 poems; the two sealed unmapped import records, 26,049 poems without established source identity, and three source-pointer disagreements remained. A one-row read-only diagnostic traversed 200 candidates past the failed cursor without another Worker error; the full ten-row inventory was restarted. This narrows the first 503 to a transient or batch-size-dependent failure, not a proven malformed poem.
 
+A later read-only count found 80,478 public projection candidates, or at least 8,048 ten-row Worker requests. `scraper_writer_control.writer_id` is null and its last update is 2026-08-26 14:21 UTC, while `poem_source_revision.created_at` reaches 2026-09-23 12:52 UTC. Neither timestamp proves the installed writer topology; the old source graph could have been changed by a separate path or migration. Do not delete its epoch guard until all active source writers have been identified or replaced.
+
 Exception review: the two sealed unmapped records point to existing public poems `c3718eff-15af-46bf-9258-a843d5222181` and `d2ad44f1-577c-456a-a1be-fe0d57e52daa`. The first has identical staged Arabic lines and a visible legacy translation; the second has changed staged Arabic lines and no English. They are pending source bindings/one real text update, not disposable history. Of the three established source identities whose poem revision pointer is null, two have exact title/line parity with their current revision (one has legacy English); the third has changed Arabic and no English. Backfill the two exact hashes with a guarded compare-and-swap after the old writer is cut over, then apply the changed text and hash for the other cases. Keep their current public URLs and the first poem's visible English throughout.
 
 ## Target schema and paths
@@ -66,12 +68,12 @@ Counts are live D1 counts above; local counts are ? until an installed rig and b
 | insights_rollup | 1 | DROP; cheap ad hoc counts if operationally needed | Dashboard totals lost; no public reader left. |
 | model_enrichment_artifact | 8,733 | FOLD visible tracks INTO poem.publication_json | Rejected/superseded raw payloads lost; row-by-row all visible line/insight/gloss/label parity and shadow reads. |
 | model_enrichment_validation | 17,466 | DROP; deterministic validation before one publication CAS | Historical review decisions lost; reject malformed/refusal outputs in tests and live rehearsal. |
-| model_publication_receipt | 6,252 | DROP; publication_hash/version on poem | Receipt history lost; idempotent duplicate publish and cache purge retry proven. |
+| model_publication_receipt | 6,252 | DROP; publication_hash plus rig_version CAS on poem | Receipt history lost; idempotent duplicate publish and cache purge retry proven. |
 | poem | 104,960 | KEEP CORE, with current source/publication/invocation fields | Arabic, URL, visibility and selected English/insight parity required. |
 | poem_model_publication_pointer | 8,347 | FOLD visible selections INTO poem.publication_json | Pointer history lost; all active selections and selected/default output parity for 8,321 active-pointer poems, especially 26 multi-pointer poems. |
-| poem_source_revision | 78,911 | FOLD INTO poem.source_hash/version/content | Old Arabic revisions lost; stale source update CAS and current hash/content parity. |
+| poem_source_revision | 78,911 | FOLD INTO poem.source_hash/content with guarded CAS | Old Arabic revisions lost; stale source update CAS and current hash/content parity. |
 | scraper_writer_control | 1 | DROP after direct single-writer CAS | Old epoch prevented an expired concurrent writer from promoting stale content; prove only one deployed writer and a stale-worker race against new CAS. |
-| source_admission_clock | 75,938 | FOLD INTO poem.collected_at/source_hash | Per-source admission timing lost; idempotent recrawl and due query benchmark. |
+| source_admission_clock | 75,938 | FOLD INTO author.collected_at plus poem.source_hash | Per-source admission timing lost; idempotent recrawl and due query benchmark. |
 | source_author_identity | 1,212 | FOLD INTO author source key | URL aliases/history lost; 20 slug conflicts resolved and all mapped IDs preserved. |
 | source_poem_identity | 78,911 | FOLD INTO poem source key | Tombstones/history lost; 3 pointer disagreements and 26,049 unmapped poems handled explicitly. |
 | canonical_translation_binding | ? | DROP; one current publication per poem | Old binding choice lost; selected publication parity. |
