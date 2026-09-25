@@ -96,8 +96,10 @@ if (!complete)
   throw new Error(
     `Projection exceeded ${maxBatches} batches; resume from start`,
   );
-if (expectEmpty && totalEligible > 0)
-  throw new Error(`${totalEligible} visible publications still need backfill`);
+if (expectEmpty && (totalEligible > 0 || totalSkipped > 0))
+  throw new Error(
+    `${totalEligible} visible publications still need backfill and ${totalSkipped} candidate${totalSkipped === 1 ? "" : "s"} skipped`,
+  );
 if (action === "audit" && totalEligible === 0)
   throw new Error("Audit found no inactive publication snapshots");
 process.stdout.write(
