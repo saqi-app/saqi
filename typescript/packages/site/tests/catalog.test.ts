@@ -104,14 +104,16 @@ void test("a projected track cannot hide an existing published translation", asy
       projected?.poem.modelEnrichments?.map(({ lines }) => lines),
       [["Current English"]],
     );
-    assert.equal(projected?.poem.linesEnglish, undefined);
+    assert.equal(projected.poem.linesEnglish, undefined);
     const projectedSummary = await reader.getAuthorPage("current-poet");
     assert.deepEqual(
       projectedSummary?.poems[0]?.translationModels.map(({ key }) => key),
       ["current"],
     );
     sqlite
-      .prepare("UPDATE poem SET publication_json = ?, translation = ? WHERE id = 'p-current'")
+      .prepare(
+        "UPDATE poem SET publication_json = ?, translation = ? WHERE id = 'p-current'",
+      )
       .run('{"model":"Broken"}', '{"content":["Old English"]}');
     const fallback = await reader.getPoemPage("current-poet", "p-current");
     assert.deepEqual(fallback?.poem.linesEnglish, ["Old English"]);

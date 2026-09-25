@@ -80,10 +80,12 @@ function pending() {
 }
 
 let remaining = pending();
-console.log(JSON.stringify({ remaining, mode: apply ? "apply" : "read-only" }));
+process.stdout.write(
+  `${JSON.stringify({ remaining, mode: apply ? "apply" : "read-only" })}\n`,
+);
 if (!apply) {
-  console.log(
-    "Take and verify a production restore point, then rerun with --apply.",
+  process.stdout.write(
+    "Take and verify a production restore point, then rerun with --apply.\n",
   );
   process.exit(0);
 }
@@ -97,7 +99,7 @@ for (
     throw new Error("Backfill exceeded 1000 batches; inspect manually");
   wrangler(["--file", migration]);
   const next = pending();
-  console.log(JSON.stringify({ batch, remaining: next }));
+  process.stdout.write(`${JSON.stringify({ batch, remaining: next })}\n`);
   if (Object.keys(next).some((key) => next[key] > remaining[key])) {
     throw new Error(
       "Pending count increased; an old writer may still be active",

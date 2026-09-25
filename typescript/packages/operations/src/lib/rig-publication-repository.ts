@@ -70,13 +70,32 @@ export type RigSourcePoem = z.infer<typeof SourceSchema> & {
   readonly linesArabic: readonly string[];
 };
 
+interface RigSourcePort {
+  readClaimedSource(
+    poemId: string,
+    token: string,
+    now: number
+  ): Promise<null | RigSourcePoem>;
+}
+
+interface RigPublicationPort {
+  publish(poemId: string, expectedVersion: number): Promise<boolean>;
+}
+
+interface RigCachePort {
+  clearCacheDirty(poemId: string, publicationHash: string): Promise<boolean>;
+  pendingPurge(poemId?: string): Promise<null | PendingPurgeRoute>;
+}
+
 interface PendingPurgeRoute {
   authorSlug: string;
   poemId: string;
   publicationHash: string;
 }
 
-export class RigPublicationRepository {
+export class RigPublicationRepository
+  implements RigSourcePort, RigPublicationPort, RigCachePort
+{
   readonly #database: D1Database;
 
   constructor(database: D1Database) {

@@ -627,66 +627,14 @@ function poemFromRow(
   const linesArabic = retainedLineIndexes.map(
     (index) => sourceLines[index] ?? "",
   );
-  // During the additive rollout, never let a one-track projection replace an
-  // existing visible legacy, Gemini, or model selection. Those require a
-  // multi-track projection and exhaustive parity before the graph is dropped.
-  if (
-    row.publicationJson &&
-    !row.translation &&
-    !row.translationGemini &&
-    row.hasActivePointer === 0 &&
-    dynamicModelEnrichments.length === 0
-  ) {
-    try {
-      const published = CurrentPublicationSchema.safeParse(
-        JSON.parse(row.publicationJson),
-      );
-      if (
-        published.success &&
-        published.data.translation.lines.length <= sourceLines.length &&
-        !published.data.translation.lines.some((line) =>
-          GENERATION_FAILURE_PATTERN.test(line),
-        )
-      ) {
-        const source = published.data.translation.lines;
-        const lines =
-          source.length === retainedLineIndexes.length
-            ? source
-            : retainedLineIndexes.map((index) => source[index] ?? "");
-        const projected = SnapshotPoemSchema.safeParse({
-          id: row.id,
-          slug: row.slug,
-          authorId: row.authorId,
-          verses: Math.ceil(linesArabic.length / 2),
-          nameArabic: row.nameArabic,
-          ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
-          linesArabic,
-          modelEnrichments: [
-            {
-              lines,
-              model: published.data.model,
-              modelKey: "current",
-              reasoningEffort: "unknown",
-              vendorKey: published.data.provider,
-              ...(published.data.wordGlosses
-                ? { wordGlosses: published.data.wordGlosses }
-                : {}),
-            },
-          ],
-          ...(published.data.insights
-            ? {
-                insights: published.data.insights,
-                insightsModel: published.data.model,
-                insightsTrack: "model",
-              }
-            : {}),
-        });
-        if (projected.success) return projected.data;
-      }
-    } catch {
-      // A bad projection never hides an existing published translation.
-    }
-  }
+  const currentPublication = currentPublicationPoem(
+    row,
+    sourceLines,
+    retainedLineIndexes,
+    linesArabic,
+    dynamicModelEnrichments.length === 0,
+  );
+  if (currentPublication) return currentPublication;
   const english = optionalLines(
     row.translation,
     sourceLines.length,
@@ -753,6 +701,73 @@ function poemFromRow(
       : {}),
   });
   return parsedPoem.success ? parsedPoem.data : undefined;
+}
+
+function currentPublicationPoem(
+  row: z.infer<typeof PoemRowSchema>,
+  sourceLines: readonly string[],
+  retainedLineIndexes: readonly number[],
+  linesArabic: readonly string[],
+  hasNoModelSelections: boolean,
+): Poem | undefined {
+  // A one-track projection cannot replace an existing visible selection.
+  if (
+    !row.publicationJson ||
+    row.translation ||
+    row.translationGemini ||
+    row.hasActivePointer !== 0 ||
+    !hasNoModelSelections
+  )
+    return undefined;
+  try {
+    const published = CurrentPublicationSchema.safeParse(
+      JSON.parse(row.publicationJson),
+    );
+    if (
+      !published.success ||
+      published.data.translation.lines.length > sourceLines.length ||
+      published.data.translation.lines.some((line) =>
+        GENERATION_FAILURE_PATTERN.test(line),
+      )
+    )
+      return undefined;
+    const source = published.data.translation.lines;
+    const lines =
+      source.length === retainedLineIndexes.length
+        ? source
+        : retainedLineIndexes.map((index) => source[index] ?? "");
+    const projected = SnapshotPoemSchema.safeParse({
+      id: row.id,
+      slug: row.slug,
+      authorId: row.authorId,
+      verses: Math.ceil(linesArabic.length / 2),
+      nameArabic: row.nameArabic,
+      ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
+      linesArabic,
+      modelEnrichments: [
+        {
+          lines,
+          model: published.data.model,
+          modelKey: "current",
+          reasoningEffort: "unknown",
+          vendorKey: published.data.provider,
+          ...(published.data.wordGlosses
+            ? { wordGlosses: published.data.wordGlosses }
+            : {}),
+        },
+      ],
+      ...(published.data.insights
+        ? {
+            insights: published.data.insights,
+            insightsModel: published.data.model,
+            insightsTrack: "model",
+          }
+        : {}),
+    });
+    return projected.success ? projected.data : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function optionalLines(

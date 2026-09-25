@@ -15,9 +15,91 @@ if (!clientId || !clientSecret)
     "CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required",
   );
 const schemaPath = new URL(
-  "./rig-publication-output.schema.json",
+  "rig-publication-output.schema.json",
   import.meta.url,
 ).pathname;
+
+async function main() {
+  if (process.argv[2] === "retry-unknown") {
+    const [poemId, attemptId] = process.argv.slice(3);
+    if (!poemId || !attemptId || process.argv.length !== 5)
+      throw new Error("Usage: rig-lite.mjs retry-unknown POEM_ID ATTEMPT_ID");
+    const state = await current();
+    const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
+    if (
+      state?.poemId !== poemId ||
+      state.status !== "unknown" ||
+      checkpoint.invocation?.attemptId !== attemptId
+    )
+      throw new Error("The current unknown attempt does not match");
+    if (await readOutput(attemptId))
+      throw new Error(
+        "A recoverable Codex result exists; run the rig normally",
+      );
+    await request({
+      action: "retry-unknown",
+      poemId,
+      attemptId,
+      expectedVersion: state.version,
+    });
+    process.stdout.write(`Manual retry authorized for ${poemId}\n`);
+    return;
+  }
+  if (process.argv.length > 2)
+    throw new Error("Usage: rig-lite.mjs [retry-unknown POEM_ID ATTEMPT_ID]");
+  if (process.env.SAQI_RIG_ACTIVE !== "1")
+    throw new Error(
+      "Rig inactive: complete publication parity and set SAQI_RIG_ACTIVE=1",
+    );
+  await request({ action: "purge-cache" });
+  const active = await current();
+  if (active?.status === "dispatching" || active?.status === "unknown") {
+    await recover(active);
+    return;
+  }
+  if (active?.status === "claimed") {
+    const checkpoint = JSON.parse(active.checkpointJson ?? "{}");
+    if (checkpoint.outputs?.generation) {
+      await publish(active);
+      return;
+    }
+  }
+  const token = randomUUID();
+  const claimResponse = await request({ action: "claim-poem", token });
+  const claim = claimResponse.state;
+  if (!claim) {
+    process.stdout.write("No poem ready; a prior claim may still be live.\n");
+    return;
+  }
+  const sourceResponse = await request({
+    action: "source",
+    poemId: claim.poemId,
+    token,
+  });
+  const source = sourceResponse.poem;
+  const prompt = promptFor(source);
+  const attemptId = randomUUID();
+  const inputHash = createHash("sha256").update(prompt).digest("hex");
+  const dispatched = await request({
+    action: "dispatch",
+    poemId: claim.poemId,
+    token,
+    expectedVersion: claim.version,
+    attemptId,
+    inputHash,
+    model,
+  });
+  const output = await runCodex(prompt, attemptId);
+  const acknowledged = await request({
+    action: "acknowledge",
+    poemId: claim.poemId,
+    attemptId,
+    expectedVersion: dispatched.state.version,
+    output,
+  });
+  await publish(acknowledged.state);
+  await unlink(outputPath(attemptId));
+}
 
 function outputPath(attemptId) {
   return join(tmpdir(), `saqi-rig-${attemptId}.json`);
@@ -62,7 +144,8 @@ async function readOutput(attemptId) {
   const path = outputPath(attemptId);
   let size;
   try {
-    size = (await stat(path)).size;
+    const file = await stat(path);
+    size = file.size;
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -182,89 +265,9 @@ async function runCodex(prompt, attemptId) {
   return output;
 }
 
-async function main() {
-  if (process.argv[2] === "retry-unknown") {
-    const [poemId, attemptId] = process.argv.slice(3);
-    if (!poemId || !attemptId || process.argv.length !== 5)
-      throw new Error("Usage: rig-lite.mjs retry-unknown POEM_ID ATTEMPT_ID");
-    const state = await current();
-    const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
-    if (
-      state?.poemId !== poemId ||
-      state.status !== "unknown" ||
-      checkpoint.invocation?.attemptId !== attemptId
-    )
-      throw new Error("The current unknown attempt does not match");
-    if (await readOutput(attemptId))
-      throw new Error(
-        "A recoverable Codex result exists; run the rig normally",
-      );
-    await request({
-      action: "retry-unknown",
-      poemId,
-      attemptId,
-      expectedVersion: state.version,
-    });
-    process.stdout.write(`Manual retry authorized for ${poemId}\n`);
-    return;
-  }
-  if (process.argv.length > 2)
-    throw new Error("Usage: rig-lite.mjs [retry-unknown POEM_ID ATTEMPT_ID]");
-  if (process.env.SAQI_RIG_ACTIVE !== "1")
-    throw new Error(
-      "Rig inactive: complete publication parity and set SAQI_RIG_ACTIVE=1",
-    );
-  await request({ action: "purge-cache" });
-  const active = await current();
-  if (active?.status === "dispatching" || active?.status === "unknown") {
-    await recover(active);
-    return;
-  }
-  if (active?.status === "claimed") {
-    const checkpoint = JSON.parse(active.checkpointJson ?? "{}");
-    if (checkpoint.outputs?.generation) {
-      await publish(active);
-      return;
-    }
-  }
-  const token = randomUUID();
-  const claim = (await request({ action: "claim-poem", token })).state;
-  if (!claim) {
-    process.stdout.write("No poem ready; a prior claim may still be live.\n");
-    return;
-  }
-  const source = (
-    await request({
-      action: "source",
-      poemId: claim.poemId,
-      token,
-    })
-  ).poem;
-  const prompt = promptFor(source);
-  const attemptId = randomUUID();
-  const inputHash = createHash("sha256").update(prompt).digest("hex");
-  const dispatched = await request({
-    action: "dispatch",
-    poemId: claim.poemId,
-    token,
-    expectedVersion: claim.version,
-    attemptId,
-    inputHash,
-    model,
-  });
-  const output = await runCodex(prompt, attemptId);
-  const acknowledged = await request({
-    action: "acknowledge",
-    poemId: claim.poemId,
-    attemptId,
-    expectedVersion: dispatched.state.version,
-    output,
-  });
-  await publish(acknowledged.state);
-  await unlink(outputPath(attemptId));
-}
-
-main().catch((error) => {
+try {
+  await main();
+} catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : error}\n`);
   process.exitCode = 1;
-});
+}
