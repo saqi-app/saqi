@@ -67,6 +67,7 @@ describe("contract registry", () => {
       "operations.enrichment-publications-v2",
       "operations.publication-projection",
       "operations.rig-state",
+      "operations.rig-source",
     ]);
     expect(generateContractCatalog().queues).toEqual([]);
   });

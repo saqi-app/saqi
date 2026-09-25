@@ -556,6 +556,23 @@ export const HTTP_CONTRACTS = [
     service: "operations",
     summary: "Claim, recover, and publish one canonical poem",
   },
+  {
+    audience: "authenticated",
+    body: z.looseObject({ action: z.string().min(1) }),
+    id: "operations.rig-source",
+    method: "POST",
+    params: EmptyHttpPartSchema,
+    path: "/api/rig/source",
+    query: EmptyHttpPartSchema,
+    responses: [200, 400, 403, 409, 415, 503].map((status) => ({
+      body: z.unknown(),
+      contentType: "application/json",
+      status,
+    })),
+    service: "operations",
+    summary:
+      "Upsert current source authors and poems directly into canonical rows",
+  },
 ] as const satisfies readonly HttpContract[];
 
 export const CLOUDFLARE_WORKER_CONTRACTS = [
