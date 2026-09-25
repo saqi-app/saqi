@@ -39,35 +39,8 @@ export interface InvocationIntent {
   readonly startedAt: number;
 }
 
-export interface RigQueuePort {
-  claimNextPoem(token: string, now: number): Promise<null | RigStateRow>;
-  currentEnrichment(): Promise<null | RigStateRow>;
-  read(poemId: string): Promise<null | RigStateRow>;
-}
-
-export interface RigInvocationPort {
-  acknowledgeInvocation(
-    poemId: string,
-    attemptId: string,
-    expectedVersion: number,
-    output: unknown
-  ): Promise<boolean>;
-  beginInvocation(
-    poemId: string,
-    token: string,
-    expectedVersion: number,
-    intent: InvocationIntent
-  ): Promise<boolean>;
-  markExpiredUnknown(poemId: string, now: number): Promise<boolean>;
-  retryUnknown(
-    poemId: string,
-    attemptId: string,
-    expectedVersion: number
-  ): Promise<boolean>;
-}
-
 /** Pending work is derived from canonical poems; only in-flight state persists. */
-export class RigStateRepository implements RigQueuePort, RigInvocationPort {
+export class RigStateRepository {
   readonly #database: D1Database;
 
   constructor(database: D1Database) {
