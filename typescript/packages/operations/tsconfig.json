@@ -1,11 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "ES2024"
-    ],
+    "lib": ["dom", "dom.iterable", "ES2024"],
     "noEmit": true,
     "jsx": "preserve",
     "incremental": true,
@@ -14,24 +10,23 @@
         "name": "next"
       }
     ],
+    "types": ["@cloudflare/workers-types"],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "../site/src/lib/catalog.ts",
+    "../site/src/lib/catalog-database.ts",
+    "../site/src/lib/poem-translations.ts",
+    "../site/src/lib/publication-snapshot.ts",
+    "../site/src/lib/snapshot-contract.ts",
     ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "scripts",
-    "migrations",
-    "test"
-  ],
+  "exclude": ["node_modules", "scripts", "migrations", "test"],
   "references": [
     {
       "path": "../precedent-iso"

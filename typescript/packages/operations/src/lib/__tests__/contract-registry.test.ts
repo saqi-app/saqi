@@ -65,6 +65,7 @@ describe("contract registry", () => {
       "operations.corpus-resolution",
       "operations.source-admissions-v2",
       "operations.enrichment-publications-v2",
+      "operations.publication-projection",
       "operations.rig-state",
     ]);
     expect(generateContractCatalog().queues).toEqual([]);

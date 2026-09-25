@@ -16,6 +16,7 @@ import {
   type CatalogDatabase,
   CatalogRepository,
 } from "../src/lib/catalog";
+import { publicationSnapshotFromPoem } from "../src/lib/publication-snapshot";
 
 class TestStatement {
   readonly #database: Database.Database;
@@ -122,6 +123,57 @@ void test("a projected track cannot hide an existing published translation", asy
       fallbackSummary?.poems[0]?.translationModels.map(({ key }) => key),
       ["legacy"],
     );
+  } finally {
+    sqlite.close();
+  }
+});
+
+void test("one poem publication snapshot preserves every visible translation choice", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author(id, slug, name_arabic, name, hidden)
+      VALUES ('a-tracks', 'tracks-poet', 'شاعر', 'Poet', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
+        content_arabic, translation, translation_gemini, hidden)
+      VALUES ('p-tracks', 'a-tracks', 'tracks', 1, 'قصيدة',
+        '{"content":["بيت"]}', '{"content":["Legacy English"]}',
+        '{"content":["Gemini English"]}', 0);
+    `);
+    const reader = catalogRepository(sqlite);
+    const oldDetail = await reader.getPoemPage("tracks-poet", "p-tracks");
+    const oldSummary = await reader.getAuthorPage("tracks-poet");
+    assert.ok(oldDetail);
+    assert.deepEqual(
+      oldSummary?.poems[0]?.translationModels.map(({ key }) => key),
+      ["legacy", "gemini"],
+    );
+    const shadow = publicationSnapshotFromPoem(oldDetail.poem);
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-tracks'")
+      .run(JSON.stringify(shadow));
+    assert.deepEqual(
+      await reader.getPoemPage("tracks-poet", "p-tracks"),
+      oldDetail,
+    );
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-tracks'")
+      .run(JSON.stringify({ ...shadow, active: true }));
+    assert.deepEqual(
+      await reader.getPoemPage("tracks-poet", "p-tracks"),
+      oldDetail,
+    );
+    sqlite.exec(`
+      UPDATE poem SET translation = NULL, translation_gemini = NULL
+      WHERE id = 'p-tracks';
+    `);
+    assert.deepEqual(
+      await reader.getPoemPage("tracks-poet", "p-tracks"),
+      oldDetail,
+    );
+    const updatedSummary = await reader.getAuthorPage("tracks-poet");
+    assert.ok(updatedSummary);
+    assert.deepEqual(updatedSummary.poems[0], oldSummary.poems[0]);
   } finally {
     sqlite.close();
   }
@@ -474,6 +526,24 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
       "p-valid",
     );
     assert.ok(exactlyReviewedSolPage);
+    const beforeModelSummary = await database.getAuthorPage("good-poet");
+    const modelSnapshot = publicationSnapshotFromPoem(
+      exactlyReviewedSolPage.poem,
+      true,
+    );
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-valid'")
+      .run(JSON.stringify(modelSnapshot));
+    assert.deepEqual(
+      await database.getPoemPage("good-poet", "p-valid"),
+      exactlyReviewedSolPage,
+    );
+    const updatedModelSummary = await database.getAuthorPage("good-poet");
+    assert.deepEqual(
+      updatedModelSummary?.poems[0],
+      beforeModelSummary?.poems[0],
+    );
+    sqlite.exec("UPDATE poem SET publication_json = NULL WHERE id = 'p-valid'");
     assert.deepEqual(
       await availableModels(),
       [{ key: "sol-5.6", model: "Sol 5.6", provider: "openai" }],
