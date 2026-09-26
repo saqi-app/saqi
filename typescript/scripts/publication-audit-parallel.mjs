@@ -24,17 +24,11 @@ const script = fileURLToPath(
 const children = [];
 try {
   // Four simultaneous catalog comparisons exceeded the live Worker's stable
-  // read capacity. Keep the four bounded ranges but run at most two at once.
+  // read capacity. Keep bounded ranges for resumability, but read one at a time.
   const summaries = [];
-  for (let index = 0; index < ranges.length; index += 2) {
-    // eslint-disable-next-line no-await-in-loop -- The next pair starts only after the previous pair has passed.
-    summaries.push(
-      ...(await Promise.all(
-        ranges
-          .slice(index, index + 2)
-          .map((range, offset) => auditLane(range, index + offset)),
-      )),
-    );
+  for (let index = 0; index < ranges.length; index += 1) {
+    // eslint-disable-next-line no-await-in-loop -- Limit audit demand on the live Worker.
+    summaries.push(await auditLane(ranges[index], index));
   }
   const totals = summaries.reduce(
     (sum, item) => ({
