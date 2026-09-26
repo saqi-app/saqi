@@ -1,6 +1,6 @@
 import { z, type ZodType } from "zod";
 
-import { PublicationIdentitySchema } from "./corpus-import.js";
+import { PublicationIdentitySchema } from "./production-identity.js";
 import { ResourceIdSchema } from "./resource-id-schema.js";
 
 const EmptyHttpPartSchema = z.strictObject({});
