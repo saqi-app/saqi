@@ -29,6 +29,10 @@ on:
         description: Optional cursor for resuming a read-only inventory or audit after a verified batch
         required: false
         type: string
+      stop_after_id:
+        description: Optional upper cursor when resuming one bounded audit lane
+        required: false
+        type: string
       batch_limit:
         description: Poems per Worker request (1-10; use 1 to isolate a bad row)
         required: true
@@ -81,12 +85,20 @@ jobs:
           APPLY: ${{ inputs.apply }}
           SAQI_D1_RESTORE_BOOKMARK: ${{ inputs.restore_bookmark }}
           SAQI_PROJECTION_AFTER_ID: ${{ inputs.after_id }}
+          SAQI_PROJECTION_STOP_AFTER_ID: ${{ inputs.stop_after_id }}
           SAQI_PROJECTION_BATCH_LIMIT: ${{ inputs.batch_limit }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
         run: |
           case "$OPERATION" in
-            audit) test "$APPLY" = 'false'; node typescript/scripts/publication-projection.mjs --audit ;;
+            audit)
+              test "$APPLY" = 'false'
+              if test -n "$SAQI_PROJECTION_AFTER_ID" || test -n "$SAQI_PROJECTION_STOP_AFTER_ID"; then
+                node typescript/scripts/publication-projection.mjs --audit
+              else
+                node typescript/scripts/publication-audit-parallel.mjs
+              fi
+              ;;
             verify-empty) test "$APPLY" = 'false'; node typescript/scripts/publication-projection.mjs --expect-empty ;;
             backfill)
               if test "$APPLY" = 'true'; then
