@@ -936,6 +936,24 @@ const BASE_POEM_COLUMNS = `p.id,
 const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
   p.legacy_translation_attributions AS legacyTranslationAttributions`;
 
+// Once the audited projection is selected, public reads must be independent
+// of the model/source history graph so those tables can be contracted.
+const PROJECTED_POEM_COLUMNS = `p.id,
+  NULL AS activeSourceRevisionId,
+  0 AS hasActivePointer,
+  p.slug,
+  p.author_id AS authorId,
+  p.verses,
+  p.name_arabic AS nameArabic,
+  NULLIF(trim(p.name_english), '') AS nameEnglish,
+  NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy,
+  p.content_arabic AS contentArabic,
+  NULL AS translation,
+  NULL AS translationGemini,
+  NULL AS insights,
+  p.publication_json AS publicationJson,
+  NULL AS legacyTranslationAttributions`;
+
 const BASE_POEM_SUMMARY_COLUMNS = `p.id,
   p.slug,
   p.author_id AS authorId,
@@ -986,6 +1004,16 @@ const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
     WHEN ${validInsightsSql("p.insights")} = 1
       OR (${VALIDATED_MODEL_PUBLICATION})
       THEN 1 ELSE 0 END AS hasInsights`;
+
+const PROJECTED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
+  p.publication_json AS publicationJson,
+  0 AS hasLegacyTranslation,
+  0 AS hasGeminiTranslation,
+  NULL AS legacyModel,
+  NULL AS geminiModel,
+  0 AS hasCurrentPublication,
+  '[]' AS translationModels,
+  0 AS hasInsights`;
 
 async function sha256Utf8Exact(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -1087,7 +1115,11 @@ export class CatalogRepository implements CatalogReader {
         .bind(slug, AUTHOR_PAGE_SIZE, offset);
       return this.#database.batch([authorStatement, poemsStatement]);
     };
-    const pageResults = await loadPage(NORMALIZED_POEM_SUMMARY_COLUMNS);
+    const pageResults = await loadPage(
+      this.#allowInactiveProjection
+        ? PROJECTED_POEM_SUMMARY_COLUMNS
+        : NORMALIZED_POEM_SUMMARY_COLUMNS,
+    );
     const authorRow = pageResults.at(0)?.results.at(0);
     if (!authorRow) return undefined;
     const parsedAuthor = AuthorPageRowSchema.parse(authorRow);
@@ -1144,7 +1176,11 @@ export class CatalogRepository implements CatalogReader {
         )
         .bind(authorSlug, poemId)
         .all();
-    const result = await loadPoem(NORMALIZED_POEM_COLUMNS);
+    const result = await loadPoem(
+      this.#allowInactiveProjection
+        ? PROJECTED_POEM_COLUMNS
+        : NORMALIZED_POEM_COLUMNS,
+    );
     const row = result.results[0];
     if (!row) return undefined;
     const parsedRow = PoemRowSchema.safeParse(row);
@@ -1153,15 +1189,16 @@ export class CatalogRepository implements CatalogReader {
       parsedRow.data.publicationJson,
       this.#allowInactiveProjection,
     );
-    const [dynamicModelEnrichments, legacyAttribution] = activeSnapshot
-      ? ([[], undefined] as const)
-      : await Promise.all([
-          this.#loadRegistryModelEnrichments(poemId),
-          this.#loadLegacyModelAttribution(
-            parsedRow.data.translation,
-            parsedRow.data.legacyTranslationAttributions,
-          ),
-        ]);
+    const [dynamicModelEnrichments, legacyAttribution] =
+      activeSnapshot || this.#allowInactiveProjection
+        ? ([[], undefined] as const)
+        : await Promise.all([
+            this.#loadRegistryModelEnrichments(poemId),
+            this.#loadLegacyModelAttribution(
+              parsedRow.data.translation,
+              parsedRow.data.legacyTranslationAttributions,
+            ),
+          ]);
     const poem = poemFromRow(
       row,
       dynamicModelEnrichments,
