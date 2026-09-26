@@ -8,11 +8,14 @@ All local files and the disposable D1 are removed.
 
 import argparse
 import contextlib
+import gzip
 import importlib.util
 import json
+import itertools
 import pathlib
 import re
 import sqlite3
+import shutil
 import subprocess
 import tempfile
 import time
@@ -230,16 +233,6 @@ TABLES_SQL = (
 )
 
 
-def archived_tables(source: sqlite3.Connection, database_id: str) -> list[str]:
-    tables = [row[0] for row in source.execute(TABLES_SQL)]
-    if any(re.fullmatch(r"[a-z][a-z0-9_]*", table) is None for table in tables):
-        raise RuntimeError("Archive contains an unexpected table identifier")
-    remote = d1_query(database_id, TABLES_SQL)
-    if [row["name"] for row in remote] != tables:
-        raise RuntimeError("Disposable D1 table inventory differs from archive")
-    return tables
-
-
 def table_layout(source: sqlite3.Connection, table: str) -> TableLayout:
     info = source.execute(f"PRAGMA table_info({table})").fetchall()
     columns = [row[1] for row in info]
@@ -249,70 +242,53 @@ def table_layout(source: sqlite3.Connection, table: str) -> TableLayout:
     return TableLayout(columns, primary_key)
 
 
-def assert_page_equal(
-    table: str, columns: list[str], primary_key: list[str],
-    remote: list[dict], originals: list[sqlite3.Row]
-) -> None:
-    for row, original in zip(remote, originals, strict=True):
-        if any(row.get(column) != original[column] for column in columns):
-            key = {column: original[column] for column in primary_key}
-            raise RuntimeError(f"Disposable D1 differs from archive in {table} row {key}")
+def compare_copies(expected: pathlib.Path, actual: pathlib.Path) -> dict[str, int]:
+    schema_sql = (
+        "SELECT type,name,tbl_name,sql FROM sqlite_master "
+        "WHERE name NOT LIKE 'sqlite_%' AND name != '_cf_KV' ORDER BY type,name"
+    )
+    with contextlib.closing(sqlite3.connect(f"file:{expected}?mode=ro", uri=True)) as source, \
+         contextlib.closing(sqlite3.connect(f"file:{actual}?mode=ro", uri=True)) as target:
+        if source.execute(schema_sql).fetchall() != target.execute(schema_sql).fetchall():
+            raise RuntimeError("Disposable D1 schema differs from archive")
+        if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise RuntimeError("Disposable D1 export failed integrity check")
+        if target.execute("PRAGMA foreign_key_check").fetchall():
+            raise RuntimeError("Disposable D1 export has foreign-key errors")
+        counts = {}
+        for (table,) in source.execute(TABLES_SQL):
+            if re.fullmatch(r"[a-z][a-z0-9_]*", table) is None:
+                raise RuntimeError("Unexpected table identifier")
+            layout = table_layout(source, table)
+            columns = layout.columns
+            names = ",".join(f'"{column}"' for column in columns)
+            order = ",".join(f'"{column}"' for column in (layout.primary_key or columns))
+            query = f'SELECT {names} FROM "{table}" ORDER BY {order}'
+            count = 0
+            for original, restored in itertools.zip_longest(source.execute(query), target.execute(query)):
+                if original != restored:
+                    raise RuntimeError(f"Disposable D1 differs from archive in {table}")
+                count += 1
+            counts[table] = count
+            print(json.dumps({"table": table, "rows_checked": count}), flush=True)
+        return counts
 
 
-def verified_table_count(source: sqlite3.Connection, database_id: str, table: str) -> int:
-    expected = source.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
-    remote_count = d1_query(database_id, f'SELECT count(*) AS rows FROM "{table}"')
-    if remote_count != [{"rows": expected}]:
-        raise RuntimeError(f"Disposable D1 {table} count mismatch")
-    return expected
-
-
-def compare_table(source: sqlite3.Connection, database_id: str, table: str) -> int:
-    expected = verified_table_count(source, database_id, table)
-    layout = table_layout(source, table)
-    columns, primary_key = layout.columns, layout.primary_key
-    if not primary_key:
-        if expected:
-            raise RuntimeError(f"Cannot compare {table} without a primary key")
-        return 0
-    projection = ",".join(f'"{column}"' for column in columns)
-    order = ",".join(f'"{column}"' for column in primary_key)
-    question_marks = ",".join("?" for _ in primary_key)
-    source_rows = source.execute(f'SELECT {projection} FROM "{table}" ORDER BY {order}')
-    cursor: list[str] | None = None
-    checked = 0
-    while True:
-        where = f"WHERE ({order}) > ({question_marks}) " if cursor is not None else ""
-        rows = d1_query(
-            database_id,
-            f'SELECT {projection} FROM "{table}" {where}ORDER BY {order} LIMIT 25',
-            cursor,
-        )
-        if not rows:
-            break
-        assert_page_equal(table, columns, primary_key, rows, source_rows.fetchmany(len(rows)))
-        checked += len(rows)
-        if any(rows[-1][column] is None for column in primary_key):
-            raise RuntimeError(f"Null primary key in {table}")
-        cursor = [str(rows[-1][column]) for column in primary_key]
-        if checked % 1000 < len(rows):
-            print(json.dumps({"table": table, "rows_checked": checked}), flush=True)
-    if checked != expected:
-        raise RuntimeError(f"Disposable D1 {table} count mismatch: {checked} != {expected}")
-    return checked
-
-
-def compare_rows(restored: pathlib.Path, database_id: str) -> dict[str, int]:
-    with contextlib.closing(sqlite3.connect(f"file:{restored}?mode=ro", uri=True)) as source:
-        source.row_factory = sqlite3.Row
-        counts = {
-            table: compare_table(source, database_id, table)
-            for table in archived_tables(source, database_id)
-        }
-    fk = d1_query(database_id, "SELECT count(*) AS errors FROM pragma_foreign_key_check")
-    if fk != [{"errors": 0}]:
-        raise RuntimeError("Disposable D1 has foreign-key errors")
-    return counts
+def compare_export(restored: pathlib.Path, name: str) -> dict[str, int]:
+    if re.fullmatch(r"saqi-restore-rehearsal-[0-9a-f]{12}", name) is None:
+        raise RuntimeError("Refusing to export a non-disposable database")
+    with tempfile.TemporaryDirectory(prefix="saqi-d1-export-parity-") as temporary:
+        directory = pathlib.Path(temporary)
+        sql = directory / "restored.sql"
+        # Capture Wrangler output: an export can print a signed download URL.
+        wrangler("d1", "export", name, "--remote", "--output", str(sql))
+        compressed = directory / "restored.sql.gz"
+        with sql.open("rb") as source, gzip.open(compressed, "wb", compresslevel=1) as target:
+            shutil.copyfileobj(source, target)
+        sql.unlink()
+        actual = directory / "restored.sqlite3"
+        RESTORE.restore([compressed], actual)
+        return compare_copies(restored, actual)
 
 
 def main() -> None:
@@ -361,7 +337,7 @@ def main() -> None:
                     wrangler("d1", "execute", name, "--remote", "--file", str(step), "--yes")
                 else:
                     d1_query(database_id, step.sql, step.params, retry=False)
-            counts = compare_rows(restored, database_id)
+            counts = compare_export(restored, name)
             print(json.dumps({"disposable_d1": name, "counts": counts, "d1_import_rehearsal": "passed"}), flush=True)
     finally:
         if created:

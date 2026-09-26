@@ -160,17 +160,38 @@ class D1ImportRehearsalTest(unittest.TestCase):
                 with sqlite3.connect(target) as copy:
                     source.backup(copy)
 
-            def query(_database_id, sql, params=None):
-                with sqlite3.connect(target) as connection:
-                    connection.row_factory = sqlite3.Row
-                    return [dict(row) for row in connection.execute(sql, params or [])]
+            self.assertEqual(MODULE.compare_copies(original, target), {"author": 1, "poem": 1})
+            with sqlite3.connect(target) as connection:
+                connection.execute("UPDATE poem SET publication_json = 'Changed'")
+            with self.assertRaisesRegex(RuntimeError, "differs from archive"):
+                MODULE.compare_copies(original, target)
 
-            with patch.object(MODULE, "d1_query", side_effect=query):
-                self.assertEqual(MODULE.compare_rows(original, "disposable"), {"author": 1, "poem": 1})
-                with sqlite3.connect(target) as connection:
-                    connection.execute("UPDATE poem SET publication_json = 'Changed'")
-                with self.assertRaisesRegex(RuntimeError, "differs from archive"):
-                    MODULE.compare_rows(original, "disposable")
+    def test_bulk_parity_rejects_missing_trigger_and_extra_row(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            original = directory / "original.sqlite3"
+            target = directory / "target.sqlite3"
+            with sqlite3.connect(original) as source:
+                source.executescript("""
+                    CREATE TABLE poem(id TEXT PRIMARY KEY);
+                    CREATE TRIGGER immutable BEFORE UPDATE ON poem BEGIN SELECT RAISE(ABORT, 'immutable'); END;
+                    INSERT INTO poem VALUES ('a');
+                """)
+                with sqlite3.connect(target) as copy:
+                    source.backup(copy)
+            with sqlite3.connect(target) as copy:
+                copy.execute("INSERT INTO poem VALUES ('b')")
+            with self.assertRaisesRegex(RuntimeError, "differs from archive in poem"):
+                MODULE.compare_copies(original, target)
+            with sqlite3.connect(target) as copy:
+                copy.execute("DELETE FROM poem WHERE id='b'")
+                copy.execute("DROP TRIGGER immutable")
+            with self.assertRaisesRegex(RuntimeError, "schema differs"):
+                MODULE.compare_copies(original, target)
+
+    def test_bulk_export_refuses_production_name(self):
+        with self.assertRaisesRegex(RuntimeError, "non-disposable"):
+            MODULE.compare_export(pathlib.Path("unused"), "saqi-db")
 
 
 if __name__ == "__main__":
