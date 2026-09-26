@@ -6,3 +6,4 @@ export * from "./resource-id-schema.js";
 export * from "./sitemap.js";
 export * from "./source-configuration.js";
 export * from "./translation-models.js";
+export * from "./word-glosses.js";

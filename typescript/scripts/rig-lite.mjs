@@ -5,6 +5,8 @@ import { readFile, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
+
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
 const model = process.env.SAQI_RIG_MODEL ?? "gpt-5.6-sol";
@@ -208,9 +210,11 @@ function promptFor(poem) {
     "Output one English line for each Arabic line, in exactly the same order.",
     "Keep names and imagery faithful. Do not invent historical facts or cite sources you did not read.",
     "Every insight field and array must be nonempty. notableLines must quote actual Arabic lines.",
+    "For wordMeanings, return one array per Arabic line, with one concise English meaning per listed token in exactly the given order. Preserve attached conjunctions/pronouns in the meaning. Empty token lists require an empty array. Do not merge, skip, or add words.",
     "Return only the JSON object required by the supplied schema.",
     `Author: ${poem.authorName}`,
     `Title: ${poem.titleArabic}`,
+    `Tokens by line: ${JSON.stringify(poem.linesArabic.map(arabicWords))}`,
     "Arabic lines:",
     ...poem.linesArabic.map((line, index) => `${index + 1}. ${line}`),
   ].join("\n");

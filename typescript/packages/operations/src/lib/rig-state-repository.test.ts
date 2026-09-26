@@ -157,6 +157,7 @@ test("a lost dispatch response cannot cause a second Codex invocation", async ()
   await expect(
     repository.acknowledgeInvocation("poem-1", attempt, unknown!.version, {
       translation: { lines: ["translated"] },
+      wordMeanings: [["verse"]],
       insights: {
         summary: "A reading",
         themes: ["Memory"],
@@ -191,7 +192,18 @@ test("a lost dispatch response cannot cause a second Codex invocation", async ()
     active: true,
     fields: {
       modelEnrichments: [
-        { lines: ["translated"], model: "Codex Sol", vendorKey: "openai" },
+        {
+          lines: ["translated"],
+          model: "Codex Sol",
+          vendorKey: "openai",
+          wordGlosses: {
+            lines: [
+              {
+                segments: [{ kind: "word", surface: "بيت", meaning: "verse" }],
+              },
+            ],
+          },
+        },
       ],
       insightsTrack: "model",
       insightsModel: "Codex Sol",
@@ -293,6 +305,7 @@ test("a changed Arabic source cannot receive an earlier Codex result", async () 
         outputs: {
           generation: {
             translation: { lines: ["translated"] },
+            wordMeanings: [["verse"]],
             insights: {
               summary: "A reading",
               themes: ["Memory"],

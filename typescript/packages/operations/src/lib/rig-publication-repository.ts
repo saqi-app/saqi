@@ -1,4 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import { wordGlossesFromMeanings } from "@saqi/precedent-iso";
 import { z } from "zod";
 
 import { PublicationSnapshotSchema } from "../../../site/src/lib/publication-snapshot";
@@ -43,6 +44,10 @@ const OutputSchema = z.strictObject({
     lines: z.array(TranslatedLineSchema).min(1).max(2_000),
   }),
   insights: InsightsSchema,
+  wordMeanings: z
+    .array(z.array(InsightTextSchema.max(2_000)).max(5_000))
+    .min(1)
+    .max(2_000),
 });
 const SourceSchema = z.object({
   poemId: z.string(),
@@ -182,6 +187,10 @@ export class RigPublicationRepository {
           modelEnrichments: [
             {
               lines: output.translation.lines,
+              wordGlosses: wordGlossesFromMeanings(
+                arabic.content,
+                output.wordMeanings
+              ),
               model: checkpoint.model,
               modelKey: "current",
               reasoningEffort: "unknown",

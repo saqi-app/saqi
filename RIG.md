@@ -50,3 +50,5 @@ That manual retry can duplicate one Codex call if the previous invocation comple
 Only the browser profile, Keychain credential, and one temporary JSON result per unfinished Codex invocation are needed. Published result files are deleted. Losing the temporary result after an unacknowledged completion loses that intermediate result, but D1 retains the unknown invocation and blocks automatic replay. A new computer can resume all acknowledged work from D1.
 
 Production migrations, backups, exact parity evidence, and rollback steps are recorded in [the schema reduction plan](planning/schema-reduction.md). Public translations and poem insights are part of the preserved publication; retired dashboard analytics are separate.
+
+Each translation invocation now generates the full English translation, poem insights, and an English meaning for every Arabic word. The server reconstructs gloss segments from the original Arabic and rejects missing/extra meanings; Codex cannot change the Arabic spelling or punctuation. All three outputs publish atomically in `poem.publication_json`. Build shared contracts with `yarn build:api` before running the local command.
