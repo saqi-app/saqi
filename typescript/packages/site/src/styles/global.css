@@ -583,38 +583,6 @@ h1:lang(ar) {
   display: inline-flex;
 }
 
-.word-meanings {
-  max-inline-size: 52rem;
-  margin: 1rem auto 0;
-  color: var(--muted);
-  font: 500 0.875rem/1.5 var(--font-ui);
-}
-
-.word-meanings summary {
-  min-block-size: 2.75rem;
-  cursor: pointer;
-}
-
-.word-meanings h2 {
-  font-size: 0.8rem;
-}
-
-.word-meanings dl {
-  display: grid;
-  grid-template-columns: minmax(5rem, auto) 1fr;
-  gap: 0.35rem 1rem;
-}
-
-.word-meanings dt {
-  color: var(--ink);
-  font-family: var(--font-arabic);
-  text-align: right;
-}
-
-.word-meanings dd {
-  margin: 0;
-}
-
 .translation {
   inline-size: min(100%, 44ch);
   max-inline-size: 44ch;

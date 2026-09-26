@@ -145,7 +145,43 @@ export class RigPublicationRepository {
     return { ...source, linesArabic: arabic.content };
   }
 
-  async publish(poemId: string, expectedVersion: number): Promise<boolean> {
+  async publish(
+    poemId: string,
+    expectedVersion: number
+  ): Promise<"blocked" | boolean> {
+    try {
+      return await this.#publish(poemId, expectedVersion);
+    } catch (error) {
+      const invalid =
+        error instanceof z.ZodError ||
+        (error instanceof Error &&
+          /^(GLOSS_|TRANSLATION_LINE_COUNT_MISMATCH$|TRANSLATION_HAS_BLANK_LINE$|INSIGHT_LINE_NOT_IN_SOURCE$)/u.test(
+            error.message
+          ));
+      if (!invalid) throw error;
+      // A known, acknowledged invalid result must not block unrelated poems.
+      // Keep its checkpoint for review; never automatically invoke Codex again.
+      const blocked = await this.#database
+        .prepare(
+          `UPDATE poem
+        SET rig_status = 'blocked', rig_version = rig_version + 1,
+            rig_lease_token = NULL, rig_lease_expires_at = NULL,
+            rig_updated_at = unixepoch()
+        WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
+          AND rig_checkpoint_json IS NOT NULL`
+        )
+        .bind(poemId, expectedVersion)
+        .run();
+      if (blocked.meta.changes !== 1) return false;
+      console.warn("[ops] Publication retained for review", {
+        poemId,
+        code: error instanceof Error ? error.message : "INVALID_OUTPUT",
+      });
+      return "blocked";
+    }
+  }
+
+  async #publish(poemId: string, expectedVersion: number): Promise<boolean> {
     const raw = await this.#database
       .prepare(
         `SELECT rig_status AS status, rig_checkpoint_json AS checkpointJson,

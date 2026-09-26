@@ -40,6 +40,25 @@ export default [
     ...tseslint.configs.disableTypeChecked,
   },
   {
+    files: ["chrome/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        AbortController: "readonly",
+        URL: "readonly",
+        chrome: "readonly",
+        importScripts: "readonly",
+        projectSaqiPage: "readonly",
+        document: "readonly",
+        location: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     rules: {
       "@sarj/prefer-module-level-schema": ["error", { minProperties: 1 }],

@@ -211,6 +211,7 @@ async function handlePublicationAction(
     input.poemId,
     input.expectedVersion
   );
+  if (changed === "blocked") return failure(422, "RIG_PUBLICATION_BLOCKED");
   if (!changed) return failure(409, "RIG_PUBLICATION_CHANGED");
   let cachePurged = false;
   try {

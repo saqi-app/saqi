@@ -1,54 +1,69 @@
 # Saqi rig
 
-The Operations API is a plain Cloudflare Worker with three endpoints; it has no Next.js server, React dashboard, or static asset build.
+Production D1 is the only queue: two application tables, author and poem. There is no local SQLite, scheduler database, event ledger, or model registry. Current translations, poem insights and word meanings publish atomically on the poem row.
 
-The rig has no local database, queue, event log, scheduler, or model registry. The Operations Worker derives the next task from production `author` and `poem` rows. Source keys prevent duplicate imports; source hashes and compare-and-swap writes reject stale updates.
+## Background translation
 
-## Run one task
-
-From `typescript`, after installing dependencies and running `yarn build:api`:
+From `typescript`, install dependencies and run `yarn build:api` and `yarn workspace @saqi/source-collector build`. From the repository root:
 
 ```sh
-SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs collect next-author
-SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs translate
+python3 typescript/scripts/rig-background.py install
+python3 typescript/scripts/rig-background.py status
+python3 typescript/scripts/rig-background.py stop
 ```
 
-Collection visits one author's manifest, upserts each poem, then advances that author's collection timestamp. Translation claims one eligible poem, calls Codex once, saves the validated result to D1, and publishes it. Each command exits after its task. Stopping the process pauses work; no service is installed automatically.
+launchd runs one translation task every 30 seconds, never overlapping itself. Long tasks finish before another starts. The job resumes at login; the Mac must be awake and signed in. Stop removes its login entry and terminates the current task. Do not run manual copies alongside it. One-off command: `SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs translate [POEM_ID]`.
 
-This Mac's wrapper loads the existing Cloudflare Access credential from Keychain. Other computers can supply `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` through their secret manager. Never put credentials in the repository or command arguments.
+Credentials remain in this Mac's Keychain under account `saqi-publication-access-v2`. Other machines can provide `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` through their secret manager. Never put credentials in arguments or Git. The only translation output file is one temporary JSON result per unfinished invocation; it is deleted after publication.
 
-To collect a particular author or translate a particular canonical poem:
+## Collection in personal Chrome
+
+The separate automation profile can remain blocked by Cloudflare. Use the site-scoped extension in the normal signed-in Chrome profile instead:
 
 ```sh
-SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs collect author AUTHOR_URL ARABIC_NAME
-SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs translate POEM_ID
+python3 typescript/chrome/saqi-collector/install.py
 ```
 
-Complete source verification in the collector's visible Chrome window when requested. It waits up to 15 minutes. Source requests are serial, spaced by at least 13 seconds; a source rate-limit deadline persists in D1 and survives process restarts.
+This installs the native bridge and retires the separate-profile launchd collector. In `chrome://extensions`, enable Developer mode and Load unpacked: `typescript/chrome/saqi-collector` from this repository. This installation grants source-page access and must be explicitly approved by the browser owner. The extension can read only `https://www.aldiwan.net/*`, manage its dedicated collector tab, and talk to its native bridge. No cookies are copied and no credentials are stored in Chrome.
 
-## Use your regular Chrome session
+Once enabled, it checks for the next D1 author every minute and visits poems serially, at least 13 seconds apart. Clicking its toolbar icon starts a check immediately. Disable the extension to stop collection. Closing personal Chrome stops collection; reopening it resumes. Incomplete manifests, challenges and identity conflicts are surfaced explicitly; source keys and pre-fetch hashes prevent duplicate admission and stale updates. A full author is marked collected only after all listed poems are handled.
 
-For collection assisted by this coding agent, use the connected regular Chrome browser. On this Mac it loaded the source author and poem immediately where the separate automation profile remained challenged. Read the visible complete author manifest and poem text, validate them with `parseAuthorPoemManifest` and `parsePoemDetail`, then use the existing `/api/rig/source` endpoint with source keys and expected hashes. Respect the persisted source cooldown and serial pacing; mark the author collected only after the complete manifest succeeds. Temporary page projections can be deleted after D1 accepts them.
+Collection cycles through source-linked authors already admitted to D1 and updates their metadata and poems. It does not discover the entire author directory. The one-shot manual fallback remains `SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs collect author AUTHOR_URL ARABIC_NAME`; it uses a separate browser profile and may require human verification.
 
-This path needs no dedicated browser profile or cookie copy. The standalone `collect` CLI still launches its own separate Chrome profile; it does not attach to an already-running personal Chrome session. Prefer the agent-assisted regular-browser path when the standalone collector repeatedly encounters source verification. Translation remains the same one-shot CLI command.
-
-## Restart after a crash
-
-Run the same translation command again. A durable invocation marker on the poem prevents an unknown Codex outcome from being silently dispatched again. If the completed result file still exists, the rig acknowledges and publishes that same result. Acknowledged results are already in D1 and can be published after a restart.
-
-If the outcome is unknown and no result can be recovered, the rig stops. Inspect the reported poem and attempt before explicitly allowing another call:
+## macOS monitor
 
 ```sh
-node scripts/rig-local.mjs translate retry-unknown POEM_ID ATTEMPT_ID
-SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs translate
+python3 macos/SaqiActivityMonitor/install.py
 ```
 
-That manual retry can duplicate one Codex call if the previous invocation completed without a recoverable result. Automatic retries do not accept that tradeoff. Do not delete a result file while its invocation is unresolved.
+The native menu-bar app starts at login and shows translation/collection status, current progress, errors and source verification alerts. It reads launchd and two current-state logs, not a database. Translation controls manage the translator; Chrome's extension switch controls collection. Quit monitor closes the UI while workers continue.
 
-## Local files
+`~/Library/Application Support/Saqi/translate.log` contains the current/last translation task. `collect.log` contains the current personal-Chrome status and heartbeat; an expired active heartbeat is an attention state, not reported as healthy. Source API errors and unknown Codex outcomes remain visible. There are no lifetime counters or append-only diagnostic logs.
 
-Only the browser profile, Keychain credential, and one temporary JSON result per unfinished Codex invocation are needed. Published result files are deleted. Losing the temporary result after an unacknowledged completion loses that intermediate result, but D1 retains the unknown invocation and blocks automatic replay. A new computer can resume all acknowledged work from D1.
+## Crash recovery
 
-Production migrations, backups, exact parity evidence, and rollback steps are recorded in [the schema reduction plan](planning/schema-reduction.md). Public translations and poem insights are part of the preserved publication; retired dashboard analytics are separate.
+The invocation marker in D1 prevents unknown Codex outcomes from being silently replayed. Restarting recovers a completed local result or publishes an already acknowledged D1 result. If neither exists, inspect the attempt before explicitly allowing a duplicate call:
 
-Each translation invocation now generates the full English translation, poem insights, and an English meaning for every Arabic word. The server reconstructs gloss segments from the original Arabic and rejects missing/extra meanings; Codex cannot change the Arabic spelling or punctuation. All three outputs publish atomically in `poem.publication_json`. Build shared contracts with `yarn build:api` before running the local command.
+```sh
+node typescript/scripts/rig-local.mjs translate retry-unknown POEM_ID ATTEMPT_ID
+```
+
+Known completed results that fail publication validation are marked `blocked` with their checkpoint retained; other poems continue. Review those rows with `SELECT id FROM poem WHERE rig_status = 'blocked'`. Generation constrains each line's exact word count before publication.
+
+A manual retry can duplicate one call if it completed without a recoverable result. Automatic background checks never make that decision. Do not delete an unresolved invocation's result file.
+
+## Recovery
+
+Stop writers before database recovery and preserve any subsequent publications. The verified private pre-column-drop backup is `saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/manifest.json`. It has six checksum-verified compressed parts, 1,392 authors, 104,961 poems and 77,742 snapshots. Later background publications must be reconciled before restoring it. Create a fresh backup with `python3 typescript/scripts/archive-production-d1.py --execute` while writers are stopped.
+
+From `typescript/packages/operations`, the pre-drop-compatible rollback versions are:
+
+```sh
+yarn wrangler rollback 1de00fbf-5ea0-421a-9a54-6adcb2657bf1 --name saqi-ops --yes
+yarn wrangler rollback 39ad654f-da26-4b03-a615-1fe3fbd719a1 --name saqi-public --yes
+yarn wrangler rollback edf5dd91-8d7d-4117-8e56-96a2de2f8d1b --name saqi-www --yes
+# Only after preserving/reconciling later writes, within Time Travel retention:
+yarn wrangler d1 time-travel restore saqi-db --bookmark 0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd
+```
+
+Prefer a forward fix. Do not roll back to code that reads removed columns. Inspect the migration ledger after any ambiguous timeout; never assume an error means rollback. Before restarting, verify author/poem/publication counts, retained source/publication hashes, FK checks and public poem URLs. For a durable archive restore, use the checked-in `rehearse-production-d1-restore.py` and `rehearse-production-d1-import.py` helpers; oversized payloads require bound imports.
