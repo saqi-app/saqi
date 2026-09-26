@@ -1,7 +1,6 @@
 export * from "./canonical-json.js";
 export * from "./contracts.js";
 export * from "./enrichment.js";
-export * from "./enrichment-profiles.js";
 export * from "./models/author.js";
 export * from "./models/poem.js";
 export * from "./models/text.js";
@@ -9,3 +8,4 @@ export * from "./production-identity.js";
 export * from "./resource-id-schema.js";
 export * from "./sitemap.js";
 export * from "./source-configuration.js";
+export * from "./translation-models.js";

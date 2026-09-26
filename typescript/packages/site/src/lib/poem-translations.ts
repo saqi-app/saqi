@@ -1,7 +1,4 @@
-import {
-  approvedEnrichmentProfileByModelKey,
-  READABLE_ENRICHMENT_PROFILES,
-} from "@saqi/precedent-iso";
+import { TRANSLATION_MODELS } from "@saqi/precedent-iso";
 
 import type { Poem } from "./snapshot-contract";
 
@@ -39,7 +36,7 @@ export type TranslationModelProvider =
 
 function profileForModelLabel(model: string) {
   const normalized = model.split(" · ", 1)[0]?.trim() ?? model;
-  return READABLE_ENRICHMENT_PROFILES.find(
+  return TRANSLATION_MODELS.find(
     ({ displayName, model: profileModel }) =>
       normalized === displayName ||
       normalized === profileModel ||
@@ -53,7 +50,10 @@ export function translationModelProvider(
   const normalized = model.split(" · ", 1)[0]?.trim() ?? model;
   const profile = profileForModelLabel(model);
   if (profile) return profile.modelVendorKey;
-  if (normalized === "claude-2" || normalized === "claude-sonnet-4-5-20250929") {
+  if (
+    normalized === "claude-2" ||
+    normalized === "claude-sonnet-4-5-20250929"
+  ) {
     return "anthropic";
   }
   if (normalized === "gemini-3-pro-preview") return "google";
@@ -70,18 +70,17 @@ export function translationModelName(model: string): string {
   if (normalized === HISTORICAL_CLAUDE_LABEL) {
     return LEGACY_TRANSLATION_MODEL_ESTIMATE;
   }
-  if (normalized === HISTORICAL_GEMINI_LABEL) return LEGACY_GEMINI_MODEL_ESTIMATE;
+  if (normalized === HISTORICAL_GEMINI_LABEL)
+    return LEGACY_GEMINI_MODEL_ESTIMATE;
   return profileForModelLabel(model)?.displayName ?? normalized;
 }
 
 function modelPresentation(
   enrichment: NonNullable<Poem["modelEnrichments"]>[number],
 ) {
-  const profile =
-    approvedEnrichmentProfileByModelKey(enrichment.modelKey) ??
-    READABLE_ENRICHMENT_PROFILES.find(
-      ({ modelKey }) => modelKey === enrichment.modelKey,
-    );
+  const profile = TRANSLATION_MODELS.find(
+    ({ modelKey }) => modelKey === enrichment.modelKey,
+  );
   return {
     model: enrichment.displayName ?? profile?.displayName ?? enrichment.model,
     provider:
@@ -108,20 +107,22 @@ export function poemWordGlossTracks(
   });
 }
 
+type TranslationPoem = Pick<
+  Poem,
+  | "linesEnglish"
+  | "linesEnglishAttributionCertainty"
+  | "linesEnglishGemini"
+  | "linesEnglishGeminiModel"
+  | "linesEnglishModel"
+  | "linesEnglishModelVendor"
+  | "linesEnglishSol"
+  | "linesEnglishSolModel"
+  | "linesEnglishSolReasoningEffort"
+  | "modelEnrichments"
+>;
+
 export function poemTranslationTracks(
-  poem: Pick<
-    Poem,
-    | "linesEnglish"
-    | "linesEnglishAttributionCertainty"
-    | "linesEnglishGemini"
-    | "linesEnglishGeminiModel"
-    | "linesEnglishModel"
-    | "linesEnglishModelVendor"
-    | "linesEnglishSol"
-    | "linesEnglishSolModel"
-    | "linesEnglishSolReasoningEffort"
-    | "modelEnrichments"
-  >,
+  poem: TranslationPoem,
 ): TranslationTrack[] {
   const tracks: TranslationTrack[] = [];
   for (const enrichment of poem.modelEnrichments ?? []) {
@@ -137,42 +138,21 @@ export function poemTranslationTracks(
     hasTranslation(poem.linesEnglishSol) &&
     !tracks.some(({ key }) => key === "sol-5.6")
   ) {
-    const solProfile = approvedEnrichmentProfileByModelKey("sol-5.6");
+    const solProfile = TRANSLATION_MODELS[0];
     tracks.push({
       key: "sol",
       lines: poem.linesEnglishSol,
-      model: "Sol · provenance unavailable",
-      provider: solProfile?.modelVendorKey ?? "openai",
-      ...(poem.linesEnglishSolModel
-        ? {
-            model:
-              solProfile?.displayName ??
-              translationModelName(poem.linesEnglishSolModel),
-            provider:
-              solProfile?.modelVendorKey ??
-              translationModelProvider(poem.linesEnglishSolModel),
-          }
-        : {}),
+      model: poem.linesEnglishSolModel
+        ? solProfile.displayName
+        : "Sol · provenance unavailable",
+      provider: solProfile.modelVendorKey,
     });
   }
+
   if (hasTranslation(poem.linesEnglish)) {
-    const inferred = !poem.linesEnglishModel ||
-      poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
-    tracks.push({
-      ...(inferred
-        ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
-        : {}),
-      attributionCertainty:
-        poem.linesEnglishAttributionCertainty ?? (inferred ? "inferred_range" : undefined),
-      key: "legacy",
-      lines: poem.linesEnglish,
-      model: poem.linesEnglishModel ?? LEGACY_TRANSLATION_MODEL_ESTIMATE,
-      provider: poem.linesEnglishModelVendor ??
-        (poem.linesEnglishModel
-          ? translationModelProvider(poem.linesEnglishModel)
-          : "anthropic"),
-    });
+    tracks.push(legacyTranslationTrack(poem, poem.linesEnglish));
   }
+
   if (hasTranslation(poem.linesEnglishGemini)) {
     tracks.push({
       ...(!poem.linesEnglishGeminiModel ||
@@ -188,6 +168,31 @@ export function poemTranslationTracks(
     });
   }
   return tracks;
+}
+
+function legacyTranslationTrack(
+  poem: TranslationPoem,
+  lines: string[],
+): TranslationTrack {
+  const inferred =
+    !poem.linesEnglishModel ||
+    poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
+  return {
+    ...(inferred
+      ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
+      : {}),
+    attributionCertainty:
+      poem.linesEnglishAttributionCertainty ??
+      (inferred ? "inferred_range" : undefined),
+    key: "legacy",
+    lines,
+    model: poem.linesEnglishModel ?? LEGACY_TRANSLATION_MODEL_ESTIMATE,
+    provider:
+      poem.linesEnglishModelVendor ??
+      (poem.linesEnglishModel
+        ? translationModelProvider(poem.linesEnglishModel)
+        : "anthropic"),
+  };
 }
 
 function hasTranslation(lines: string[] | undefined): lines is string[] {
