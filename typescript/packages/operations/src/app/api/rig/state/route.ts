@@ -96,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
     return failure(403, "UNTRUSTED_MUTATION");
   if (!hasJsonContentType(request)) return failure(415, "INVALID_CONTENT_TYPE");
   const env = getCloudflareEnv();
+  if (env.SAQI_RIG_ACTIVE !== "1") return failure(503, "RIG_INACTIVE");
   if (
     !(await new ProductionDeploymentIdentityRepository(
       env.DB
