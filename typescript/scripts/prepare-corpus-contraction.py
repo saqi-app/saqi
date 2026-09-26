@@ -109,7 +109,7 @@ def main():
             "d1_databases": [{
                 "binding": "DB", "database_name": "saqi-db", "database_id": ARCHIVE.DATABASE_ID,
                 "migrations_dir": str(ARCHIVE.OPERATIONS / "migrations"),
-                "migrations_pattern": "007[12]_*.sql",
+                "migrations_pattern": str(ARCHIVE.OPERATIONS / "migrations/007[12]_*.sql"),
             }],
         }))
         ARCHIVE.wrangler("d1", "migrations", "apply", "saqi-db", "--remote", "--config", str(config))
