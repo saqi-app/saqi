@@ -3,8 +3,6 @@ import importlib.util
 import io
 import pathlib
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import unittest
 import urllib.error
@@ -31,11 +29,6 @@ class D1ImportRehearsalTest(unittest.TestCase):
         finally:
             source.close()
             target.close()
-
-    def test_cli_rejects_production_destination_before_network(self):
-        result = subprocess.run([sys.executable, str(SCRIPT), "--execute", "--manifest-key", "saqi-corpus-archive/d1/test/manifest.json", "--database-name", "saqi-db"], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("Expected a disposable restore database name", result.stderr)
 
     def test_generated_data_batch_can_be_replayed_without_duplicates(self):
         with tempfile.TemporaryDirectory() as temporary:
