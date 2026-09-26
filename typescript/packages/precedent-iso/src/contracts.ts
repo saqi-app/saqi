@@ -1,17 +1,7 @@
 import { z, type ZodType } from "zod";
 
-import { CorpusImportActionSchema } from "./corpus-import.js";
-import {
-  ProductionResolutionApiResponseSchema,
-  ProductionResolutionRequestSchema,
-} from "./production-resolution.js";
+import { PublicationIdentitySchema } from "./corpus-import.js";
 import { ResourceIdSchema } from "./resource-id-schema.js";
-import {
-  EnrichmentPublicationV2RequestSchema,
-  EnrichmentPublicationV2ResponseSchema,
-  SourceAdmissionV2RequestSchema,
-  SourceAdmissionV2ResponseSchema,
-} from "./source-bound-publication.js";
 
 const EmptyHttpPartSchema = z.strictObject({});
 const TextDocumentSchema = z.string().describe("Rendered response body");
@@ -98,77 +88,6 @@ const EMPTY_INPUT = {
   params: EmptyHttpPartSchema,
   query: EmptyHttpPartSchema,
 } as const;
-const CorpusImportResponseSchema = z.discriminatedUnion("ok", [
-  z.strictObject({ ok: z.literal(true), result: z.unknown() }),
-  z.strictObject({ error: z.string().min(1), ok: z.literal(false) }),
-]);
-export const LegacySourceLineageAdoptionRequestSchema = z.strictObject({
-  poemIds: z
-    .array(z.uuid())
-    .min(1)
-    .max(10)
-    .refine((poemIds) => new Set(poemIds).size === poemIds.length, {
-      message: "Legacy source lineage poem IDs must be unique",
-    }),
-});
-const LegacySourceLineageAdoptionResponseSchema = z.discriminatedUnion("ok", [
-  z.strictObject({
-    ok: z.literal(true),
-    result: z.strictObject({
-      adopted: z.number().int().nonnegative().max(10),
-      conflicts: z
-        .array(
-          z.strictObject({
-            code: z.string().regex(/^[A-Z][A-Z\d_]{2,99}$/),
-            poemId: z.uuid(),
-          }),
-        )
-        .max(10)
-        .default([]),
-      scanned: z.number().int().nonnegative().max(10),
-      unchanged: z.number().int().nonnegative().max(10),
-    }),
-  }),
-  z.strictObject({
-    error: z.string().min(1),
-    ok: z.literal(false),
-    retryable: z.boolean(),
-  }),
-]);
-export const SourceFingerprintBackfillRequestSchema = z.strictObject({
-  cursor: z
-    .strictObject({
-      createdAt: z.number().int().nonnegative(),
-      sourceRevisionId: z.string().regex(/^[a-f\d]{64}$/),
-    })
-    .optional(),
-  limit: z.number().int().min(1).max(20).default(20),
-});
-const SourceFingerprintBackfillResponseSchema = z.discriminatedUnion("ok", [
-  z.strictObject({
-    ok: z.literal(true),
-    result: z.strictObject({
-      complete: z.boolean(),
-      existing: z.number().int().nonnegative(),
-      inserted: z.number().int().nonnegative(),
-      nextCursor:
-        SourceFingerprintBackfillRequestSchema.shape.cursor.nullable(),
-      scanned: z.number().int().nonnegative().max(20),
-    }),
-  }),
-  z.strictObject({ error: z.string().min(1), ok: z.literal(false) }),
-]);
-const ProductionResolutionErrorResponseSchema = z.strictObject({
-  error: z.string().min(1),
-  ok: z.literal(false),
-});
-const SourceBoundPublicationErrorResponseSchema = z.strictObject({
-  code: z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/),
-  error: z.string().min(1),
-  ok: z.literal(false),
-  retryable: z.boolean(),
-});
-
 export const HTTP_CONTRACTS = [
   {
     ...EMPTY_INPUT,
@@ -395,134 +314,25 @@ export const HTTP_CONTRACTS = [
       "Read the deployed public sitemap through an internal service binding",
   },
   {
+    ...EMPTY_INPUT,
     audience: "authenticated",
-    body: LegacySourceLineageAdoptionRequestSchema,
-    id: "operations.legacy-source-lineage-adoption",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/legacy-source-lineage-adoption",
-    query: EmptyHttpPartSchema,
-    responses: [200, 400, 403, 409, 415, 503].map((status) => ({
-      body: LegacySourceLineageAdoptionResponseSchema,
-      contentType: "application/json",
-      status,
-    })),
-    service: "operations",
-    summary: "Adopt legacy source lineage for explicit poem UUIDs",
-  },
-  {
-    audience: "authenticated",
-    body: SourceFingerprintBackfillRequestSchema,
-    id: "operations.corpus-fingerprint-backfill",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/corpus-fingerprint-backfill",
-    query: EmptyHttpPartSchema,
-    responses: [200, 400, 403, 409, 415, 503].map((status) => ({
-      body: SourceFingerprintBackfillResponseSchema,
-      contentType: "application/json",
-      status,
-    })),
-    service: "operations",
-    summary:
-      "Backfill authoritative active source fingerprints in bounded pages",
-  },
-  {
-    audience: "authenticated",
-    body: CorpusImportActionSchema,
-    id: "operations.corpus-import",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/corpus-import",
-    query: EmptyHttpPartSchema,
+    id: "operations.rig-identity",
+    method: "GET",
+    path: "/api/rig/identity",
     responses: [
       {
-        body: CorpusImportResponseSchema,
+        body: PublicationIdentitySchema,
         contentType: "application/json",
         status: 200,
       },
       {
-        body: CorpusImportResponseSchema,
+        body: ErrorResponseSchema,
         contentType: "application/json",
-        status: 409,
-      },
-      {
-        body: CorpusImportResponseSchema,
-        contentType: "application/json",
-        status: 415,
+        status: 503,
       },
     ],
     service: "operations",
-    summary: "Stage, confirm, and publish immutable corpus revisions",
-  },
-  {
-    audience: "authenticated",
-    body: ProductionResolutionRequestSchema,
-    id: "operations.corpus-resolution",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/corpus-resolution",
-    query: EmptyHttpPartSchema,
-    responses: [
-      {
-        body: ProductionResolutionApiResponseSchema,
-        contentType: "application/json",
-        status: 200,
-      },
-      ...[400, 403, 409, 415, 503].map((status) => ({
-        body: ProductionResolutionErrorResponseSchema,
-        contentType: "application/json",
-        status,
-      })),
-    ],
-    service: "operations",
-    summary: "Resolve bounded source targets to production identities",
-  },
-  {
-    audience: "authenticated",
-    body: SourceAdmissionV2RequestSchema,
-    id: "operations.source-admissions-v2",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/v2/source-admissions",
-    query: EmptyHttpPartSchema,
-    responses: [
-      {
-        body: SourceAdmissionV2ResponseSchema,
-        contentType: "application/json",
-        status: 200,
-      },
-      ...[400, 403, 409, 413, 415, 503].map((status) => ({
-        body: SourceBoundPublicationErrorResponseSchema,
-        contentType: "application/json",
-        status,
-      })),
-    ],
-    service: "operations",
-    summary: "Admit exact source revisions and issue canonical poem bindings",
-  },
-  {
-    audience: "authenticated",
-    body: EnrichmentPublicationV2RequestSchema,
-    id: "operations.enrichment-publications-v2",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/v2/enrichment-publications",
-    query: EmptyHttpPartSchema,
-    responses: [
-      {
-        body: EnrichmentPublicationV2ResponseSchema,
-        contentType: "application/json",
-        status: 200,
-      },
-      ...[400, 403, 409, 413, 415, 503].map((status) => ({
-        body: SourceBoundPublicationErrorResponseSchema,
-        contentType: "application/json",
-        status,
-      })),
-    ],
-    service: "operations",
-    summary: "Atomically publish bound, approved enrichment artifacts",
+    summary: "Verify the Access-protected rig is bound to production D1",
   },
   {
     audience: "authenticated",

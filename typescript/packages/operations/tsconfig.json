@@ -30,9 +30,6 @@
   "references": [
     {
       "path": "../precedent-iso"
-    },
-    {
-      "path": "../precedent-node"
     }
   ]
 }
