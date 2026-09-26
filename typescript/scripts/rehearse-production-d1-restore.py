@@ -26,6 +26,11 @@ DATABASE_ID = "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
 class SqlDigest:
     size: int
     sha256: str
+    largest_statement_bytes: int
+    oversized_statement_count: int
+
+
+D1_MAX_STATEMENT_BYTES = 100_000
 
 
 def download(key: str, destination: pathlib.Path) -> None:
@@ -88,6 +93,9 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
     )
     digest = hashlib.sha256()
     total = 0
+    largest_statement_bytes = 0
+    oversized_statement_count = 0
+    statement = bytearray()
     try:
         # gzip accepts a seekable file, so join the already verified parts in
         # the same disposable directory. Only compressed bytes are duplicated.
@@ -98,11 +106,20 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
                     for block in iter(lambda: source.read(1_048_576), b""):
                         output.write(block)
         with gzip.open(joined, "rb") as sql:
-            for block in iter(lambda: sql.read(1_048_576), b""):
-                digest.update(block)
-                total += len(block)
+            for line in sql:
+                digest.update(line)
+                total += len(line)
                 assert process.stdin is not None
-                process.stdin.write(block)
+                process.stdin.write(line)
+                statement.extend(line)
+                if sqlite3.complete_statement(statement.decode("utf-8")):
+                    # The D1 limit applies to the SQL statement text, not the
+                    # SQLite row value. Newlines inside literals are supported.
+                    largest_statement_bytes = max(largest_statement_bytes, len(statement))
+                    oversized_statement_count += len(statement) > D1_MAX_STATEMENT_BYTES
+                    statement.clear()
+        if statement.strip():
+            raise RuntimeError("Archive ends with an incomplete SQL statement")
         assert process.stdin is not None
         process.stdin.close()
         assert process.stderr is not None
@@ -114,7 +131,12 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
         if process.poll() is None:
             process.kill()
             process.wait()
-    return SqlDigest(size=total, sha256=digest.hexdigest())
+    return SqlDigest(
+        size=total,
+        sha256=digest.hexdigest(),
+        largest_statement_bytes=largest_statement_bytes,
+        oversized_statement_count=oversized_statement_count,
+    )
 
 
 def verify_restored(database: pathlib.Path, manifest: dict) -> dict[str, int]:
@@ -163,7 +185,15 @@ def main() -> None:
         if sql_digest.size != manifest["sql_bytes"] or sql_digest.sha256 != manifest["sql_sha256"]:
             raise RuntimeError("Decompressed SQL differs from archived source")
         counts = verify_restored(database, manifest)
-        print(json.dumps({"manifest": key, "bookmark": manifest["bookmark"], "counts": counts, "restore_rehearsal": "passed"}))
+        print(json.dumps({
+            "manifest": key,
+            "bookmark": manifest["bookmark"],
+            "counts": counts,
+            "restore_rehearsal": "passed",
+            "largest_sql_statement_bytes": sql_digest.largest_statement_bytes,
+            "sql_statements_over_d1_limit": sql_digest.oversized_statement_count,
+            "d1_sql_import_rehearsal": "required" if sql_digest.oversized_statement_count else "required_for_final_gate",
+        }))
 
 
 if __name__ == "__main__":
