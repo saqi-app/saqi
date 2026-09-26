@@ -30,7 +30,8 @@
     "0064_retire_collection_dashboard.sql",
     "0065_index_rig_retry.sql",
     "0066_inline_unsafe_publishability.sql",
-    "0067_drop_author_counters.sql"
+    "0067_drop_author_counters.sql",
+    "0068_drop_author_legacy_status_indexes.sql"
   ],
   "databases": [
     {
@@ -62,12 +63,6 @@
               "name": "name",
               "type": "TEXT",
               "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "status",
-              "type": "TEXT",
-              "nullable": false,
               "primaryKey": false
             },
             {

@@ -18,10 +18,6 @@ CREATE TABLE author (
 );
 CREATE UNIQUE INDEX author_source_key ON author(source_name, source_author_id)
   WHERE source_name IS NOT NULL;
-CREATE INDEX author_public_order ON author(sort_name_arabic, id)
-  WHERE hidden = 0;
-CREATE INDEX author_due ON author(collected_at, id)
-  WHERE source_name IS NOT NULL;
 
 CREATE TABLE poem (
   id TEXT PRIMARY KEY,
