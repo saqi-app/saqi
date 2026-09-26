@@ -70,9 +70,9 @@ describe("production migration compatibility", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
     expect(first.at(-1)).toBe("0067_drop_author_counters.sql");
-    const authorColumns = database
-      .pragma("table_info(author)")
-      .map((column: { name: string }) => column.name);
+    const authorColumns = (
+      database.pragma("table_info(author)") as { name: string }[]
+    ).map((column) => column.name);
     for (const name of [
       "poem_count",
       "gemini_translation_count",
