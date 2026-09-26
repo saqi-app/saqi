@@ -1,10 +1,7 @@
--- Reviewed SQL candidate, not an applied migration. Do not add to migrations until
--- exhaustive public parity, deployed shadow checks, a fresh archive, and the
--- disposable D1 restore have passed. Live collection/Codex checks follow this
--- cutover per the owner's 26 September deletion priority. Apply after 0070, with all
--- old writers stopped and graph readers removed. The current publication JSON
--- and canonical source fields must already contain their verified replacements.
--- Run atomically through the D1 migration ledger; do not edit applied migrations.
+-- Retire the obsolete model/source graph after canonical reader/writer deployment.
+-- Exhaustive public parity and full D1 restore passed; require a fresh archive.
+-- Live collection/Codex checks follow contraction per the owner's deletion priority.
+-- Wrangler records this atomic migration once; never rewrite applied migrations.
 
 DROP TRIGGER IF EXISTS crawl_import_bundle_canonical_hash_insert;
 DROP TRIGGER IF EXISTS crawl_import_bundle_canonical_hash_update;
