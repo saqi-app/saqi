@@ -30,8 +30,8 @@ struct JobStatus: Identifiable {
             let result = await Task.detached { () -> [JobStatus] in
                 ["translate", "collect"].map { name in
                     let (code, output) = run("/bin/launchctl", ["print", "gui/\(getuid())/app.saqi.rig.\(name)"])
-                    let running = output.contains("state = running")
-                    let failed = output.split(separator: "\n").contains { line in
+                    var running = output.contains("state = running")
+                    var failed = output.split(separator: "\n").contains { line in
                         let value = line.trimmingCharacters(in: .whitespaces)
                         return value.hasPrefix("last exit code = ") && value != "last exit code = 0"
                     }
@@ -43,10 +43,15 @@ struct JobStatus: Identifiable {
                         let data = (try? handle.readToEnd()) ?? Data()
                         try? handle.close()
                         let lines = String(decoding: data, as: UTF8.self).split(separator: "\n")
-                        detail = lines.suffix(2).joined(separator: "\n")
+                        detail = (name == "collect" && lines.first?.hasPrefix("PERSONAL_CHROME") == true ? lines : lines.suffix(2)).joined(separator: "\n")
                     }
                     let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    return JobStatus(id: name, installed: code == 0, running: running, failed: !running && failed,
+                    let personal = name == "collect" && detail.hasPrefix("PERSONAL_CHROME")
+                    if personal {
+                        running = detail.hasPrefix("PERSONAL_CHROME running") && -(date?.timeIntervalSinceNow ?? -1000) < 90
+                        failed = detail.hasPrefix("PERSONAL_CHROME attention") || (detail.hasPrefix("PERSONAL_CHROME running") && !running)
+                    }
+                    return JobStatus(id: name, installed: code == 0 || personal, running: running, failed: !running && failed,
                                      waiting: detail.split(separator: "\n").last?.contains("SOURCE_HUMAN_REQUIRED") == true,
                                      detail: detail, updated: date)
                 }
@@ -68,8 +73,8 @@ struct JobStatus: Identifiable {
     }
     func stop() {
         let alert = NSAlert()
-        alert.messageText = "Stop the background rig?"
-        alert.informativeText = "This stops current tasks and login startup. An interrupted Codex call may need manual recovery before translating again. Existing publications remain safe."
+        alert.messageText = "Stop background translation?"
+        alert.informativeText = "This stops translation and its login startup. Collection is controlled by the Chrome extension. An interrupted Codex call may need manual recovery before translating again. Existing publications remain safe."
         alert.addButton(withTitle: "Stop rig")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn { control("stop") }
@@ -130,12 +135,12 @@ func run(_ executable: String, _ arguments: [String]) -> (Int32, String) {
                     }
                     Divider()
                 }
-                Text("Translation: every 30s · Collection: every 5m\nLong tasks never overlap. Mac must be awake. Source verification may require Chrome.")
+                Text("Translation: every 30s · Collection: personal Chrome\nLong tasks never overlap. Mac must be awake. Source verification may require Chrome.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = monitor.controlError { Text(error).font(.caption).foregroundStyle(.red).lineLimit(4) }
                 HStack {
-                    Button("Start rig") { monitor.control("install") }.disabled(monitor.refreshing)
-                    Button("Stop rig…") { monitor.stop() }.disabled(monitor.refreshing)
+                    Button("Start translation") { monitor.control("install") }.disabled(monitor.refreshing)
+                    Button("Stop translation…") { monitor.stop() }.disabled(monitor.refreshing)
                     Button("Logs") { NSWorkspace.shared.open(monitor.state) }
                 }
                 HStack {

@@ -90,8 +90,11 @@ jobs:
         if: steps.changes.outputs.crawler_only != 'true'
         run: yarn build:api
 
+      - name: Build source parser for browser bridge tests
+        run: yarn workspace @saqi/source-collector build
+
       - name: Test local rig commands
-        run: node --test scripts/rig-lite.test.mjs scripts/rig-collect.test.mjs
+        run: node --test scripts/rig-lite.test.mjs scripts/rig-collect.test.mjs scripts/rig-chrome-session.test.mjs
 
       - name: Format and type-check local runtime
         if: steps.changes.outputs.crawler_only == 'true'

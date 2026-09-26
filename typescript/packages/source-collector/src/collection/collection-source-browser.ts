@@ -2140,7 +2140,7 @@ export async function resolveCloudflareChallenge(
         cfMitigated,
       ),
     );
-  console.info("Source verification resolved; resuming collection");
+  console.warn("Source verification resolved; resuming collection");
   if (page.url() !== expectedHref)
     throw new SourceBrowserError(
       "SOURCE_REDIRECT",

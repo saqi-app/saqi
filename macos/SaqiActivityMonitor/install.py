@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build and install the native menu-bar monitor and its login job."""
 import os
 import pathlib
 import plistlib

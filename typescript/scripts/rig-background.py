@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Install, stop or inspect the two SQLite-free macOS rig jobs."""
 import os
 import pathlib
 import plistlib
@@ -12,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOMAIN = f"gui/{os.getuid()}"
 AGENTS = pathlib.Path.home() / "Library/LaunchAgents"
 STATE = pathlib.Path.home() / "Library/Application Support/Saqi"
-JOBS = {"translate": 30, "collect": 300}
+JOBS = {"translate": 30}
 
 
 def main():
