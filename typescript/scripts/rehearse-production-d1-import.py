@@ -351,16 +351,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest-key", required=True)
     parser.add_argument("--execute", action="store_true")
-    parser.add_argument("--database-name", help="Optional disposable name for CI cleanup")
     args = parser.parse_args()
     key = args.manifest_key
     if not args.execute:
         parser.error("Pass --execute to create and remove a disposable D1")
     if not key.startswith(f"{RESTORE.BUCKET}/d1/") or not key.endswith("/manifest.json"):
         parser.error("Expected a private saqi-corpus-archive/d1/.../manifest.json key")
-    name = args.database_name or f"saqi-restore-rehearsal-{uuid.uuid4().hex[:12]}"
-    if re.fullmatch(r"saqi-restore-rehearsal-[0-9a-f]{12}", name) is None:
-        parser.error("Expected a disposable restore database name")
+    name = f"saqi-restore-rehearsal-{uuid.uuid4().hex[:12]}"
     created = False
     try:
         with tempfile.TemporaryDirectory(prefix="saqi-d1-import-rehearsal-") as temporary:

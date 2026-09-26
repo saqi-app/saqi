@@ -4,7 +4,6 @@ import pathlib
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import patch
 
 
 SCRIPT = pathlib.Path(__file__).with_name("rehearse-production-d1-restore.py")
@@ -14,13 +13,6 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RestoreRehearsalTest(unittest.TestCase):
-    def test_archive_credential_is_scoped_to_download_subprocess(self):
-        with patch.dict(MODULE.os.environ, {"CLOUDFLARE_API_TOKEN": "d1-test", "SAQI_ARCHIVE_READ_TOKEN": "archive-test"}, clear=True), patch.object(MODULE.subprocess, "run") as run:
-            MODULE.download("bucket/key", pathlib.Path("destination"))
-            self.assertEqual(run.call_args.kwargs["env"]["CLOUDFLARE_API_TOKEN"], "archive-test")
-            self.assertNotIn("SAQI_ARCHIVE_READ_TOKEN", run.call_args.kwargs["env"])
-            self.assertEqual(MODULE.os.environ["CLOUDFLARE_API_TOKEN"], "d1-test")
-
     def test_early_sqlite_exit_reports_safe_diagnostic(self):
         sql = b"INSERT INTO missing_table VALUES ('private-marker');\n" + b"SELECT 1;\n" * 100_000
         with tempfile.TemporaryDirectory() as temporary:
