@@ -1,5 +1,4 @@
 import type { D1Database, Fetcher } from "@cloudflare/workers-types";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { SourceNameSchema, SourceOriginSchema } from "@saqi/precedent-iso";
 import { z } from "zod";
 
@@ -29,8 +28,7 @@ const CloudflareEnvSchema = z.object({
   SAQI_RIG_ACTIVE: z.enum(["0", "1"]).optional(),
 });
 
-export function getCloudflareEnv(): CloudflareEnv {
-  const { env } = getCloudflareContext();
+export function parseCloudflareEnv(env: unknown): CloudflareEnv {
   const typedEnv = CloudflareEnvSchema.parse(env);
 
   return {

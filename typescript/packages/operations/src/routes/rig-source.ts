@@ -1,20 +1,20 @@
 import { z } from "zod";
 
-import { getCloudflareEnv } from "@/lib/cloudflare";
+import type { CloudflareEnv } from "../lib/cloudflare";
 import {
   DirectAuthorSchema,
   DirectPoemSchema,
   DirectSourceConflictError,
   DirectSourceRepository,
-} from "@/lib/direct-source-repository";
+} from "../lib/direct-source-repository";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
   NO_STORE_HEADERS,
   readBoundedJson,
-} from "@/lib/operations-boundary";
-import { publicCacheConfig, purgePublishedPoem } from "@/lib/public-cache";
-import { RigPublicationRepository } from "@/lib/rig-publication-repository";
+} from "../lib/operations-boundary";
+import { publicCacheConfig, purgePublishedPoem } from "../lib/public-cache";
+import { RigPublicationRepository } from "../lib/rig-publication-repository";
 
 const RequestSchema = z.discriminatedUnion("action", [
   z.strictObject({
@@ -40,9 +40,10 @@ function failure(status: number, code: string): Response {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
-export async function GET(request: Request): Promise<Response> {
-  const env = getCloudflareEnv();
+export async function get(
+  request: Request,
+  env: CloudflareEnv
+): Promise<Response> {
   if (env.SAQI_DIRECT_SOURCE_ACTIVE !== "1")
     return failure(503, "DIRECT_SOURCE_INACTIVE");
   const repository = new DirectSourceRepository(
@@ -87,12 +88,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
-export async function POST(request: Request): Promise<Response> {
+export async function post(
+  request: Request,
+  env: CloudflareEnv
+): Promise<Response> {
   if (!isTrustedMutationRequest(request))
     return failure(403, "UNTRUSTED_MUTATION");
   if (!hasJsonContentType(request)) return failure(415, "INVALID_CONTENT_TYPE");
-  const env = getCloudflareEnv();
   if (env.SAQI_DIRECT_SOURCE_ACTIVE !== "1")
     return failure(503, "DIRECT_SOURCE_INACTIVE");
   let input: z.infer<typeof RequestSchema>;
@@ -145,7 +147,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 async function purgeChangedPoem(
-  env: ReturnType<typeof getCloudflareEnv>,
+  env: CloudflareEnv,
   poemId: string
 ): Promise<boolean> {
   const cache = publicCacheConfig(env);

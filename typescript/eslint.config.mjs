@@ -4,7 +4,6 @@
 // block below: later entries win, so you can relax a rule, add a framework
 // exemption, or scope one to a directory without forking the canonical file.
 import { createConfig } from "./eslint.strict.mjs";
-import nextPlugin from "@next/eslint-plugin-next";
 import tseslint from "typescript-eslint";
 
 export default [
@@ -36,15 +35,6 @@ export default [
   //     }],
   //   },
   // },
-  {
-    files: ["packages/operations/**/*.{js,jsx,ts,tsx}"],
-    plugins: { "@next/next": nextPlugin },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
-      "@next/next/no-html-link-for-pages": "off",
-    },
-  },
   {
     files: ["**/*.{js,mjs,cjs}"],
     ...tseslint.configs.disableTypeChecked,

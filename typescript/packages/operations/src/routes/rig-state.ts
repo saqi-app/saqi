@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-import { getCloudflareEnv } from "@/lib/cloudflare";
+import type { CloudflareEnv } from "../lib/cloudflare";
 import {
   hasJsonContentType,
   isTrustedMutationRequest,
   NO_STORE_HEADERS,
   readBoundedJson,
-} from "@/lib/operations-boundary";
-import { publicCacheConfig, purgePublishedPoem } from "@/lib/public-cache";
-import { RigPublicationRepository } from "@/lib/rig-publication-repository";
-import { RigStateRepository } from "@/lib/rig-state-repository";
+} from "../lib/operations-boundary";
+import { publicCacheConfig, purgePublishedPoem } from "../lib/public-cache";
+import { RigPublicationRepository } from "../lib/rig-publication-repository";
+import { RigStateRepository } from "../lib/rig-state-repository";
 
 const VersionSchema = z.number().int().positive();
 const TokenSchema = z.uuid();
@@ -65,9 +65,10 @@ function failure(status: number, code: string): Response {
 
 // Access protects the operations origin; this route also requires the same
 // request-origin contract as the existing corpus mutation endpoints.
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
-export async function GET(request: Request): Promise<Response> {
-  const env = getCloudflareEnv();
+export async function get(
+  request: Request,
+  env: CloudflareEnv
+): Promise<Response> {
   const poemId = new URL(request.url).searchParams.get("poemId");
   if (poemId === null) {
     try {
@@ -87,12 +88,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
-export async function POST(request: Request): Promise<Response> {
+export async function post(
+  request: Request,
+  env: CloudflareEnv
+): Promise<Response> {
   if (!isTrustedMutationRequest(request))
     return failure(403, "UNTRUSTED_MUTATION");
   if (!hasJsonContentType(request)) return failure(415, "INVALID_CONTENT_TYPE");
-  const env = getCloudflareEnv();
   if (env.SAQI_RIG_ACTIVE !== "1") return failure(503, "RIG_INACTIVE");
   let input: z.infer<typeof RequestSchema>;
   try {
@@ -192,7 +194,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 async function handlePublicationAction(
-  env: ReturnType<typeof getCloudflareEnv>,
+  env: CloudflareEnv,
   state: RigStateRepository,
   input: Extract<
     z.infer<typeof RequestSchema>,
@@ -227,7 +229,7 @@ async function handlePublicationAction(
 }
 
 async function purgeDirtyPublication(
-  env: ReturnType<typeof getCloudflareEnv>,
+  env: CloudflareEnv,
   poemId?: string
 ): Promise<boolean> {
   const cache = publicCacheConfig(env);

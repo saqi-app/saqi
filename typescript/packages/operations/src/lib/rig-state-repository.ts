@@ -39,39 +39,9 @@ export interface InvocationIntent {
   readonly startedAt: number;
 }
 
-interface RigQueuePort {
-  claimNextPoem(
-    token: string,
-    now: number,
-    preferredPoemId?: string
-  ): Promise<null | RigStateRow>;
-  currentEnrichment(): Promise<null | RigStateRow>;
-  read(poemId: string): Promise<null | RigStateRow>;
-}
-
-interface RigInvocationPort {
-  acknowledgeInvocation(
-    poemId: string,
-    attemptId: string,
-    expectedVersion: number,
-    output: unknown
-  ): Promise<boolean>;
-  beginInvocation(
-    poemId: string,
-    token: string,
-    expectedVersion: number,
-    intent: InvocationIntent
-  ): Promise<boolean>;
-  markExpiredUnknown(poemId: string, now: number): Promise<boolean>;
-  retryUnknown(
-    poemId: string,
-    attemptId: string,
-    expectedVersion: number
-  ): Promise<boolean>;
-}
-
 /** Pending work is derived from canonical poems; only in-flight state persists. */
-export class RigStateRepository implements RigQueuePort, RigInvocationPort {
+// eslint-disable-next-line @sarj/require-port-for-service, @sarj/require-interface-for-exported-class -- One concrete D1 implementation; callers and real-SQL tests need no interchangeable service contract.
+export class RigStateRepository {
   readonly #database: D1Database;
 
   constructor(database: D1Database) {

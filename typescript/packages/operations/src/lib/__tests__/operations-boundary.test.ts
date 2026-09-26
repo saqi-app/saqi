@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  isImmutableNextAsset,
   isTrustedMutationRequest,
   MAX_JSON_BODY_BYTES,
   readBoundedJson,
@@ -40,38 +39,8 @@ describe("mutation request checks", () => {
 });
 
 describe("response cache boundary", () => {
-  it("allows only successful framework static assets to be immutable", () => {
-    const asset = new Request(
-      "https://ops.saqi.app/_next/static/chunks/app-deadbeef.js"
-    );
-    expect(isImmutableNextAsset(asset, new Response("ok"))).toBe(true);
-    expect(
-      isImmutableNextAsset(
-        new Request("https://ops.saqi.app/tasks"),
-        new Response("ok")
-      )
-    ).toBe(false);
-    expect(
-      isImmutableNextAsset(asset, new Response("missing", { status: 404 }))
-    ).toBe(false);
-  });
-
-  it("applies immutable caching only to successful static responses", () => {
-    const asset = new Request(
-      "https://ops.saqi.app/_next/static/chunks/app-deadbeef.js"
-    );
-    const immutable = secureOperationsResponse(new Response("ok"), asset);
-    expect(immutable.headers.get("cache-control")).toBe(
-      "private, max-age=31536000, immutable"
-    );
-    expect(immutable.headers.has("expires")).toBe(false);
-    expect(immutable.headers.has("pragma")).toBe(false);
-    expect(immutable.headers.get("x-robots-tag")).toContain("noindex");
-
-    const html = secureOperationsResponse(
-      new Response("ok"),
-      new Request("https://ops.saqi.app/tasks")
-    );
+  it("never caches operations responses", () => {
+    const html = secureOperationsResponse(new Response("ok"));
     expect(html.headers.get("cache-control")).toBe(
       "private, no-store, max-age=0"
     );

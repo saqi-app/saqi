@@ -10,6 +10,9 @@
     "packages/precedent-iso": {
       "project": [
         "src/**/*.ts"
+      ],
+      "entry": [
+        "src/__tests__/**/*.test.ts"
       ]
     },
     "packages/source-collector": {
@@ -24,8 +27,7 @@
     },
     "packages/operations": {
       "entry": [
-        "src/app/**/*.{ts,tsx}",
-        "open-next.config.ts"
+        "src/**/*.test.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}",
@@ -47,7 +49,6 @@
     "cloudflare",
     "@eslint/js",
     "react-doctor",
-    "tailwindcss",
     "typescript-eslint"
   ],
   "ignore": [

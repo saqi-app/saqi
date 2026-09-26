@@ -56,19 +56,6 @@ type StoredPoem = z.infer<typeof PoemRowSchema>;
 
 const AuthorBySourceSql = `SELECT id FROM author WHERE source_name = ?1 AND source_author_id = ?2`;
 
-interface DirectSourceReadPort {
-  currentPoem(sourcePoemId: string): Promise<unknown>;
-  nextAuthor(): Promise<unknown>;
-  sourceRetryAfter(): Promise<number>;
-}
-
-interface DirectSourceWritePort {
-  completeAuthor(sourceAuthorId: string): Promise<void>;
-  deferSource(sourceAuthorId: string, retryAfter: number): Promise<void>;
-  upsertAuthor(raw: DirectAuthorInput): Promise<AuthorUpsertResult>;
-  upsertPoem(raw: DirectPoemInput): Promise<PoemUpsertResult>;
-}
-
 export interface AuthorUpsertResult {
   id: string;
   status: "created" | "updated";
@@ -88,9 +75,8 @@ export class DirectSourceConflictError extends Error {
 }
 
 /** Canonical rows own the current source key and content; no import ledger is written. */
-export class DirectSourceRepository
-  implements DirectSourceReadPort, DirectSourceWritePort
-{
+// eslint-disable-next-line @sarj/require-port-for-service, @sarj/require-interface-for-exported-class -- One concrete D1 implementation; callers and real-SQL tests need no interchangeable service contract.
+export class DirectSourceRepository {
   readonly #database: D1Database;
   readonly #sourceName: string;
   readonly #sourceOrigin: string;
