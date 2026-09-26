@@ -27,7 +27,8 @@
     "0061_retire_source_lineage_maintenance.sql",
     "0062_expand_canonical_rig_state.sql",
     "0063_backfill_known_source_identity.sql",
-    "0064_retire_collection_dashboard.sql"
+    "0064_retire_collection_dashboard.sql",
+    "0065_index_rig_retry.sql"
   ],
   "databases": [
     {

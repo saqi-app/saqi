@@ -32,6 +32,12 @@ function fixture() {
       "utf8"
     )
   );
+  sqlite.exec(
+    readFileSync(
+      new URL("../../migrations/0065_index_rig_retry.sql", import.meta.url),
+      "utf8"
+    )
+  );
   sqlite
     .prepare("INSERT INTO author(id,name_arabic) VALUES(?,?)")
     .run("author-1", "شاعر");
@@ -200,6 +206,34 @@ test("unknown work requires an exact manual retry decision", async () => {
     poemId: claimed!.poemId,
     status: "claimed",
   });
+});
+
+test("a manual retry runs before the unprocessed backlog", async () => {
+  const { repository, sqlite } = fixture();
+  sqlite
+    .prepare("UPDATE poem SET rig_status = 'retry' WHERE id = 'poem-2'")
+    .run();
+  const claimed = await repository.claimNextPoem(
+    "11111111-1111-4111-8111-111111111111",
+    100
+  );
+  expect(claimed?.poemId).toBe("poem-2");
+});
+
+test("an expired claim is recovered before another poem", async () => {
+  const { repository, sqlite } = fixture();
+  sqlite
+    .prepare(
+      `UPDATE poem SET rig_status = 'claimed', rig_version = 1,
+       rig_lease_expires_at = 90, rig_updated_at = 10,
+       rig_checkpoint_json = ? WHERE id = 'poem-2'`
+    )
+    .run(JSON.stringify({ phase: "generation", sourceHash: "b".repeat(64) }));
+  const claimed = await repository.claimNextPoem(
+    "11111111-1111-4111-8111-111111111111",
+    100
+  );
+  expect(claimed).toMatchObject({ poemId: "poem-2", version: 2 });
 });
 
 test("a changed Arabic source cannot receive an earlier Codex result", async () => {

@@ -66,6 +66,8 @@ CREATE INDEX poem_enrichment_due ON poem(id)
     AND (publication_source_hash IS NULL OR publication_source_hash <> source_hash);
 CREATE INDEX poem_active_attempt ON poem(rig_status, rig_updated_at, id)
   WHERE rig_status IN ('claimed', 'dispatching', 'unknown');
+CREATE INDEX poem_rig_retry ON poem(id)
+  WHERE rig_status = 'retry';
 CREATE INDEX poem_cache_purge_due ON poem(id)
   WHERE publication_hash IS NOT cache_purged_hash;
 ```
