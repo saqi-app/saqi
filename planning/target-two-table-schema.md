@@ -1,81 +1,84 @@
-# Final two-table schema sketch
+# Final two-table schema
 
-This is a design target, **not an executable migration**. Preserve current URLs and output through the reader/writer gates in [schema-reduction.md](schema-reduction.md), then rebuild the tables from verified canonical rows. D1's own migration ledger is platform metadata. The local runner has no SQLite schema; only an exact in-flight Codex result file may exist until acknowledgement.
+Production migrations through 0075 are applied. D1 now has only `author` and `poem` application tables and reports 440,123,392 bytes. All 1,392 authors and 104,960 poems passed canonical parity; the full output comparison preserved every currently visible translation and poem insight.
+
+These are the concrete columns and indexes installed by migrations through 0075, rather than a separate schema to execute. The six poem validation/sort triggers are defined in migration 0073; author triggers remain in the migration history. Current release evidence and rollback steps are in [schema-reduction.md](schema-reduction.md). D1's own migration ledger is platform metadata. The local runner has no SQLite schema; only an exact in-flight Codex result file may exist until acknowledgement.
 
 ```sql
 CREATE TABLE author (
   id TEXT PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,
-  name_arabic TEXT NOT NULL,
-  name_english TEXT,
-  sort_name_arabic TEXT NOT NULL,
-  hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
-  source_name TEXT,
-  source_author_id TEXT,
-  source_url TEXT,
-  collected_at INTEGER,
-  source_retry_after INTEGER CHECK (source_retry_after IS NULL OR source_retry_after >= 0),
-  CHECK ((source_name IS NULL) = (source_author_id IS NULL))
-);
-CREATE UNIQUE INDEX author_source_key ON author(source_name, source_author_id)
-  WHERE source_name IS NOT NULL;
+  slug TEXT UNIQUE NOT NULL,
+  name_arabic TEXT NOT NULL CHECK (length(name_arabic) <= 10000),
+  name TEXT,
+  hidden INTEGER DEFAULT 0
+, sort_name_arabic TEXT NOT NULL DEFAULT '', source_name TEXT, source_author_id TEXT, source_url TEXT, collected_at INTEGER, source_retry_after INTEGER CHECK (source_retry_after IS NULL OR source_retry_after >= 0));
+CREATE UNIQUE INDEX author_source_identity
+  ON author(source_name, source_author_id)
+  WHERE source_name IS NOT NULL AND source_author_id IS NOT NULL;
 
 CREATE TABLE poem (
   id TEXT PRIMARY KEY,
   author_id TEXT REFERENCES author(id) ON DELETE SET NULL,
-  slug TEXT NOT NULL UNIQUE,
-  title_arabic TEXT NOT NULL,
-  title_english TEXT,
-  verses INTEGER NOT NULL CHECK (verses >= 0),
-  sort_title_arabic TEXT NOT NULL,
-  content_arabic TEXT NOT NULL CHECK (json_valid(content_arabic)),
+  slug TEXT NOT NULL UNIQUE CHECK (length(slug) <= 1000),
+  verses INTEGER NOT NULL CHECK (verses > 0),
+  name_arabic TEXT NOT NULL CHECK (length(name_arabic) <= 10000),
+  name_english TEXT CHECK (length(name_english) <= 10000),
+  content_arabic TEXT NOT NULL,
+  poem_title_first_line TEXT,
   hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
   publishable INTEGER NOT NULL DEFAULT 0 CHECK (publishable IN (0, 1)),
-  sitemap_shard INTEGER NOT NULL CHECK (sitemap_shard BETWEEN 0 AND 15),
+  sort_name_arabic TEXT NOT NULL DEFAULT '',
+  sitemap_shard INTEGER NOT NULL DEFAULT 0 CHECK (sitemap_shard BETWEEN 0 AND 15),
   source_name TEXT,
   source_poem_id TEXT,
   source_url TEXT,
-  source_hash TEXT CHECK (source_hash IS NULL OR length(source_hash) = 64),
+  source_hash TEXT,
+  collected_at INTEGER,
   publication_json TEXT CHECK (publication_json IS NULL OR json_valid(publication_json)),
   publication_source_hash TEXT,
   publication_hash TEXT,
-  publication_cache_dirty INTEGER NOT NULL DEFAULT 0
-    CHECK (publication_cache_dirty IN (0, 1)),
-  rig_status TEXT CHECK (rig_status IS NULL OR rig_status IN
-    ('claimed', 'dispatching', 'unknown', 'retry', 'blocked', 'complete')),
+  publication_cache_dirty INTEGER NOT NULL DEFAULT 0 CHECK (publication_cache_dirty IN (0, 1)),
+  rig_status TEXT CHECK (rig_status IS NULL OR rig_status IN ('claimed', 'dispatching', 'unknown', 'retry', 'blocked', 'complete')),
   rig_version INTEGER NOT NULL DEFAULT 0 CHECK (rig_version >= 0),
   rig_lease_token TEXT,
   rig_lease_expires_at INTEGER,
-  rig_checkpoint_json TEXT CHECK (rig_checkpoint_json IS NULL OR
-    (json_valid(rig_checkpoint_json) AND
-     length(CAST(rig_checkpoint_json AS BLOB)) <= 1048576)),
+  rig_checkpoint_json TEXT CHECK (rig_checkpoint_json IS NULL OR (json_valid(rig_checkpoint_json) AND length(CAST(rig_checkpoint_json AS BLOB)) <= 1048576)),
   rig_last_error TEXT,
-  rig_updated_at INTEGER,
-  CHECK ((source_name IS NULL) = (source_poem_id IS NULL))
+  rig_updated_at INTEGER
 );
-CREATE UNIQUE INDEX poem_source_key ON poem(source_name, source_poem_id)
-  WHERE source_name IS NOT NULL;
-CREATE INDEX poem_public_author_order
-  ON poem(author_id, sort_title_arabic, id)
+CREATE INDEX IF NOT EXISTS idx_poem_author_id ON poem(author_id);
+CREATE INDEX IF NOT EXISTS idx_poem_public_author_title
+  ON poem(author_id, sort_name_arabic, id)
   WHERE hidden = 0 AND publishable = 1;
-CREATE INDEX poem_public_sitemap ON poem(sitemap_shard, id)
-  WHERE hidden = 0 AND publishable = 1;
-CREATE INDEX poem_enrichment_due ON poem(id)
-  WHERE hidden = 0 AND publishable = 1 AND source_hash IS NOT NULL
-    AND (publication_source_hash IS NULL OR publication_source_hash <> source_hash);
-CREATE INDEX poem_active_attempt ON poem(rig_status, rig_updated_at, id)
-  WHERE rig_status IN ('claimed', 'dispatching', 'unknown');
-CREATE INDEX poem_rig_retry ON poem(id)
-  WHERE rig_status = 'retry';
-CREATE INDEX poem_cache_purge_due ON poem(id)
+CREATE INDEX IF NOT EXISTS idx_poem_public_sitemap
+ON poem(sitemap_shard, id, author_id)
+WHERE hidden = 0 AND publishable = 1;
+CREATE INDEX IF NOT EXISTS poem_needs_enrichment
+  ON poem(id)
+  WHERE hidden = 0 AND publishable = 1
+    AND (publication_json IS NULL
+      OR publication_source_hash IS NULL
+      OR publication_source_hash <> source_hash);
+CREATE INDEX IF NOT EXISTS poem_publication_cache_dirty ON poem(id)
   WHERE publication_cache_dirty = 1;
+CREATE INDEX IF NOT EXISTS poem_rig_active ON poem(rig_status, rig_updated_at, id)
+  WHERE rig_status IN ('claimed', 'dispatching', 'unknown');
+CREATE INDEX IF NOT EXISTS poem_rig_retry ON poem(id)
+  WHERE rig_status = 'retry';
+CREATE UNIQUE INDEX IF NOT EXISTS poem_source_identity
+  ON poem(source_name, source_poem_id)
+  WHERE source_name IS NOT NULL AND source_poem_id IS NOT NULL;
 ```
 
 `publication_json` holds only currently visible English tracks, their labels and insights in the validated v2 shape. `publication_source_hash` is the source version that output represents; `publication_hash` makes duplicate publication idempotent. `publication_cache_dirty` is the durable cache-purge retry marker. Clear it only with a compare-and-swap against the publication and source hashes that were purged, so a concurrent update cannot lose its pending purge. `rig_checkpoint_json` contains only the current attempt/result, not history. A stale writer must lose the `rig_version` and source-hash compare-and-swap before it can publish. No local queue, audit, model history, month rollup, or counter table remains.
 
-`poem.author_id` stays nullable in this sketch because production has 100 canonical poems with no author row; 73 have a legacy English or insight payload. They currently have no readable author/poem URL, but silently deleting them would fail canonical row parity. Resolve or deliberately archive them before considering `NOT NULL`. Likewise, legacy English titles, Arabic sort keys, `sitemap_shard`, and publishability flags need exact reader parity before their old columns/triggers are replaced. The final target intentionally removes `source_version`, `publication_version`, all three author counters, and old model/source foreign keys; hash/CAS, live counts, and the existing cache-purge bit absorb their core behaviors.
+`poem.author_id` stays nullable in this schema because production has 100 canonical poems with no author row; 73 have a legacy English or insight payload. They currently have no readable author/poem URL, but silently deleting them would fail canonical row parity. Resolve or deliberately archive them before considering `NOT NULL`. Likewise, legacy English titles, Arabic sort keys, `sitemap_shard`, and publishability flags need exact reader parity before their old columns/triggers are replaced. The final target intentionally removes `source_version`, `publication_version`, all three author counters, and old model/source foreign keys; hash/CAS, live counts, and the existing cache-purge bit absorb their core behaviors.
 
-The `verses` field is core until a replacement proves the existing eligibility rule: a 26 September read-only production query found 104,880 of 104,960 stored values differ from `json_array_length(content_arabic, '$.content')`. Do not replace it with a raw line count. The single `title_english` target also needs a validator-aware backfill: 16,564 poems have no nonblank `name_english` but do have `poem_title_first_line`; the site chooses the first *usable* title, excluding generation-failure text. Applying the exact candidate reader's title validator to all 104,960 archived poems selected 55,869 primary titles and 16,408 fallback titles, including 66 with a nonblank but invalid primary; 32,683 had no usable English title. A plain `COALESCE` backfill would therefore preserve invalid primary text for those 66 instead of their displayed title. Keep both current title columns during the reader cutover, then backfill the selected usable title and compare every public page before dropping the fallback column.
+The `verses` field is core until a replacement proves the existing eligibility rule: a 26 September read-only production query found 104,880 of 104,960 stored values differ from `json_array_length(content_arabic, '$.content')`. Do not replace it with a raw line count. A future consolidation of the two English-title inputs needs a validator-aware backfill: 16,564 poems have no nonblank `name_english` but do have `poem_title_first_line`; the site chooses the first *usable* title, excluding generation-failure text. Applying the exact candidate reader's title validator to all 104,960 archived poems selected 55,869 primary titles and 16,408 fallback titles, including 66 with a nonblank but invalid primary; 32,683 had no usable English title. A plain `COALESCE` backfill would therefore preserve invalid primary text for those 66 instead of their displayed title. Keep both current title columns during the reader cutover, then backfill the selected usable title and compare every public page before dropping the fallback column.
+
+## Rehearsal evidence and migration design
+
+The following records the staged investigation; the current production result is tracked in schema-reduction.md.
 
 A concrete graph-drop candidate is in [migration 0075](../typescript/packages/operations/migrations/0075_drop_obsolete_corpus_tables.sql), promoted to the migration directory after exhaustive parity and the full D1 restore passed; deploy only after the canonical application and fresh archive gates pass. On 26 September it was applied after migrations 0065–0069 to a disposable SQLite copy of the verified full production archive. It removed 64 obsolete graph triggers and 12 history/control/import/identity tables, leaving exactly `author` and `poem`. Every retained column compared equal across all 1,391 authors and 104,960 poems, with integrity `ok` and zero FK errors. This proves SQL/data compatibility in SQLite; D1 timing, active reader/writer cutover, and live end-to-end checks remain required.
 
@@ -106,3 +109,5 @@ The D1 failure is reproduced with synthetic data: dropping one column works on a
 Run `python3 typescript/scripts/prepare-corpus-contraction.py --execute --archive-manifest saqi-corpus-archive/d1/2026-09-26T19-18-17Z-4bf0454f4a8544a9a0c448fb968afb79/manifest.json` with collectors/translators stopped. It uses Wrangler's migration ledger for every schema change, checks archived canonical counts, and copies via idempotent upsert. A lost response can safely resume; 0073 rejects missing, extra, or changed rows before touching the serving table. Empty installations need no helper because the copy is already complete. Populated installations that call migrations directly stop safely at the parity guard until preparation finishes.
 
 Evidence: a synthetic 1 GB D1 copy preserved all 50,000 rows and 10 dependent FK rows through the atomic swap (626.7 ms). Full production archive replay through the new copy path preserved every retained value in 1,392 authors and 104,960 poems; all 104,657 public poem pages, 1,277 author pages, and 16 sitemap shards match the unchanged public-output digest. The compacted SQLite copy is 439,898,112 bytes. Local migration tests reject both incomplete and stale staged copies, and a simulated lost response after a committed batch resumes without changing any canonical or invocation values.
+
+Production 0073 returned a D1 storage timeout (7429) after copying all 104,960 rows. A subsequent read-only inspection showed that the 28-column replacement and its migration-ledger entry had committed, with the staging table gone. Resume from the ledger rather than replaying the swap or assuming rollback after an ambiguous response.
