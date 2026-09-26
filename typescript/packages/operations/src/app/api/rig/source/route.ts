@@ -24,6 +24,11 @@ const RequestSchema = z.discriminatedUnion("action", [
   }),
   z.strictObject({ action: z.literal("upsert-poem"), poem: DirectPoemSchema }),
   z.strictObject({
+    action: z.literal("defer-source"),
+    sourceAuthorId: DirectAuthorSchema.shape.sourceAuthorId,
+    retryAfter: z.number().int().nonnegative(),
+  }),
+  z.strictObject({
     action: z.literal("complete-author"),
     sourceAuthorId: DirectAuthorSchema.shape.sourceAuthorId,
   }),
@@ -52,8 +57,24 @@ export async function GET(request: Request): Promise<Response> {
     env.SAQI_SOURCE_NAME,
     env.SAQI_SOURCE_BASE_URL
   );
+  // eslint-disable-next-line @sarj/no-fat-try-blocks -- All source reads share one unavailable response; no mutation occurs here.
   try {
+    const retryAfter = await repository.sourceRetryAfter();
+    const now = Math.floor(Date.now() / 1_000);
+    if (retryAfter > now)
+      return Response.json(
+        { ok: false, code: "SOURCE_COOLDOWN", retryAfter },
+        {
+          status: 429,
+          headers: {
+            ...NO_STORE_HEADERS,
+            "Retry-After": String(retryAfter - now),
+          },
+        }
+      );
     const query = new URL(request.url).searchParams;
+    if (query.get("action") === "origin")
+      return Response.json({ ok: true }, { headers: NO_STORE_HEADERS });
     if (query.get("action") === "next-author")
       return Response.json(
         { ok: true, author: await repository.nextAuthor() },
@@ -99,6 +120,10 @@ export async function POST(request: Request): Promise<Response> {
     env.SAQI_SOURCE_BASE_URL
   );
   try {
+    if (input.action === "defer-source") {
+      await repository.deferSource(input.sourceAuthorId, input.retryAfter);
+      return Response.json({ ok: true }, { headers: NO_STORE_HEADERS });
+    }
     if (input.action === "complete-author") {
       await repository.completeAuthor(input.sourceAuthorId);
       return Response.json({ ok: true }, { headers: NO_STORE_HEADERS });

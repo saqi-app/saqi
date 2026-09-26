@@ -49,13 +49,21 @@ async function main() {
     );
   }
   const canonical = canonicalAuthorUrl(author.href);
+  await get("?action=origin");
+  // Admit the stable author key before any source request, so a rate-limit
+  // deadline can be preserved even if its first manifest request fails.
+  await post({
+    action: "upsert-author",
+    author: {
+      sourceAuthorId: canonical.slug,
+      sourceUrl: canonical.href,
+      nameArabic: author.name,
+    },
+  });
   const collector = await SourceChromeCollector.create({
     profileDirectory:
       process.env.SAQI_BROWSER_PROFILE ?? join(tmpdir(), "saqi-source-profile"),
   });
-  let created = 0;
-  let updated = 0;
-  let unchanged = 0;
   try {
     const signal = new AbortController().signal;
     const manifest = parseAuthorPoemManifest(
@@ -63,14 +71,6 @@ async function main() {
     );
     if (manifest.author.canonicalId !== canonical.canonicalId)
       throw new Error("SOURCE_MANIFEST_AUTHOR_MISMATCH");
-    await post({
-      action: "upsert-author",
-      author: {
-        sourceAuthorId: canonical.slug,
-        sourceUrl: canonical.href,
-        nameArabic: author.name,
-      },
-    });
     for (const poem of manifest.poems) {
       // The manifest is certified by two independent browser passes. A crash
       // simply repeats the current author; D1's source key and hash make it safe.
@@ -99,9 +99,6 @@ async function main() {
           expectedHash: current.poem?.sourceHash ?? null,
         },
       });
-      if (response.result.status === "created") created += 1;
-      else if (response.result.status === "updated") updated += 1;
-      else unchanged += 1;
       process.stdout.write(
         `${poem.numericId}: ${response.result.status}${response.cachePending ? " (cache purge pending)" : ""}\n`,
       );
@@ -109,11 +106,21 @@ async function main() {
     // Only a fully processed manifest advances the D1-derived queue. A crash
     // before this point leaves the same author due for an idempotent retry.
     await post({ action: "complete-author", sourceAuthorId: canonical.slug });
+  } catch (error) {
+    if (error?.code === "SOURCE_RATE_LIMITED") {
+      const delay = Math.max(60_000, error.retryAfterMs ?? 900_000);
+      await post({
+        action: "defer-source",
+        sourceAuthorId: canonical.slug,
+        retryAfter: Math.ceil((Date.now() + delay) / 1_000),
+      });
+    }
+    throw error;
   } finally {
     await collector.close();
   }
   process.stdout.write(
-    `Author ${canonical.slug}: ${created} created, ${updated} updated, ${unchanged} unchanged\n`,
+    `Author ${canonical.slug}: collection complete\n`,
   );
 }
 

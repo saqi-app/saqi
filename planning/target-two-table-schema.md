@@ -14,6 +14,7 @@ CREATE TABLE author (
   source_author_id TEXT,
   source_url TEXT,
   collected_at INTEGER,
+  source_retry_after INTEGER CHECK (source_retry_after IS NULL OR source_retry_after >= 0),
   CHECK ((source_name IS NULL) = (source_author_id IS NULL))
 );
 CREATE UNIQUE INDEX author_source_key ON author(source_name, source_author_id)
@@ -80,3 +81,5 @@ A concrete graph-drop candidate is in [contract-model-source-graph.sql](contract
 The source/revision cycle must be broken by dropping `source_poem_identity.current_revision_id` and its FK, not by merely setting it to NULL. A full-data rehearsal of the latter spent more than 100 CPU seconds checking unindexed foreign keys while dropping revision rows and was stopped; removing the obsolete FK let the complete rehearsal finish in seconds. This candidate deliberately retains canonical payload/title/rig columns: dropping legacy payload fields requires the separate all-public-output parity gate, and simplifying their names can follow the table contraction without holding the 12-table deletion hostage.
 
 Measured local storage after that candidate: 1,306,390,528 bytes before compaction, 734,855,168 bytes on the freelist, and 564,604,928 bytes after SQLite `VACUUM` (about 57% below the restored archive file). The surviving application rows are 106,351. This is a full-corpus SQLite measurement, not a promise that D1 immediately returns freed pages or reports the same physical size; measure production's reported size after its contraction. Legacy canonical payload columns still account for additional removable storage once their snapshot parity gate passes.
+
+`author.source_retry_after` preserves an observed source 429 deadline across collector exits and machine restarts. The source reader takes the maximum deadline for its configured source before allowing either automatic or manual collection requests. The collector admits the stable author key before fetching its manifest so even a first-request 429 has a canonical row to hold the deadline. A later shorter response cannot shorten an existing deadline. A 429 without `Retry-After` waits 15 minutes; explicit waits have a 60-second minimum. This one current timestamp replaces an origin table and requires no local state file.

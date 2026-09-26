@@ -32,7 +32,8 @@
     "0066_inline_unsafe_publishability.sql",
     "0067_drop_author_counters.sql",
     "0068_drop_author_legacy_status_indexes.sql",
-    "0069_drop_unused_poem_indexes.sql"
+    "0069_drop_unused_poem_indexes.sql",
+    "0070_preserve_source_cooldown.sql"
   ],
   "databases": [
     {
@@ -98,6 +99,12 @@
             },
             {
               "name": "collected_at",
+              "type": "INTEGER",
+              "nullable": true,
+              "primaryKey": false
+            },
+            {
+              "name": "source_retry_after",
               "type": "INTEGER",
               "nullable": true,
               "primaryKey": false

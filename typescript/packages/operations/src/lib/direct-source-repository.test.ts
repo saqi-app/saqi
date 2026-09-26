@@ -25,7 +25,7 @@ function fixture() {
       id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL,
       name_arabic TEXT NOT NULL,
       source_name TEXT, source_author_id TEXT, source_url TEXT,
-      collected_at INTEGER
+      collected_at INTEGER, source_retry_after INTEGER
     );
     CREATE UNIQUE INDEX author_source_identity
       ON author(source_name, source_author_id) WHERE source_name IS NOT NULL;
@@ -367,4 +367,21 @@ test("direct source insert passes the installed D1 schema and publishability tri
   expect(
     sqlite.prepare("SELECT id FROM author WHERE id = ?").get(author.id)
   ).toEqual({ id: author.id });
+});
+
+test("source cooldown persists through completion and a shorter retry cannot erase it", async () => {
+  const { author, repository, sqlite } = fixture();
+  await repository.upsertAuthor(author);
+  await repository.deferSource(author.sourceAuthorId, 2_000_000_000);
+  await repository.deferSource(author.sourceAuthorId, 1_900_000_000);
+  await repository.completeAuthor(author.sourceAuthorId);
+  await expect(repository.sourceRetryAfter()).resolves.toBe(2_000_000_000);
+  expect(sqlite.prepare("SELECT source_retry_after FROM author").get()).toEqual(
+    {
+      source_retry_after: 2_000_000_000,
+    }
+  );
+  await expect(
+    repository.deferSource("missing-author", 2_000_000_001)
+  ).rejects.toThrow("SOURCE_AUTHOR_MISSING");
 });
