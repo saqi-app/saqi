@@ -100,19 +100,21 @@ function canonicalPoem(database: Database.Database) {
 }
 
 describe("canonical migration compatibility", () => {
-  it("keeps every deployment binding on the approved production database", () => {
-    for (const path of [
-      "../../../wrangler.jsonc",
-      "../../../../site/wrangler.jsonc",
-      "../../../../site/wrangler.production.jsonc",
-    ]) {
+  it.each([
+    "../../../wrangler.jsonc",
+    "../../../../site/wrangler.jsonc",
+    "../../../../site/wrangler.production.jsonc",
+  ])(
+    "keeps deployment binding %s on the approved production database",
+    (path) => {
       const source = readFileSync(new URL(path, import.meta.url), "utf8");
-      const ids = [...source.matchAll(/"database_id"\s*:\s*"([^"]+)"/gu)].map(
-        (match) => match[1]
-      );
+      const ids = source
+        .matchAll(/"database_id"\s*:\s*"([^"]+)"/gu)
+        .map((match) => match[1])
+        .toArray();
       expect(ids).toEqual([SAQI_PRODUCTION_DATABASE_ID]);
     }
-  });
+  );
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
