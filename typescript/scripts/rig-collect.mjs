@@ -2,13 +2,13 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { SourceChromeCollector } from "../packages/crawler-local/dist/collection/collection-source-browser.js";
+import { SourceChromeCollector } from "../packages/source-collector/dist/collection/collection-source-browser.js";
 import {
   canonicalAuthorUrl,
   configureSource,
   parseAuthorPoemManifest,
   parsePoemDetail,
-} from "../packages/crawler-local/dist/source-adapter/index.js";
+} from "../packages/source-collector/dist/source-adapter/index.js";
 
 const endpoint =
   process.env.SAQI_SOURCE_ENDPOINT ?? "https://ops.saqi.app/api/rig/source";

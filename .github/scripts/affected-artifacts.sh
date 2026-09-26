@@ -69,7 +69,7 @@ else
     if is_dependency_audit_path "$path"; then
       dependency_audit=true
     fi
-    if [[ "$path" != typescript/packages/crawler-local/* ]]; then
+    if [[ "$path" != typescript/packages/source-collector/* ]]; then
       crawler_only=false
     fi
     case "$path" in
@@ -87,8 +87,8 @@ else
       typescript/packages/precedent-node/*)
         app=true
         ;;
-      typescript/packages/crawler-local/*)
-        # Local runtime packages do not produce a Cloudflare artifact.
+      typescript/packages/source-collector/*)
+        # The local browser source parser does not produce a Cloudflare artifact.
         ;;
       typescript/packages/operations/migrations/*)
         app=true

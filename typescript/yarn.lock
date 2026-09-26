@@ -3768,25 +3768,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@saqi/crawler-local@workspace:packages/crawler-local":
-  version: 0.0.0-use.local
-  resolution: "@saqi/crawler-local@workspace:packages/crawler-local"
-  dependencies:
-    "@saqi/precedent-iso": "workspace:^"
-    "@types/better-sqlite3": "npm:^9.6.0"
-    better-sqlite3: "npm:^13.0.3"
-    eslint: "npm:10.11.0"
-    playwright-core: "npm:1.63.0"
-    prettier: "npm:^3.9.9"
-    typescript: "npm:6.0.3"
-    vite: "npm:8.3.0"
-    vitest: "npm:5.0.1"
-    zod: "npm:4.6.5"
-  bin:
-    saqi-crawler: ./dist/cli.js
-  languageName: unknown
-  linkType: soft
-
 "@saqi/operations@workspace:packages/operations":
   version: 0.0.0-use.local
   resolution: "@saqi/operations@workspace:packages/operations"
@@ -3878,6 +3859,21 @@ __metadata:
     tsx: "npm:4.23.15"
     typescript: "npm:6.0.3"
     wrangler: "npm:4.137.0"
+    zod: "npm:4.6.5"
+  languageName: unknown
+  linkType: soft
+
+"@saqi/source-collector@workspace:packages/source-collector":
+  version: 0.0.0-use.local
+  resolution: "@saqi/source-collector@workspace:packages/source-collector"
+  dependencies:
+    "@saqi/precedent-iso": "workspace:^"
+    "@types/node": "npm:26.6.2"
+    playwright-core: "npm:1.63.0"
+    prettier: "npm:^3.9.9"
+    typescript: "npm:6.0.3"
+    vite: "npm:8.3.0"
+    vitest: "npm:5.0.1"
     zod: "npm:4.6.5"
   languageName: unknown
   linkType: soft

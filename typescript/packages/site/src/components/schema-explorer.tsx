@@ -24,7 +24,6 @@ interface SchemaDatabase {
 }
 interface Catalog {
   databases: SchemaDatabase[];
-  localVersion: number;
   migrationNames: string[];
 }
 const NODE_TYPES = { databaseSchema: SchemaNodeView } as const;
