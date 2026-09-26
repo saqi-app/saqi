@@ -163,6 +163,30 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
   });
 });
 
+test("an interrupted author collection stays due until its manifest completes", async () => {
+  const { author, repository, sqlite } = fixture();
+  const created = await repository.upsertAuthor(author);
+  sqlite
+    .prepare("UPDATE author SET collected_at = ? WHERE id = ?")
+    .run(100, created.id);
+
+  await repository.upsertAuthor(author);
+  expect(
+    sqlite
+      .prepare("SELECT collected_at AS collectedAt FROM author WHERE id = ?")
+      .get(created.id)
+  ).toEqual({ collectedAt: 100 });
+
+  await repository.completeAuthor(author.sourceAuthorId);
+  const completed = sqlite
+    .prepare("SELECT collected_at AS collectedAt FROM author WHERE id = ?")
+    .get(created.id) as { collectedAt: number };
+  expect(completed.collectedAt).toBeGreaterThan(100);
+  await expect(
+    repository.completeAuthor("unknown-author")
+  ).rejects.toMatchObject({ message: "AUTHOR_NOT_FOUND" });
+});
+
 test("direct upsert accepts the Arabic source author IDs used by the live corpus", async () => {
   const { author, poem, repository } = fixture();
   const sourceAuthorId = "أبو الطيب المتنبي";

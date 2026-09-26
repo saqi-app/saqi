@@ -43,13 +43,16 @@ export async function POST(request: Request): Promise<Response> {
       await readBoundedJson(request, MAXIMUM_REQUEST_BYTES)
     );
     const { corpusRevision } = getServices();
+    const backfillInput: {
+      cursor?: NonNullable<typeof input.cursor>;
+      limit: number;
+    } = { limit: input.limit };
+    if (input.cursor) backfillInput.cursor = input.cursor;
     return Response.json(
       {
         ok: true,
-        result: await corpusRevision.backfillActiveSourceFingerprints({
-          ...(input.cursor ? { cursor: input.cursor } : {}),
-          limit: input.limit,
-        }),
+        result:
+          await corpusRevision.backfillActiveSourceFingerprints(backfillInput),
       },
       { headers: NO_STORE_HEADERS }
     );

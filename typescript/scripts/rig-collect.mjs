@@ -106,6 +106,9 @@ async function main() {
         `${poem.numericId}: ${response.result.status}${response.cachePending ? " (cache purge pending)" : ""}\n`,
       );
     }
+    // Only a fully processed manifest advances the D1-derived queue. A crash
+    // before this point leaves the same author due for an idempotent retry.
+    await post({ action: "complete-author", sourceAuthorId: canonical.slug });
   } finally {
     await collector.close();
   }
