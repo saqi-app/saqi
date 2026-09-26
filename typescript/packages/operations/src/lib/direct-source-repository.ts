@@ -259,18 +259,8 @@ export class DirectSourceRepository {
       !(input.expectedHash === null && stored.sourceHash === sourceHash)
     )
       throw new DirectSourceConflictError("SOURCE_CHANGED");
-    if (stored.sourceHash === sourceHash) {
-      const result = await this.#database
-        .prepare(
-          `UPDATE poem SET collected_at = unixepoch(), source_url = ?1
-           WHERE id = ?2 AND source_hash = ?3`
-        )
-        .bind(input.sourceUrl, stored.id, sourceHash)
-        .run();
-      if (result.meta.changes !== 1)
-        throw new DirectSourceConflictError("SOURCE_CHANGED");
+    if (stored.sourceHash === sourceHash)
       return { id: stored.id, sourceHash, status: "unchanged" };
-    }
     const contentArabic = JSON.stringify({
       content: input.linesArabic,
       titleArabic: input.titleArabic,
@@ -279,16 +269,14 @@ export class DirectSourceRepository {
       .prepare(
         `UPDATE poem SET name_arabic = ?1, content_arabic = ?2,
                 verses = ?3, source_hash = ?4,
-                source_url = ?5, collected_at = unixepoch(),
                 publication_cache_dirty = 1
-         WHERE id = ?6 AND author_id = ?7 AND source_hash = ?8`
+         WHERE id = ?5 AND author_id = ?6 AND source_hash = ?7`
       )
       .bind(
         input.titleArabic,
         contentArabic,
         Math.ceil(input.linesArabic.length / 2),
         sourceHash,
-        input.sourceUrl,
         stored.id,
         authorId,
         input.expectedHash
@@ -335,9 +323,8 @@ export class DirectSourceRepository {
       .prepare(
         `INSERT OR IGNORE INTO poem
        (id, author_id, slug, verses, name_arabic, content_arabic,
-        sitemap_shard, source_name, source_poem_id, source_url,
-        source_hash, collected_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, unixepoch())`
+        sitemap_shard, source_name, source_poem_id, source_hash)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
       )
       .bind(
         id,
@@ -349,7 +336,6 @@ export class DirectSourceRepository {
         sitemapShardForId(id),
         this.#sourceName,
         input.sourcePoemId,
-        input.sourceUrl,
         sourceHash
       )
       .run();

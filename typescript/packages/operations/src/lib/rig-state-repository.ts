@@ -159,7 +159,6 @@ export class RigStateRepository {
         `UPDATE poem
          SET rig_status = 'unknown', rig_version = rig_version + 1,
              rig_lease_token = NULL, rig_lease_expires_at = NULL,
-             rig_last_error = 'CODEX_OUTCOME_UNKNOWN',
              rig_updated_at = ?2
          WHERE id = ?1 AND rig_status = 'dispatching'
            AND rig_lease_expires_at <= ?2`
@@ -198,7 +197,6 @@ export class RigStateRepository {
         `UPDATE poem
          SET rig_checkpoint_json = ?1, rig_status = 'claimed',
              rig_version = rig_version + 1,
-             rig_last_error = NULL,
              rig_lease_token = NULL, rig_lease_expires_at = NULL,
              rig_updated_at = unixepoch()
          WHERE id = ?2 AND rig_version = ?3
@@ -221,7 +219,6 @@ export class RigStateRepository {
         `UPDATE poem
          SET rig_status = 'retry', rig_version = rig_version + 1,
              rig_checkpoint_json = NULL,
-             rig_last_error = 'MANUAL_RETRY_OF_UNKNOWN_ATTEMPT',
              rig_updated_at = unixepoch()
          WHERE id = ?1 AND rig_status = 'unknown' AND rig_version = ?2
            AND json_extract(rig_checkpoint_json, '$.invocation.attemptId') = ?3`
@@ -235,7 +232,7 @@ export class RigStateRepository {
     const candidate = await this.#database
       .prepare(
         `SELECT p.id FROM poem p INDEXED BY poem_rig_retry
-         WHERE p.rig_status = 'retry' AND p.hidden = 0 AND p.publishable = 1
+         WHERE p.rig_status = 'retry' AND p.publishable = 1
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id AND a.hidden = 0)
@@ -251,8 +248,8 @@ export class RigStateRepository {
   async #nextDuePoem(now: number): Promise<null | string> {
     const candidate = await this.#database
       .prepare(
-        `SELECT p.id FROM poem p INDEXED BY poem_needs_enrichment
-         WHERE p.hidden = 0 AND p.publishable = 1
+        `SELECT p.id FROM poem p
+         WHERE p.publishable = 1
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id AND a.hidden = 0)
@@ -288,7 +285,7 @@ export class RigStateRepository {
                ELSE json_object('phase', 'generation', 'sourceHash', source_hash)
              END,
              rig_updated_at = ?2
-         WHERE id = ?3 AND hidden = 0 AND publishable = 1
+         WHERE id = ?3 AND publishable = 1
            AND source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = poem.author_id AND a.hidden = 0)
