@@ -64,9 +64,6 @@ async function main() {
     profileDirectory:
       process.env.SAQI_BROWSER_PROFILE ?? join(tmpdir(), "saqi-source-profile"),
   });
-  let created = 0;
-  let updated = 0;
-  let unchanged = 0;
   try {
     const signal = new AbortController().signal;
     const manifest = parseAuthorPoemManifest(
@@ -102,9 +99,6 @@ async function main() {
           expectedHash: current.poem?.sourceHash ?? null,
         },
       });
-      if (response.result.status === "created") created += 1;
-      else if (response.result.status === "updated") updated += 1;
-      else unchanged += 1;
       process.stdout.write(
         `${poem.numericId}: ${response.result.status}${response.cachePending ? " (cache purge pending)" : ""}\n`,
       );
@@ -126,7 +120,7 @@ async function main() {
     await collector.close();
   }
   process.stdout.write(
-    `Author ${canonical.slug}: ${created} created, ${updated} updated, ${unchanged} unchanged\n`,
+    `Author ${canonical.slug}: collection complete\n`,
   );
 }
 
