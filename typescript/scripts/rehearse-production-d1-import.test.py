@@ -16,6 +16,33 @@ SPEC.loader.exec_module(MODULE)
 
 
 class D1ImportRehearsalTest(unittest.TestCase):
+    def test_generated_data_batch_can_be_replayed_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            original = directory / "original.sqlite3"
+            with sqlite3.connect(original) as source:
+                source.executescript("CREATE TABLE poem(id TEXT PRIMARY KEY, title TEXT NOT NULL); INSERT INTO poem VALUES ('p','title');")
+            plan = MODULE.portable_import_plan(original, directory)
+            with sqlite3.connect(directory / "copy.sqlite3") as target:
+                target.executescript(plan[0].read_text())
+                for step in plan[1:]:
+                    target.executescript(step.read_text())
+                    target.executescript(step.read_text())
+                self.assertEqual(target.execute("SELECT id,title FROM poem").fetchall(), [("p", "title")])
+
+    def test_only_data_batches_retry_network_failures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = pathlib.Path(temporary) / "portable.sql"
+            for sql, calls in [("INSERT INTO poem VALUES ('p') ON CONFLICT DO NOTHING;", 2), ("CREATE TABLE poem(id TEXT);", 1)]:
+                path.write_text(sql)
+                with patch.object(MODULE, "wrangler", side_effect=[RuntimeError("fetch failed"), "ok"]) as command, patch.object(MODULE.time, "sleep"):
+                    if calls == 1:
+                        with self.assertRaisesRegex(RuntimeError, "fetch failed"):
+                            MODULE.import_batch("saqi-restore-rehearsal-123456abcdef", path)
+                    else:
+                        MODULE.import_batch("saqi-restore-rehearsal-123456abcdef", path)
+                    self.assertEqual(command.call_count, calls)
+
     def test_near_expiry_waits_before_wrangler_refreshes(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = pathlib.Path(temporary)
