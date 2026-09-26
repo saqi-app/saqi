@@ -13,7 +13,7 @@ SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs collect next-author
 SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs translate
 ```
 
-Collection visits one author's manifest, upserts each poem, then advances that author's collection timestamp. Translation claims one eligible poem, calls Codex once, saves the validated result to D1, and publishes it. Each command exits after its task. Stopping the process pauses work; no service is installed automatically.
+Collection visits one author's manifest, upserts each poem, then advances that author's collection timestamp. Translation claims one eligible poem, calls Codex once, saves the validated result to D1, and publishes it. Each command exits after its task. For continuous operation, install the two small launchd jobs below.
 
 This Mac's wrapper loads the existing Cloudflare Access credential from Keychain. Other computers can supply `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` through their secret manager. Never put credentials in the repository or command arguments.
 
@@ -49,6 +49,41 @@ That manual retry can duplicate one Codex call if the previous invocation comple
 
 Only the browser profile, Keychain credential, and one temporary JSON result per unfinished Codex invocation are needed. Published result files are deleted. Losing the temporary result after an unacknowledged completion loses that intermediate result, but D1 retains the unknown invocation and blocks automatic replay. A new computer can resume all acknowledged work from D1.
 
-Production migrations, backups, exact parity evidence, and rollback steps are recorded in [the schema reduction plan](planning/schema-reduction.md). Public translations and poem insights are part of the preserved publication; retired dashboard analytics are separate.
+Production uses migrations through 0079: author (11 columns) and poem (24 columns). Historical planning and parity evidence remain available in Git history before the planning-folder removal. Public translations and poem insights are part of the preserved publication; retired dashboard analytics are separate.
 
 Each translation invocation now generates the full English translation, poem insights, and an English meaning for every Arabic word. The server reconstructs gloss segments from the original Arabic and rejects missing/extra meanings; Codex cannot change the Arabic spelling or punctuation. All three outputs publish atomically in `poem.publication_json`. Build shared contracts with `yarn build:api` before running the local command.
+
+## Continuous background operation on this Mac
+
+From the repository root after `yarn build:api` in `typescript`:
+
+```sh
+python3 typescript/scripts/rig-background.py install
+python3 typescript/scripts/rig-background.py status
+# Stop both jobs and remove their login startup entries:
+python3 typescript/scripts/rig-background.py stop
+```
+
+The translator checks every 30 seconds and the collector every five minutes. launchd never overlaps a job with itself; long tasks continue to completion. The jobs resume at login and after task exits, while D1 remains the only queue. Do not simultaneously start manual copies. An unknown Codex outcome still blocks automatic replay and requires inspection. The computer must be awake and signed in; sleep pauses progress.
+
+Credentials stay in Keychain. `~/Library/Application Support/Saqi/translate.log` and `collect.log` contain only the current/last run, and `source-browser/` holds the collector's persistent browser session. The collector cycles through source-linked authors in D1, upserts author metadata and imports their poem manifests. It does not discover an entire new source author directory; admit a new author's URL with the explicit collect-author command. Source Cloudflare verification can still pause collection; it does not block the separate translator.
+
+## macOS menu-bar monitor
+
+Run `python3 macos/SaqiActivityMonitor/install.py` from the repository root. This builds a native menu-bar app with translation/collection state, recent task output, source verification alerts, start/stop controls and log access. It starts at login and reads launchd plus the two current-run logs; it has no database and never reads credentials. Quit monitor closes the UI; the rig jobs continue independently.
+
+## Recovery
+
+Stop writers before database recovery and preserve any subsequent publications. The verified private pre-column-drop backup is `saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/manifest.json`. It has six checksum-verified compressed parts, 1,392 authors, 104,961 poems and 77,742 snapshots. Later background publications must be reconciled before restoring it. Create a fresh backup with `python3 typescript/scripts/archive-production-d1.py --execute` while writers are stopped.
+
+From `typescript/packages/operations`, the pre-drop-compatible rollback versions are:
+
+```sh
+yarn wrangler rollback 1de00fbf-5ea0-421a-9a54-6adcb2657bf1 --name saqi-ops --yes
+yarn wrangler rollback 39ad654f-da26-4b03-a615-1fe3fbd719a1 --name saqi-public --yes
+yarn wrangler rollback edf5dd91-8d7d-4117-8e56-96a2de2f8d1b --name saqi-www --yes
+# Only after preserving/reconciling later writes, within Time Travel retention:
+yarn wrangler d1 time-travel restore saqi-db --bookmark 0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd
+```
+
+Prefer a forward fix. Do not roll back to code that reads removed columns. Inspect the migration ledger after any ambiguous timeout; never assume an error means rollback. Before restarting, verify author/poem/publication counts, retained source/publication hashes, FK checks and public poem URLs. For a durable archive restore, use the checked-in `rehearse-production-d1-restore.py` and `rehearse-production-d1-import.py` helpers; oversized payloads require bound imports.

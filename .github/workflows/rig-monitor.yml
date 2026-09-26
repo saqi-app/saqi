@@ -1,0 +1,24 @@
+name: Rig monitor
+
+on:
+  pull_request:
+    paths:
+      - 'macos/**'
+      - 'typescript/scripts/rig-background.py'
+      - '.github/workflows/rig-monitor.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Compile native monitor
+        run: xcrun swiftc -parse-as-library -warnings-as-errors macos/SaqiActivityMonitor/main.swift -o /tmp/SaqiActivityMonitor
+      - name: Validate installers
+        run: python3 -m py_compile macos/SaqiActivityMonitor/install.py typescript/scripts/rig-background.py

@@ -94,6 +94,7 @@ async function main() {
     inputHash,
     model,
   });
+  process.stdout.write(`Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`);
   const output = await runCodex(prompt, attemptId);
   const acknowledged = await request({
     action: "acknowledge",

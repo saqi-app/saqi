@@ -281,23 +281,6 @@ const structuredData = [
           <span>{wordGlossTracks[0]?.model}</span>
         </p>
       </div>
-      <details class="word-meanings" id="word-meanings">
-        <summary>Word meanings</summary>
-        {wordGlossTracks.map((track) => (
-          <section data-word-glossary={track.key} hidden={track !== wordGlossTracks[0]}>
-            <h2>{track.model}</h2>
-            <dl>
-              {track.wordGlosses.lines.flatMap((line) =>
-                line.segments.flatMap((segment) =>
-                  segment.kind === "word"
-                    ? [<><dt lang="ar" dir="rtl">{segment.surface}</dt><dd>{segment.meaning}</dd></>]
-                    : [],
-                )
-              )}
-            </dl>
-          </section>
-        ))}
-      </details>
     </>
   )}
 
@@ -324,10 +307,7 @@ const structuredData = [
         for (const fallback of document.querySelectorAll("[data-word-gloss-fallback]")) {
           if (fallback instanceof HTMLElement) fallback.hidden = hasGlosses;
         }
-        for (const glossary of document.querySelectorAll("[data-word-glossary]")) {
-          if (!(glossary instanceof HTMLElement)) continue;
-          glossary.hidden = glossary.dataset["wordGlossary"] !== translationSelect.value;
-        }
+
       };
       translationSelect.addEventListener("change", syncTranslation);
       syncTranslation();

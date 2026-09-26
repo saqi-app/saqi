@@ -37,6 +37,7 @@ if (operation === "collect") {
 }
 
 const script = fileURLToPath(new URL(scripts[operation], import.meta.url));
+process.stdout.write(`${new Date().toISOString()} Starting ${operation}\n`);
 const child = spawn(process.execPath, [script, ...args], {
   env: environment,
   stdio: "inherit",

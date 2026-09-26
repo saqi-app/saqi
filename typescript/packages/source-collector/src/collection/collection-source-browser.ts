@@ -2115,6 +2115,9 @@ export async function resolveCloudflareChallenge(
     documentCategory !== null;
   if (!challenged) return false;
 
+  console.warn(
+    `SOURCE_HUMAN_REQUIRED: complete verification in Chrome for ${expectedHref}`,
+  );
   const resolved = await waitForChallengeResolution(
     async () => {
       const inspection = await inspectChallengePage(page, expectedHref);
@@ -2137,6 +2140,7 @@ export async function resolveCloudflareChallenge(
         cfMitigated,
       ),
     );
+  console.info("Source verification resolved; resuming collection");
   if (page.url() !== expectedHref)
     throw new SourceBrowserError(
       "SOURCE_REDIRECT",
