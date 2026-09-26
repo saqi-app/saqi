@@ -426,7 +426,13 @@ function summaryTranslationModels(
         ? [
             {
               key: track.key,
-              model: track.model,
+              // Author summaries keep their existing concise estimate; the poem
+              // detail retains the more specific stored attribution range.
+              model:
+                track.key === "legacy" &&
+                track.attributionCertainty === "inferred_range"
+                  ? LEGACY_TRANSLATION_MODEL_ESTIMATE
+                  : track.model,
               provider: track.provider,
               ...(track.attributionCertainty ||
               (track.key === "gemini" && track.attributionNote)
@@ -1145,7 +1151,10 @@ export class CatalogRepository implements CatalogReader {
             authorId: row.authorId,
             hasEnglish: translationModels.length > 0,
             hasInsights: publication
-              ? publication.fields.insights !== undefined
+              ? publication.fields.insights !== undefined ||
+                (publication.fields.modelEnrichments ?? []).some(
+                  (enrichment) => enrichment.wordGlosses !== undefined,
+                )
               : row.hasInsights === 1,
             id: row.id,
             nameArabic: row.nameArabic,
