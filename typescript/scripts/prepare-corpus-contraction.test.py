@@ -50,8 +50,9 @@ class BoundedCopyTest(unittest.TestCase):
                 self.assertEqual(database.execute("SELECT count(*) FROM _poem_next").fetchone()[0], 1_000)
                 self.assertEqual(HELPER.copy_poems(query), 1_234)
                 self.assertEqual(HELPER.copy_poems(query), 1_234)
-            self.assertEqual(database.execute("SELECT * FROM poem ORDER BY id").fetchall(), expected)
-            self.assertEqual(database.execute("SELECT * FROM _poem_next ORDER BY id").fetchall(), expected)
+            names = ",".join(columns)
+            self.assertEqual(database.execute("SELECT " + names + " FROM poem ORDER BY id").fetchall(), expected)
+            self.assertEqual(database.execute("SELECT " + names + " FROM _poem_next ORDER BY id").fetchall(), expected)
 
     def test_completed_swap_needs_no_local_checkpoint(self):
         self.assertEqual(HELPER.copy_poems(lambda sql: []), 0)

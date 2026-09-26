@@ -39,26 +39,27 @@ DROP TABLE IF EXISTS _poem_copy_guard;
 PRAGMA defer_foreign_keys=ON;
 DROP TABLE IF EXISTS poem;
 ALTER TABLE _poem_next RENAME TO poem;
-CREATE INDEX idx_poem_author_id ON poem(author_id);
-CREATE INDEX idx_poem_public_author_title -- sarj-noqa: SARJ116 — Verified existing baseline index, not incremental index growth; preserve schema equivalence.
+DROP INDEX IF EXISTS _poem_next_author_fk;
+CREATE INDEX IF NOT EXISTS idx_poem_author_id ON poem(author_id); -- sarj-noqa: SARJ108 — SQLite lacks CONCURRENTLY; this is the atomic stopped-writer swap.
+CREATE INDEX IF NOT EXISTS idx_poem_public_author_title -- sarj-noqa: SARJ108,SARJ116 — SQLite lacks CONCURRENTLY; verified existing baseline index, not incremental index growth; preserve schema equivalence.
   ON poem(author_id, sort_name_arabic, id)
   WHERE hidden = 0 AND publishable = 1;
-CREATE INDEX idx_poem_public_sitemap -- sarj-noqa: SARJ116 — Verified existing baseline index, not incremental index growth; preserve schema equivalence.
+CREATE INDEX IF NOT EXISTS idx_poem_public_sitemap -- sarj-noqa: SARJ108,SARJ116 — SQLite lacks CONCURRENTLY; verified existing baseline index, not incremental index growth; preserve schema equivalence.
 ON poem(sitemap_shard, id, author_id)
 WHERE hidden = 0 AND publishable = 1;
-CREATE INDEX poem_needs_enrichment -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
+CREATE INDEX IF NOT EXISTS poem_needs_enrichment -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
   ON poem(id)
   WHERE hidden = 0 AND publishable = 1
     AND (publication_json IS NULL
       OR publication_source_hash IS NULL
       OR publication_source_hash <> source_hash);
-CREATE INDEX poem_publication_cache_dirty ON poem(id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
+CREATE INDEX IF NOT EXISTS poem_publication_cache_dirty ON poem(id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
   WHERE publication_cache_dirty = 1;
-CREATE INDEX poem_rig_active ON poem(rig_status, rig_updated_at, id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
+CREATE INDEX IF NOT EXISTS poem_rig_active ON poem(rig_status, rig_updated_at, id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
   WHERE rig_status IN ('claimed', 'dispatching', 'unknown');
-CREATE INDEX poem_rig_retry ON poem(id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
+CREATE INDEX IF NOT EXISTS poem_rig_retry ON poem(id) -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
   WHERE rig_status = 'retry';
-CREATE UNIQUE INDEX poem_source_identity -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
+CREATE UNIQUE INDEX IF NOT EXISTS poem_source_identity -- sarj-noqa: SARJ108 — D1 SQLite lacks CONCURRENTLY; Wrangler serializes the migration.
   ON poem(source_name, source_poem_id)
   WHERE source_name IS NOT NULL AND source_poem_id IS NOT NULL;
 CREATE TRIGGER poem_generated_title_guard_before_insert
