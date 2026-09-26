@@ -71,8 +71,3 @@ DROP TRIGGER IF EXISTS source_poem_identity_delete_forbidden;
 DROP TRIGGER IF EXISTS source_poem_identity_ownership_immutable;
 
 DROP INDEX IF EXISTS idx_poem_active_source_revision;
-ALTER TABLE poem DROP COLUMN active_source_revision_id;
-
--- Break the remaining source/revision cycle after removing its old guards.
-ALTER TABLE source_poem_identity DROP COLUMN current_revision_id;
-
