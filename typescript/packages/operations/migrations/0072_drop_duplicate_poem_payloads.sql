@@ -1,4 +1,4 @@
--- Candidate only: apply after graph contraction and deployment of the canonical
+-- Apply after graph contraction and deployment of the canonical
 -- reader/writer, with a fresh verified archive and full public-output parity.
 -- Run once through the D1 migration ledger; do not rewrite applied migrations.
 -- Two English-title inputs stay until their validator-aware backfill is proved.

@@ -1,10 +1,7 @@
--- Reviewed SQL candidate, not an applied migration. Do not add to migrations until
--- exhaustive public parity, deployed shadow checks, a fresh archive, and the
--- disposable D1 restore have passed. Live collection/Codex checks follow this
--- cutover per the owner's 26 September deletion priority. Apply after 0070, with all
--- old writers stopped and graph readers removed. The current publication JSON
--- and canonical source fields must already contain their verified replacements.
--- Run atomically through the D1 migration ledger; do not edit applied migrations.
+-- Retire the obsolete model/source graph after canonical reader/writer deployment.
+-- Exhaustive public parity and full D1 restore passed; require a fresh archive.
+-- Live collection/Codex checks follow contraction per the owner's deletion priority.
+-- Wrangler records this atomic migration once; never rewrite applied migrations.
 
 DROP TRIGGER IF EXISTS crawl_import_bundle_canonical_hash_insert;
 DROP TRIGGER IF EXISTS crawl_import_bundle_canonical_hash_update;
@@ -77,18 +74,18 @@ ALTER TABLE poem DROP COLUMN active_source_revision_id;
 -- Break the remaining source/revision cycle after removing its old guards.
 ALTER TABLE source_poem_identity DROP COLUMN current_revision_id;
 
-DROP TABLE model_publication_receipt;
-DROP TABLE poem_model_publication_pointer;
-DROP TABLE model_enrichment_validation;
-DROP TABLE model_enrichment_artifact;
-DROP TABLE poem_source_revision;
-DROP TABLE crawl_import_record;
-DROP TABLE crawl_import_bundle;
-DROP TABLE source_poem_identity;
-DROP TABLE source_author_identity;
-DROP TABLE enrichment_profile;
-DROP TABLE source_admission_clock;
-DROP TABLE scraper_writer_control;
+DROP TABLE IF EXISTS model_publication_receipt;
+DROP TABLE IF EXISTS poem_model_publication_pointer;
+DROP TABLE IF EXISTS model_enrichment_validation;
+DROP TABLE IF EXISTS model_enrichment_artifact;
+DROP TABLE IF EXISTS poem_source_revision;
+DROP TABLE IF EXISTS crawl_import_record;
+DROP TABLE IF EXISTS crawl_import_bundle;
+DROP TABLE IF EXISTS source_poem_identity;
+DROP TABLE IF EXISTS source_author_identity;
+DROP TABLE IF EXISTS enrichment_profile;
+DROP TABLE IF EXISTS source_admission_clock;
+DROP TABLE IF EXISTS scraper_writer_control;
 
 -- Release postconditions: exactly author + poem application tables, zero FKs
 -- broken, and canonical rows/URLs/visible publication hashes equal to preflight.
