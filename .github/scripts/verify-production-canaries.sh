@@ -85,7 +85,7 @@ access_headers=(
 
 curl_probe 'authenticated publication identity' --fail --retry 2 --retry-all-errors \
   "${access_headers[@]}" \
-  https://ops.saqi.app/api/corpus-import \
+  https://ops.saqi.app/api/rig/identity \
   | node scripts/verify-publication-identity.mjs
 
 curl_probe 'authenticated live public sitemap' --fail --retry 2 --retry-all-errors \
@@ -93,65 +93,10 @@ curl_probe 'authenticated live public sitemap' --fail --retry 2 --retry-all-erro
   https://ops.saqi.app/api/public-sitemap \
   | node -e 'let body=""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const { xml } = JSON.parse(body); if (typeof xml !== "string" || !xml.includes("<sitemapindex") || !xml.includes("https://saqi.app/sitemaps/authors-1.xml")) process.exit(1); console.error("PUBLIC_SITEMAP_OK: live XML fetched from public Worker"); });'
 
-readonly resolution_url='https://ops.saqi.app/api/corpus-resolution'
-readonly source_request='{"schemaId":"saqi.production-resolution-request","schemaVersion":2,"targets":[{"modelKeys":["sol-5.6"],"sourceAuthorSlug":"poet-Abdelkader-El-Djezairi","sourcePoemId":"47644"}]}'
-
-curl_probe 'authenticated source resolution bootstrap' --fail --retry 2 --retry-all-errors \
+curl_probe 'authenticated rig state' --fail --retry 2 --retry-all-errors \
   "${access_headers[@]}" \
-  --header 'Content-Type: application/json' \
-  --header 'Origin: https://ops.saqi.app' \
-  --header 'Sec-Fetch-Mode: cors' \
-  --header 'Sec-Fetch-Site: same-origin' \
-  --request POST \
-  --data "$source_request" \
-  --dump-header "${canary_dir}/source-resolution.headers" \
-  --output "${canary_dir}/source-resolution.json" \
-  "$resolution_url"
-
-canonical_request="$(node scripts/verify-production-resolution.mjs \
-  source "$source_request" \
-  "${canary_dir}/source-resolution.headers" \
-  "${canary_dir}/source-resolution.json")"
-
-curl_probe 'authenticated exact-current canonical v2 resolution' \
-  --fail --retry 2 --retry-all-errors \
-  "${access_headers[@]}" \
-  --header 'Content-Type: application/json' \
-  --header 'Origin: https://ops.saqi.app' \
-  --header 'Sec-Fetch-Mode: cors' \
-  --header 'Sec-Fetch-Site: same-origin' \
-  --request POST \
-  --data "$canonical_request" \
-  --dump-header "${canary_dir}/canonical-resolution.headers" \
-  --output "${canary_dir}/canonical-resolution.json" \
-  "$resolution_url"
-
-node scripts/verify-production-resolution.mjs \
-  canonical "$canonical_request" \
-  "${canary_dir}/canonical-resolution.headers" \
-  "${canary_dir}/canonical-resolution.json"
-
-fingerprint_request="$(yarn workspace @saqi/operations db:execute --remote --json \
-  --command "WITH active AS (SELECT revision.fingerprint_algorithm AS algorithm, revision.line_nfc_hash AS lineNfcHash, revision.prompt_material_hash AS promptMaterialHash, revision.source_poem_id FROM poem_source_revision revision JOIN poem ON poem.active_source_revision_id = revision.id JOIN source_poem_identity source_poem ON source_poem.id = revision.source_poem_id AND source_poem.canonical_poem_id = poem.id AND source_poem.tombstoned_at IS NULL AND source_poem.current_revision_id = revision.id WHERE revision.fingerprint_algorithm IS NOT NULL), unique_fingerprint AS (SELECT algorithm, lineNfcHash, promptMaterialHash FROM active GROUP BY algorithm, lineNfcHash, promptMaterialHash HAVING COUNT(DISTINCT source_poem_id) = 1) SELECT algorithm, lineNfcHash, promptMaterialHash FROM unique_fingerprint LIMIT 1" \
-  | node scripts/select-production-resolution-fingerprint.mjs)"
-
-curl_probe 'authenticated dual-fingerprint v3 resolution' \
-  --fail --retry 2 --retry-all-errors \
-  "${access_headers[@]}" \
-  --header 'Content-Type: application/json' \
-  --header 'Origin: https://ops.saqi.app' \
-  --header 'Sec-Fetch-Mode: cors' \
-  --header 'Sec-Fetch-Site: same-origin' \
-  --request POST \
-  --data "$fingerprint_request" \
-  --dump-header "${canary_dir}/fingerprint-resolution.headers" \
-  --output "${canary_dir}/fingerprint-resolution.json" \
-  "$resolution_url"
-
-node scripts/verify-production-resolution.mjs \
-  fingerprint "$fingerprint_request" \
-  "${canary_dir}/fingerprint-resolution.headers" \
-  "${canary_dir}/fingerprint-resolution.json"
+  https://ops.saqi.app/api/rig/state \
+  | node -e 'let body=""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const parsed = JSON.parse(body); if (parsed.ok !== true || !("state" in parsed)) process.exit(1); console.error("RIG_STATE_OK: canonical D1 queue is readable"); });'
 
 test "$(curl_probe 'unauthenticated operations boundary' \
   --output /dev/null --write-out '%{http_code}' https://ops.saqi.app/)" = '403'

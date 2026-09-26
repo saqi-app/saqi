@@ -12,16 +12,6 @@
         "src/**/*.ts"
       ]
     },
-    "packages/precedent-node": {
-      "project": [
-        "src/**/*.ts"
-      ],
-      "ignoreIssues": {
-        "src/services/schema.ts": [
-          "exports"
-        ]
-      }
-    },
     "packages/source-collector": {
       "entry": [
         "src/collection/collection-source-browser.ts",

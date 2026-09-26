@@ -9,7 +9,7 @@ import {
 } from "../operations-boundary";
 
 function mutationRequest(overrides: Record<string, string> = {}) {
-  return new Request("https://ops.saqi.app/api/corpus-import", {
+  return new Request("https://ops.saqi.app/api/rig/state", {
     method: "POST",
     headers: {
       host: "ops.saqi.app",
