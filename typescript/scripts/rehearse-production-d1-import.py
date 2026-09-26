@@ -89,12 +89,36 @@ def wrangler(*args: str) -> str:
         # Never echo SQL, response payloads, credentials, or signed upload URLs.
         known = [code for code in (
             "D1_RESET_DO", "Authentication error", "FOREIGN KEY constraint failed", "Statement too long",
-            "SQLITE_CONSTRAINT", "SQLITE_ERROR", "SQLITE_BUSY",
+            "SQLITE_CONSTRAINT", "SQLITE_ERROR", "SQLITE_BUSY", "fetch failed",
+            "connectivity issue", "ECONNRESET", "ETIMEDOUT",
         ) if code in diagnostic]
         raise RuntimeError(
             f"Wrangler {args[0]} failed ({error.returncode}); "
             f"output_bytes={len(diagnostic)}; known_errors={known}"
         ) from None
+
+
+def import_batch(name: str, path: pathlib.Path) -> None:
+    if re.fullmatch(r"saqi-restore-rehearsal-[0-9a-f]{12}", name) is None:
+        raise RuntimeError("Refusing to import into a non-disposable database")
+    # Only generated data batches are repeatable. Triggers are installed last,
+    # after every data batch finishes. Conflict handling preserves the first
+    # inserted row; the final exhaustive comparison rejects any wrong value.
+    prefix = path.read_bytes()[:32]
+    repeatable = prefix.startswith((b'INSERT INTO ', b'UPDATE '))
+    for attempt in range(4):
+        try:
+            wrangler("d1", "execute", name, "--remote", "--file", str(path), "--yes")
+            return
+        except RuntimeError as error:
+            transient = any(marker in str(error) for marker in (
+                "fetch failed", "connectivity issue", "ECONNRESET", "ETIMEDOUT",
+                "D1_RESET_DO", "Authentication error",
+            ))
+            if not repeatable or not transient or attempt == 3:
+                raise
+            print(json.dumps({"retrying_disposable_data_batch": path.name, "attempt": attempt + 2}), flush=True)
+            time.sleep(min(2 ** attempt, 4))
 
 
 MAX_IMPORT_BYTES = 8_000_000
@@ -142,12 +166,12 @@ def table_inserts(database: sqlite3.Connection, table: str):
         values = [None if column in deferred else row[column] for column in columns]
         sql = f'INSERT INTO "{table}" ({names}) VALUES (' + ",".join(map(sql_literal, values)) + ")"
         if len(sql.encode("utf-8")) + 2 <= RESTORE.D1_MAX_STATEMENT_BYTES:
-            yield sql
+            yield sql + " ON CONFLICT DO NOTHING"
             continue
         if table not in {"poem", "model_enrichment_artifact"} or columns[0] != "id":
             raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
         placeholders = ",".join("?" for _ in columns)
-        yield BoundInsert(table, row["id"], f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', values)
+        yield BoundInsert(table, row["id"], f'INSERT INTO "{table}" ({names}) VALUES ({placeholders}) ON CONFLICT DO NOTHING', values)
 
 
 def restore_cycle_updates(database: sqlite3.Connection, tables: list[str]):
@@ -356,7 +380,7 @@ def main() -> None:
             for index, step in enumerate(steps, 1):
                 print(json.dumps({"import_step": index, "total_steps": len(steps)}), flush=True)
                 if isinstance(step, pathlib.Path):
-                    wrangler("d1", "execute", name, "--remote", "--file", str(step), "--yes")
+                    import_batch(name, step)
                 else:
                     d1_query(database_id, step.sql, step.params, retry=False)
             counts = compare_export(restored, name)

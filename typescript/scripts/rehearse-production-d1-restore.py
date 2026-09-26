@@ -140,10 +140,25 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
         process.stderr.close()
         if process.wait() != 0:
             raise RuntimeError(f"SQLite archive replay failed: {error[-1000:]}")
+    except BrokenPipeError:
+        assert process.stderr is not None
+        error = process.stderr.read().decode("utf-8", "replace")
+        code = process.wait()
+        known = [message for message in (
+            "database or disk is full", "out of memory", "disk I/O error",
+            "unable to open database file", "no such table", "syntax error",
+            "UNIQUE constraint failed", "FOREIGN KEY constraint failed",
+            "database is locked", "database disk image is malformed",
+        ) if message in error]
+        raise RuntimeError(f"SQLite replay exited early: code={code}, known_errors={known}") from None
     finally:
         if process.poll() is None:
             process.kill()
             process.wait()
+        for stream in (process.stdin, process.stderr):
+            if stream is not None:
+                with contextlib.suppress(BrokenPipeError):
+                    stream.close()
     return SqlDigest(
         size=total,
         sha256=digest.hexdigest(),

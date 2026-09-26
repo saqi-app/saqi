@@ -13,6 +13,17 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RestoreRehearsalTest(unittest.TestCase):
+    def test_early_sqlite_exit_reports_safe_diagnostic(self):
+        sql = b"INSERT INTO missing_table VALUES ('private-marker');\n" + b"SELECT 1;\n" * 100_000
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            part = directory / "part"
+            part.write_bytes(gzip.compress(sql, mtime=0))
+            with self.assertRaises(RuntimeError) as caught:
+                MODULE.restore([part], directory / "copy.sqlite3")
+            self.assertIn("no such table", str(caught.exception))
+            self.assertNotIn("private-marker", str(caught.exception))
+
     def test_replays_verified_sql_and_rejects_count_drift(self):
         sql = b"""
         CREATE TABLE author(id TEXT PRIMARY KEY);
