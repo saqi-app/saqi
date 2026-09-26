@@ -11,6 +11,7 @@
   "vars": {
     "SAQI_PUBLIC_ORIGIN": "https://saqi.app",
     "SAQI_DIRECT_SOURCE_ACTIVE": "0",
+    "SAQI_RIG_ACTIVE": "0",
   },
   "secrets": {
     "required": [

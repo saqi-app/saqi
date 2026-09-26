@@ -9,6 +9,7 @@ export interface CloudflareEnv {
   SAQI_DIRECT_SOURCE_ACTIVE: string | undefined;
   SAQI_PUBLIC_CACHE_PURGE_SECRET: string | undefined;
   SAQI_PUBLIC_ORIGIN: string | undefined;
+  SAQI_RIG_ACTIVE: string | undefined;
   SAQI_SOURCE_BASE_URL: string;
   SAQI_SOURCE_NAME: string;
 }
@@ -25,6 +26,7 @@ const CloudflareEnvSchema = z.object({
   SAQI_SOURCE_BASE_URL: SourceOriginSchema,
   SAQI_SOURCE_NAME: SourceNameSchema,
   SAQI_DIRECT_SOURCE_ACTIVE: z.enum(["0", "1"]).optional(),
+  SAQI_RIG_ACTIVE: z.enum(["0", "1"]).optional(),
 });
 
 export function getCloudflareEnv(): CloudflareEnv {
@@ -39,5 +41,6 @@ export function getCloudflareEnv(): CloudflareEnv {
     SAQI_SOURCE_BASE_URL: typedEnv.SAQI_SOURCE_BASE_URL,
     SAQI_SOURCE_NAME: typedEnv.SAQI_SOURCE_NAME,
     SAQI_DIRECT_SOURCE_ACTIVE: typedEnv.SAQI_DIRECT_SOURCE_ACTIVE,
+    SAQI_RIG_ACTIVE: typedEnv.SAQI_RIG_ACTIVE,
   };
 }
