@@ -9,6 +9,7 @@ import { delimiter, join } from "node:path";
 import { test } from "node:test";
 
 const script = new URL("rig-lite.mjs", import.meta.url);
+const localScript = new URL("rig-local.mjs", import.meta.url);
 
 test("a durable Codex result is acknowledged and published after restart without another call", async () => {
   const attemptId = randomUUID();
@@ -35,7 +36,15 @@ test("an unknown Codex outcome without a result blocks instead of replaying", as
   assert.equal(run.codexCalled, false);
 });
 
-async function exerciseUnknown(attemptId) {
+test("the Keychain-backed entrypoint preserves unknown-outcome blocking", async () => {
+  const run = await exerciseUnknown(randomUUID(), localScript, ["translate"]);
+  assert.notEqual(run.code, 0);
+  assert.match(run.stderr, /no durable result/u);
+  assert.deepEqual(run.actions, ["purge-cache"]);
+  assert.equal(run.codexCalled, false);
+});
+
+async function exerciseUnknown(attemptId, entry = script, args = []) {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-test-"));
   const markerPath = join(directory, "codex-called");
   const fakeCodex = join(directory, "codex");
@@ -93,7 +102,7 @@ async function exerciseUnknown(attemptId) {
       SAQI_RIG_ACTIVE: "1",
       SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
       SAQI_TEST_CODEX_MARKER: markerPath,
-    });
+    }, entry, args);
     let codexCalled = true;
     try {
       await access(markerPath);
@@ -108,9 +117,9 @@ async function exerciseUnknown(attemptId) {
   }
 }
 
-function runScript(environment) {
+function runScript(environment, entry = script, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script.pathname], {
+    const child = spawn(process.execPath, [entry.pathname, ...args], {
       env: { ...process.env, ...environment },
       stdio: ["ignore", "pipe", "pipe"],
     });
