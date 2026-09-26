@@ -33,7 +33,7 @@ function request(path: string, method = "GET", headers = {}) {
       "content-type": "application/json",
       ...headers,
     },
-    body: method === "POST" ? "{}" : undefined,
+    body: method === "POST" ? "{}" : null,
   });
 }
 beforeEach(() => {
