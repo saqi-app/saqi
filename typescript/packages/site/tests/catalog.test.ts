@@ -238,6 +238,61 @@ void test("audited inactive snapshots can be selected by the reader flag", async
   }
 });
 
+void test("word-gloss publications keep the author-page insights badge", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author(id, slug, name_arabic, hidden)
+      VALUES ('a-gloss', 'gloss-poet', 'شاعر', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic, hidden)
+      VALUES ('p-gloss', 'a-gloss', 'gloss', 1, 'قصيدة', '{"content":["بيت"]}', 0);
+    `);
+    const publication = publicationSnapshotFromPoem({
+      id: "p-gloss",
+      authorId: "a-gloss",
+      slug: "gloss",
+      verses: 1,
+      nameArabic: "قصيدة",
+      linesArabic: ["بيت"],
+      modelEnrichments: [
+        {
+          modelKey: "sol-5.6",
+          model: "gpt-5.6-sol",
+          reasoningEffort: "medium",
+          lines: ["A verse"],
+          wordGlosses: {
+            tokenizerVersion: "saqi-orthographic-v1",
+            lines: [
+              {
+                lineIndex: 0,
+                segments: [
+                  {
+                    kind: "word",
+                    surface: "بيت",
+                    meaning: "verse",
+                    tokenIndex: 0,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    sqlite
+      .prepare("UPDATE poem SET publication_json=? WHERE id='p-gloss'")
+      .run(JSON.stringify(publication));
+    const reader = catalogRepository(sqlite, true);
+    const detail = await reader.getPoemPage("gloss-poet", "p-gloss");
+    assert.equal(detail?.poem.insights, undefined);
+    assert.ok(detail?.poem.modelEnrichments?.[0]?.wordGlosses);
+    const summary = await reader.getAuthorPage("gloss-poet");
+    assert.equal(summary?.poems[0]?.hasInsights, true);
+  } finally {
+    sqlite.close();
+  }
+});
+
 void test("the projected reader needs no model history table", async () => {
   const sqlite = createDatabase();
   try {
@@ -333,6 +388,21 @@ void test("legacy attribution requires the exact stored payload hash", async () 
     assert.equal(
       attributed.poem.linesEnglishAttributionCertainty,
       "inferred_range",
+    );
+
+    const beforeProjection = await database.getAuthorPage("attributed-poet");
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-attributed'")
+      .run(JSON.stringify(publicationSnapshotFromPoem(attributed.poem)));
+    const projected = catalogRepository(sqlite, true);
+    assert.deepEqual(
+      await projected.getAuthorPage("attributed-poet"),
+      beforeProjection,
+    );
+    assert.equal(
+      (await projected.getPoemPage("attributed-poet", "p-attributed"))?.poem
+        .linesEnglishModel,
+      "Claude 1 or 2",
     );
 
     sqlite
