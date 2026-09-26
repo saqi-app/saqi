@@ -24,6 +24,12 @@ SAQI_RIG_ACTIVE=1 node scripts/rig-local.mjs translate POEM_ID
 
 Complete source verification in the collector's visible Chrome window when requested. It waits up to 15 minutes. Source requests are serial, spaced by at least 13 seconds; a source rate-limit deadline persists in D1 and survives process restarts.
 
+## Use your regular Chrome session
+
+For collection assisted by this coding agent, use the connected regular Chrome browser. On this Mac it loaded the source author and poem immediately where the separate automation profile remained challenged. Read the visible complete author manifest and poem text, validate them with `parseAuthorPoemManifest` and `parsePoemDetail`, then use the existing `/api/rig/source` endpoint with source keys and expected hashes. Respect the persisted source cooldown and serial pacing; mark the author collected only after the complete manifest succeeds. Temporary page projections can be deleted after D1 accepts them.
+
+This path needs no dedicated browser profile or cookie copy. The standalone `collect` CLI still launches its own separate Chrome profile; it does not attach to an already-running personal Chrome session. Prefer the agent-assisted regular-browser path when the standalone collector repeatedly encounters source verification. Translation remains the same one-shot CLI command.
+
 ## Restart after a crash
 
 Run the same translation command again. A durable invocation marker on the poem prevents an unknown Codex outcome from being silently dispatched again. If the completed result file still exists, the rig acknowledges and publishes that same result. Acknowledged results are already in D1 and can be published after a restart.

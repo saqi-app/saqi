@@ -49,4 +49,14 @@ void test("breadcrumb labels use names, safe slugs, and Arabic fallbacks", () =>
     "Amna Bnt Otaiba",
   );
   assert.equal(englishAuthorLabel(AUTHOR), AUTHOR.nameArabic);
+  const collected = {
+    ...AUTHOR,
+    slug: "source-d4c37691756dd33f39fb111412827fd4d5188b9c0ecf712c32213db778ea02ee",
+    nameArabic: "ابن عمر الضمدي",
+  };
+  assert.equal(englishAuthorLabel(collected), collected.nameArabic);
+  assert.equal(
+    englishAuthorLabel({ ...collected, nameEnglish: "Ibn Umar al-Damadi" }),
+    "Ibn Umar al-Damadi",
+  );
 });
