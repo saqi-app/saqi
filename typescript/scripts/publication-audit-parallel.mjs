@@ -26,9 +26,9 @@ try {
   // Four simultaneous catalog comparisons exceeded the live Worker's stable
   // read capacity. Keep bounded ranges for resumability, but read one at a time.
   const summaries = [];
-  for (let index = 0; index < ranges.length; index += 1) {
+  for (const [index, range] of ranges.entries()) {
     // eslint-disable-next-line no-await-in-loop -- Limit audit demand on the live Worker.
-    summaries.push(await auditLane(ranges[index], index));
+    summaries.push(await auditLane(range, index));
   }
   const totals = summaries.reduce(
     (sum, item) => ({
