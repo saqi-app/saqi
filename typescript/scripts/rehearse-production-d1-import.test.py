@@ -1,9 +1,12 @@
 import gzip
 import importlib.util
+import io
 import pathlib
 import sqlite3
 import tempfile
+import time
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 
@@ -17,6 +20,26 @@ class D1ImportRehearsalTest(unittest.TestCase):
     def test_disposable_client_refuses_production_database(self):
         with self.assertRaisesRegex(RuntimeError, "Refusing to query production"):
             MODULE.d1_query(MODULE.PRODUCTION_DATABASE_ID, "SELECT 1")
+
+    def test_disposable_client_retries_transient_error(self):
+        unavailable = urllib.error.HTTPError("https://api.cloudflare.com", 503, "unavailable", {}, None)
+        response = io.BytesIO(b'{"success":true,"result":[{"success":true,"results":[{"ok":1}]}]}')
+        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+             patch.object(MODULE.urllib.request, "urlopen", side_effect=[unavailable, response]) as open_url, \
+             patch.object(MODULE.time, "sleep") as sleep:
+            self.assertEqual(MODULE.d1_query("disposable", "SELECT 1"), [{"ok": 1}])
+            self.assertEqual(open_url.call_count, 2)
+            sleep.assert_called_once_with(0.5)
+
+    def test_disposable_client_does_not_retry_bad_query(self):
+        bad_query = urllib.error.HTTPError("https://api.cloudflare.com", 400, "bad query", {}, None)
+        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+             patch.object(MODULE.urllib.request, "urlopen", side_effect=bad_query) as open_url, \
+             patch.object(MODULE.time, "sleep") as sleep:
+            with self.assertRaises(urllib.error.HTTPError):
+                MODULE.d1_query("disposable", "SELECT 1")
+            self.assertEqual(open_url.call_count, 1)
+            sleep.assert_not_called()
 
     def test_oversized_publication_is_restored_with_a_bound_value(self):
         publication = '{"english":"' + "x" * 53_000 + ";\n" + "y" * 53_000 + '"}'
