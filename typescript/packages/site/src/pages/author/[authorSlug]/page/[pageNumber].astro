@@ -7,7 +7,10 @@ import { CatalogRepository } from "../../../../lib/catalog";
 const pageNumberText = Astro.params["pageNumber"] ?? "";
 const pageNumber = /^[1-9]\d*$/u.test(pageNumberText) ? Number(pageNumberText) : 0;
 const authorSlug = Astro.params["authorSlug"] ?? "";
-const page = await CatalogRepository.fromD1(env.DB).getAuthorPage(
+const page = await CatalogRepository.fromD1(
+  env.DB,
+  env.SAQI_PUBLICATION_PROJECTION_ACTIVE === "1",
+).getAuthorPage(
   authorSlug,
   pageNumber,
 );

@@ -13,7 +13,10 @@ import {
 } from "../../../../lib/poem-translations";
 import { authorPath, englishAuthorLabel, poemPath } from "../../../../lib/routes";
 
-const page = await CatalogRepository.fromD1(env.DB).getPoemPage(
+const page = await CatalogRepository.fromD1(
+  env.DB,
+  env.SAQI_PUBLICATION_PROJECTION_ACTIVE === "1",
+).getPoemPage(
   Astro.params["authorSlug"] ?? "",
   Astro.params["poemId"] ?? "",
 );

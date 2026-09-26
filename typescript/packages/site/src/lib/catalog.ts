@@ -414,8 +414,12 @@ const TranslationAvailabilitySchema = z.object({
 
 function summaryTranslationModels(
   row: z.infer<typeof PoemSummaryRowSchema>,
+  allowInactiveProjection = false,
 ): TranslationAvailability[] {
-  const projected = activePublicationSnapshot(row.publicationJson);
+  const projected = activePublicationSnapshot(
+    row.publicationJson,
+    allowInactiveProjection,
+  );
   if (projected) {
     return poemTranslationTracks(projected.fields).flatMap((track) =>
       track.model && track.provider
@@ -478,11 +482,16 @@ function summaryTranslationModels(
   return models;
 }
 
-function activePublicationSnapshot(raw: null | string) {
+function activePublicationSnapshot(
+  raw: null | string,
+  allowInactiveProjection = false,
+) {
   if (!raw) return undefined;
   try {
     const parsed = PublicationSnapshotSchema.safeParse(JSON.parse(raw));
-    return parsed.success && parsed.data.active ? parsed.data : undefined;
+    return parsed.success && (parsed.data.active || allowInactiveProjection)
+      ? parsed.data
+      : undefined;
   } catch {
     return undefined;
   }
@@ -644,6 +653,7 @@ function poemFromRow(
   raw: unknown,
   dynamicModelEnrichments: readonly string[] = [],
   legacyAttribution?: z.infer<typeof LegacyModelAttributionRowSchema>,
+  allowInactiveProjection = false,
 ): Poem | undefined {
   const parsedRow = PoemRowSchema.safeParse(raw);
   if (!parsedRow.success) return undefined;
@@ -671,7 +681,7 @@ function poemFromRow(
     (index) => sourceLines[index] ?? "",
   );
   const currentPublication =
-    publicationSnapshotPoem(row, linesArabic) ??
+    publicationSnapshotPoem(row, linesArabic, allowInactiveProjection) ??
     currentPublicationPoem(
       row,
       sourceLines,
@@ -751,8 +761,12 @@ function poemFromRow(
 function publicationSnapshotPoem(
   row: z.infer<typeof PoemRowSchema>,
   linesArabic: readonly string[],
+  allowInactiveProjection = false,
 ): Poem | undefined {
-  const snapshot = activePublicationSnapshot(row.publicationJson);
+  const snapshot = activePublicationSnapshot(
+    row.publicationJson,
+    allowInactiveProjection,
+  );
   if (!snapshot) return undefined;
   const parsed = SnapshotPoemSchema.safeParse({
     id: row.id,
@@ -985,13 +999,21 @@ async function sha256Utf8Exact(value: string): Promise<string> {
 
 export class CatalogRepository implements CatalogReader {
   readonly #database: CatalogDatabase;
+  readonly #allowInactiveProjection: boolean;
 
-  constructor(database: CatalogDatabase) {
+  constructor(database: CatalogDatabase, allowInactiveProjection = false) {
     this.#database = database;
+    this.#allowInactiveProjection = allowInactiveProjection;
   }
 
-  static fromD1(database: D1Database): CatalogRepository {
-    return new CatalogRepository(catalogDatabaseFromD1(database));
+  static fromD1(
+    database: D1Database,
+    allowInactiveProjection = false,
+  ): CatalogRepository {
+    return new CatalogRepository(
+      catalogDatabaseFromD1(database),
+      allowInactiveProjection,
+    );
   }
 
   async listAuthors(): Promise<IndexedAuthor[]> {
@@ -1079,8 +1101,14 @@ export class CatalogRepository implements CatalogReader {
       poems: PoemSummaryRowSchema.array()
         .parse(pageResults.at(1)?.results ?? [])
         .map((row) => {
-          const translationModels = summaryTranslationModels(row);
-          const publication = activePublicationSnapshot(row.publicationJson);
+          const translationModels = summaryTranslationModels(
+            row,
+            this.#allowInactiveProjection,
+          );
+          const publication = activePublicationSnapshot(
+            row.publicationJson,
+            this.#allowInactiveProjection,
+          );
           return {
             authorId: row.authorId,
             hasEnglish: translationModels.length > 0,
@@ -1123,6 +1151,7 @@ export class CatalogRepository implements CatalogReader {
     if (!parsedRow.success) return undefined;
     const activeSnapshot = activePublicationSnapshot(
       parsedRow.data.publicationJson,
+      this.#allowInactiveProjection,
     );
     const [dynamicModelEnrichments, legacyAttribution] = activeSnapshot
       ? ([[], undefined] as const)
@@ -1133,7 +1162,12 @@ export class CatalogRepository implements CatalogReader {
             parsedRow.data.legacyTranslationAttributions,
           ),
         ]);
-    const poem = poemFromRow(row, dynamicModelEnrichments, legacyAttribution);
+    const poem = poemFromRow(
+      row,
+      dynamicModelEnrichments,
+      legacyAttribution,
+      this.#allowInactiveProjection,
+    );
     return poem ? { author: authorFromJoinedRow(row), poem } : undefined;
   }
 

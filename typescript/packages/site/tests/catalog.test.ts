@@ -49,7 +49,10 @@ class TestStatement {
   }
 }
 
-function catalogRepository(database: Database.Database): CatalogRepository {
+function catalogRepository(
+  database: Database.Database,
+  allowInactiveProjection = false,
+): CatalogRepository {
   const adapter: CatalogDatabase = {
     async batch(statements) {
       return Promise.all(statements.map((statement) => statement.all()));
@@ -58,7 +61,7 @@ function catalogRepository(database: Database.Database): CatalogRepository {
       return new TestStatement(database, query);
     },
   };
-  return new CatalogRepository(adapter);
+  return new CatalogRepository(adapter, allowInactiveProjection);
 }
 
 function createDatabase() {
@@ -174,6 +177,44 @@ void test("one poem publication snapshot preserves every visible translation cho
     const updatedSummary = await reader.getAuthorPage("tracks-poet");
     assert.ok(updatedSummary);
     assert.deepEqual(updatedSummary.poems[0], oldSummary.poems[0]);
+  } finally {
+    sqlite.close();
+  }
+});
+
+void test("audited inactive snapshots can be selected by the reader flag", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author(id, slug, name_arabic, hidden)
+      VALUES ('a-shadow', 'shadow-poet', 'شاعر', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
+        content_arabic, translation, hidden)
+      VALUES ('p-shadow', 'a-shadow', 'shadow', 1, 'قصيدة',
+        '{"content":["بيت"]}', '{"content":["Visible English"]}', 0);
+    `);
+    const oldReader = catalogRepository(sqlite);
+    const before = await oldReader.getPoemPage("shadow-poet", "p-shadow");
+    assert.ok(before);
+    const snapshot = publicationSnapshotFromPoem(before.poem);
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-shadow'")
+      .run(JSON.stringify(snapshot));
+    const flaggedReader = catalogRepository(sqlite, true);
+    assert.deepEqual(
+      await flaggedReader.getPoemPage("shadow-poet", "p-shadow"),
+      before,
+    );
+    const beforeSummary = await oldReader.getAuthorPage("shadow-poet");
+    assert.deepEqual(
+      await flaggedReader.getAuthorPage("shadow-poet"),
+      beforeSummary,
+    );
+    sqlite.exec("UPDATE poem SET translation = NULL WHERE id = 'p-shadow'");
+    const projected = await flaggedReader.getPoemPage("shadow-poet", "p-shadow");
+    const legacy = await oldReader.getPoemPage("shadow-poet", "p-shadow");
+    assert.deepEqual(projected?.poem.linesEnglish, ["Visible English"]);
+    assert.equal(legacy?.poem.linesEnglish, undefined);
   } finally {
     sqlite.close();
   }
