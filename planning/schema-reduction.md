@@ -46,6 +46,8 @@ A later read-only count found 80,478 public projection candidates, or at least 8
 
 Exception review: the two sealed unmapped records point to existing public poems `c3718eff-15af-46bf-9258-a843d5222181` and `d2ad44f1-577c-456a-a1be-fe0d57e52daa`. The first has identical staged Arabic lines and a visible legacy translation; the second has changed staged Arabic lines and no English. They are pending source bindings/one real text update, not disposable history. Of the three established source identities whose poem revision pointer is null, two have exact title/line parity with their current revision (one has legacy English); the third has changed Arabic and no English. Backfill the two exact hashes with a guarded compare-and-swap after the old writer is cut over, then apply the changed text and hash for the other cases. Keep their current public URLs and the first poem's visible English throughout.
 
+The exact five canonical current hashes, staged-hash comparisons, row guards, and recrawl checks are pinned in [source-exception-reconciliation.md](source-exception-reconciliation.md). One sealed poem's snapshot is still pending the active publication backfill; re-read that state before setting `publication_source_hash`.
+
 ## Target schema and paths
 
 The final two-table SQL sketch, including keys and due-work indexes, is in [target-two-table-schema.md](target-two-table-schema.md). It removes even the transitional source/publication versions and dirty bit by using source hashes, a rig CAS version, and a `cache_purged_hash`. Do not execute that sketch as a migration before the parity gates below.
