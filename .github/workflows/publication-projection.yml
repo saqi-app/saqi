@@ -26,7 +26,7 @@ on:
         required: false
         type: string
       after_id:
-        description: Optional cursor for a partial read-only inventory after a failed batch
+        description: Optional cursor for resuming a read-only inventory or audit after a verified batch
         required: false
         type: string
       batch_limit:

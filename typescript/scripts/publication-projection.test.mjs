@@ -107,8 +107,11 @@ test("the reviewed skip gate accepts only the exact ID set", () => {
 
 test("read-only cursor resumes after a transient Worker failure", async () => {
   let calls = 0;
-  const server = createServer((_request, response) => {
+  const requests = [];
+  const server = createServer(async (request, response) => {
     calls += 1;
+    const chunks = await Array.fromAsync(request);
+    requests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
     if (calls === 1) {
       response.writeHead(503).end();
       return;
@@ -138,6 +141,18 @@ test("read-only cursor resumes after a transient Worker failure", async () => {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(calls, 2);
     assert.match(result.stdout, /"startAfterId":"poem-1"/u);
+    const audit = await runScript(["--audit"], {
+      SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
+      SAQI_PROJECTION_AFTER_ID: "poem-1",
+    });
+    assert.equal(audit.code, 0, audit.stderr);
+    assert.match(audit.stdout, /"action":"audit"/u);
+    assert.match(audit.stdout, /"startAfterId":"poem-1"/u);
+    assert.deepEqual(requests.at(-1), {
+      action: "audit",
+      afterId: "poem-1",
+      limit: 10,
+    });
     const rejected = await runScript(["--apply"], {
       SAQI_PROJECTION_AFTER_ID: "poem-1",
       SAQI_D1_RESTORE_BOOKMARK:
