@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, stat, unlink } from "node:fs/promises";
+import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
+import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
@@ -48,7 +49,9 @@ async function main() {
     return;
   }
   if (process.argv.length > 3)
-    throw new Error("Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]");
+    throw new Error(
+      "Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
+    );
   const preferredPoemId = process.argv[2];
   if (process.env.SAQI_RIG_ACTIVE !== "1")
     throw new Error(
@@ -94,8 +97,10 @@ async function main() {
     inputHash,
     model,
   });
-  process.stdout.write(`Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`);
-  const output = await runCodex(prompt, attemptId);
+  process.stdout.write(
+    `Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`,
+  );
+  const output = await runCodex(prompt, attemptId, source.linesArabic);
   const acknowledged = await request({
     action: "acknowledge",
     poemId: claim.poemId,
@@ -158,7 +163,7 @@ async function readOutput(attemptId) {
   }
   if (size < 1 || size > 1_048_576)
     throw new Error(`Invalid Codex output size for ${attemptId}`);
-  return JSON.parse(await readFile(path, "utf8"));
+  return normalizeWordMeanings(JSON.parse(await readFile(path, "utf8")));
 }
 
 async function recover(state) {
@@ -211,7 +216,7 @@ function promptFor(poem) {
     "Output one English line for each Arabic line, in exactly the same order.",
     "Keep names and imagery faithful. Do not invent historical facts or cite sources you did not read.",
     "Every insight field and array must be nonempty. notableLines must quote actual Arabic lines.",
-    "For wordMeanings, return one array per Arabic line, with one concise English meaning per listed token in exactly the given order. Preserve attached conjunctions/pronouns in the meaning. Empty token lists require an empty array. Do not merge, skip, or add words.",
+    "For wordMeanings, return the required line_1, line_2, etc. properties, each containing one concise English meaning per listed token in exactly the given order. Preserve attached conjunctions/pronouns in the meaning. Empty token lists require an empty array. Do not merge, skip, or add words.",
     "Return only the JSON object required by the supplied schema.",
     `Author: ${poem.authorName}`,
     `Title: ${poem.titleArabic}`,
@@ -221,7 +226,23 @@ function promptFor(poem) {
   ].join("\n");
 }
 
-async function runCodex(prompt, attemptId) {
+async function runCodex(prompt, attemptId, lines) {
+  const invocationSchema = join(tmpdir(), `saqi-schema-${attemptId}.json`);
+  await writeFile(
+    invocationSchema,
+    JSON.stringify(
+      generationSchema(JSON.parse(await readFile(schemaPath, "utf8")), lines),
+    ),
+    { mode: 0o600 },
+  );
+  try {
+    return await runWithSchema(prompt, attemptId, invocationSchema);
+  } finally {
+    await unlink(invocationSchema);
+  }
+}
+
+async function runWithSchema(prompt, attemptId, invocationSchema) {
   const args = [
     "exec",
     "--ephemeral",
@@ -231,7 +252,7 @@ async function runCodex(prompt, attemptId) {
     model,
     "--json",
     "--output-schema",
-    schemaPath,
+    invocationSchema,
     "--output-last-message",
     outputPath(attemptId),
     "-c",

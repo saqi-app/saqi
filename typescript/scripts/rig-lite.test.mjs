@@ -14,11 +14,11 @@ const localScript = new URL("rig-local.mjs", import.meta.url);
 test("killing the runner before acknowledgement recovers the exact result without another invocation", { timeout: 20_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-crash-"));
   const callsPath = join(directory, "calls");
-  const output = { translation: { lines: ["Recovered English"] } };
+  const output = { translation: { lines: ["Recovered English"] }, wordMeanings: [["line"]] };
   await writeFile(join(directory, "codex"), String.raw`#!/usr/bin/env node
 const fs = require("node:fs");
 fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
-fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify(output))});
+fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify({ ...output, wordMeanings: { line_1: ["line"] } }))});
 process.stdin.resume();
 `, { mode: 0o700 });
   let state = null;
@@ -97,7 +97,7 @@ process.stdin.resume();
 test("a durable Codex result is acknowledged and published after restart without another call", async () => {
   const attemptId = randomUUID();
   const outputPath = join(tmpdir(), `saqi-rig-${attemptId}.json`);
-  const output = { translation: { lines: ["A translated line"] } };
+  const output = { translation: { lines: ["A translated line"] }, wordMeanings: [["line"]] };
   await writeFile(outputPath, JSON.stringify(output));
   try {
     const run = await exerciseUnknown(attemptId);

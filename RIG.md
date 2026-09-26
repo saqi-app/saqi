@@ -48,6 +48,8 @@ The invocation marker in D1 prevents unknown Codex outcomes from being silently 
 node typescript/scripts/rig-local.mjs translate retry-unknown POEM_ID ATTEMPT_ID
 ```
 
+Known completed results that fail publication validation are marked `blocked` with their checkpoint retained; other poems continue. Review those rows with `SELECT id FROM poem WHERE rig_status = 'blocked'`. Generation constrains each line's exact word count before publication.
+
 A manual retry can duplicate one call if it completed without a recoverable result. Automatic background checks never make that decision. Do not delete an unresolved invocation's result file.
 
 ## Recovery

@@ -332,3 +332,45 @@ test("a changed Arabic source cannot receive an earlier Codex result", async () 
       .get()
   ).toEqual({ publicationJson: null });
 });
+
+test("an acknowledged invalid output is retained without starving the next poem", async () => {
+  const { publisher, repository, sqlite } = fixture();
+  const checkpoint = JSON.stringify({
+    model: "Codex Sol",
+    sourceHash: "a".repeat(64),
+    outputs: {
+      generation: {
+        translation: { lines: ["translated"] },
+        wordMeanings: [[]],
+        insights: {
+          summary: "Reading",
+          themes: ["Memory"],
+          historicalContext: "History",
+          literaryDevices: ["Metaphor"],
+          culturalSignificance: "Culture",
+          notableLines: [{ line: "بيت", explanation: "Meaning" }],
+        },
+      },
+    },
+  });
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'claimed', rig_version = 1, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(checkpoint);
+  await expect(publisher.publish("poem-1", 1)).resolves.toBe("blocked");
+  expect(
+    sqlite
+      .prepare(
+        "SELECT rig_status, rig_checkpoint_json, publication_json FROM poem WHERE id = 'poem-1'"
+      )
+      .get()
+  ).toEqual({
+    rig_status: "blocked",
+    rig_checkpoint_json: checkpoint,
+    publication_json: null,
+  });
+  await expect(
+    repository.claimNextPoem("11111111-1111-4111-8111-111111111111", 100)
+  ).resolves.toMatchObject({ poemId: "poem-2" });
+});
