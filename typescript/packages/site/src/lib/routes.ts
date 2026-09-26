@@ -18,6 +18,7 @@ export function authorPath(author: Pick<Author, "slug">) {
 export function englishAuthorLabel(author: Author) {
   const explicitName = author.nameEnglish?.trim();
   if (explicitName) return explicitName;
+  if (/^source-[a-f0-9]{64}$/iu.test(author.slug)) return author.nameArabic;
 
   const slug = author.slug.replace(/^poet-/iu, "");
   if (!/^[a-z0-9]+(?:[ _-][a-z0-9]+)*$/iu.test(slug)) return author.nameArabic;
