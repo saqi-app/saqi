@@ -21,7 +21,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
             home = pathlib.Path(temporary)
             config = home / "Library/Preferences/.wrangler/config/default.toml"
             config.parent.mkdir(parents=True)
-            config.write_text('expiration_time = "1970-01-01T00:01:50+00:00"')
+            config.write_text('expiration_time = "1970-01-01T00:05:00+00:00"')
             clock = [100.0]
             def advance(seconds):
                 clock[0] += seconds
@@ -30,7 +30,9 @@ class D1ImportRehearsalTest(unittest.TestCase):
                  patch.object(MODULE.time, "time", side_effect=lambda: clock[0]), \
                  patch.object(MODULE.time, "sleep", side_effect=advance) as sleep:
                 MODULE.wait_for_oauth_window()
-                sleep.assert_called_once_with(12.0)
+                self.assertEqual(sleep.call_count, 7)
+                self.assertEqual(clock[0], 302.0)
+                self.assertTrue(all(call.args[0] <= 30 for call in sleep.call_args_list))
 
     def test_disposable_client_refuses_production_database(self):
         with self.assertRaisesRegex(RuntimeError, "Refusing to query production"):

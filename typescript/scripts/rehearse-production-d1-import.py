@@ -57,6 +57,7 @@ def wait_for_oauth_window() -> None:
     # This personal Mac uses Wrangler's default OAuth profile. API tokens have
     # no local expiry. Do not begin a bulk request just before OAuth expires:
     # Wrangler only refreshes an expired token when the next command starts.
+    # A slow bulk request outlasted the former two-minute margin in rehearsal.
     if os.environ.get("CLOUDFLARE_API_TOKEN"):
         return
     config = pathlib.Path.home() / "Library/Preferences/.wrangler/config/default.toml"
@@ -67,7 +68,7 @@ def wait_for_oauth_window() -> None:
         return
     deadline = datetime.datetime.fromisoformat(expiration).timestamp()
     remaining = deadline - time.time()
-    while 0 < remaining < 120:
+    while 0 < remaining < 900:
         print(json.dumps({"waiting_for_oauth_refresh_seconds": round(remaining + 2)}), flush=True)
         time.sleep(min(remaining + 2, 30))
         remaining = deadline - time.time()
