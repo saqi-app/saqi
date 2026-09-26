@@ -106,7 +106,7 @@ jobs:
 
       - name: Build application Worker
         if: steps.changes.outputs.app == 'true'
-        run: yarn workspace @saqi/operations opennext:build
+        run: yarn workspace @saqi/operations build
 
       - name: Build and validate the public Worker
         if: steps.changes.outputs.site == 'true'
@@ -118,8 +118,6 @@ jobs:
 
       - name: Validate application Worker artifact
         if: steps.changes.outputs.app == 'true'
-        env:
-          OPEN_NEXT_DEPLOY: "true"
         run: >-
           yarn workspace @saqi/operations wrangler deploy --dry-run
           --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/ops-dry-run"

@@ -23,32 +23,10 @@ const RESPONSE_HEADERS = {
   "x-robots-tag": "noindex, nofollow, noarchive",
 } as const;
 
-export function isImmutableNextAsset(
-  request: Request,
-  response: Response
-): boolean {
-  return (
-    (request.method === "GET" || request.method === "HEAD") &&
-    response.ok &&
-    new URL(request.url).pathname.startsWith("/_next/static/")
-  );
-}
-
-export function secureOperationsResponse(
-  response: Response,
-  request?: Request
-): Response {
+export function secureOperationsResponse(response: Response): Response {
   const secured = new Response(response.body, response);
   for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
     secured.headers.set(name, value);
-  }
-  if (request && isImmutableNextAsset(request, response)) {
-    secured.headers.set(
-      "cache-control",
-      "private, max-age=31536000, immutable"
-    );
-    secured.headers.delete("expires");
-    secured.headers.delete("pragma");
   }
   return secured;
 }

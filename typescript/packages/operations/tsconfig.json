@@ -3,30 +3,17 @@
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "ES2024"],
     "noEmit": true,
-    "jsx": "preserve",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "types": ["@cloudflare/workers-types", "node"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "types": ["@cloudflare/workers-types", "node"]
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "../site/src/lib/catalog.ts",
-    "../site/src/lib/catalog-database.ts",
-    "../site/src/lib/poem-translations.ts",
+    "worker.ts",
+    "src/**/*.ts",
+    "vitest.config.ts",
     "../site/src/lib/publication-snapshot.ts",
-    "../site/src/lib/snapshot-contract.ts",
-    ".next/types/**/*.ts"
+    "../site/src/lib/snapshot-contract.ts"
   ],
-  "exclude": ["node_modules", "scripts", "migrations", "test"],
+  "exclude": ["node_modules", "dist"],
   "references": [
     {
       "path": "../precedent-iso"

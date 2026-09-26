@@ -1,13 +1,10 @@
-import { getCloudflareEnv } from "@/lib/cloudflare";
-import { NO_STORE_HEADERS } from "@/lib/operations-boundary";
-
-export const dynamic = "force-dynamic";
+import type { CloudflareEnv } from "../lib/cloudflare";
+import { NO_STORE_HEADERS } from "../lib/operations-boundary";
 
 // The operations Worker is protected by Cloudflare Access. A service binding
 // reads the deployed public Worker without passing through Bot Fight Mode.
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
-export async function GET(): Promise<Response> {
-  const { PUBLIC_SITE } = getCloudflareEnv();
+export async function get(env: CloudflareEnv): Promise<Response> {
+  const { PUBLIC_SITE } = env;
   if (!PUBLIC_SITE) {
     return Response.json(
       { error: "PUBLIC_SITEMAP_UNAVAILABLE" },

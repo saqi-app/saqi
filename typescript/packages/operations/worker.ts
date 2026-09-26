@@ -1,86 +1,73 @@
-import type { ExecutionContext } from "@cloudflare/workers-types";
-
-import openNextHandler from "./.open-next/worker.js";
 import { type AccessEnv, verifyAccessIdentity } from "./src/lib/access";
+import { type CloudflareEnv, parseCloudflareEnv } from "./src/lib/cloudflare";
 import {
   isTrustedMutationRequest,
   OPS_ORIGIN,
   secureOperationsResponse,
 } from "./src/lib/operations-boundary";
+import { get as publicSitemap } from "./src/routes/public-sitemap";
+import * as source from "./src/routes/rig-source";
+import * as state from "./src/routes/rig-state";
 
-interface AccessWorker {
-  readonly fetch: (
-    request: Request,
-    env: AccessEnv,
-    context: ExecutionContext
-  ) => Promise<Response>;
+async function route(request: Request, bindings: AccessEnv): Promise<Response> {
+  if (!isAllowedHost(request))
+    return new Response("Forbidden", { status: 403 });
+  if (!["GET", "HEAD", "POST"].includes(request.method))
+    return new Response("Method Not Allowed", { status: 405 });
+  if (request.method === "POST" && !isTrustedMutationRequest(request))
+    return new Response("Forbidden", { status: 403 });
+  if (!(await verifyAccessIdentity(request, bindings)))
+    return new Response("Forbidden", { status: 403 });
+
+  const path = new URL(request.url).pathname;
+  const read = request.method !== "POST";
+  if (path === "/" && read)
+    return new Response("Saqi Operations\nCollection and publication API.\n", {
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  if (
+    !["/api/rig/state", "/api/rig/source", "/api/public-sitemap"].includes(path)
+  )
+    return new Response("Not Found", { status: 404 });
+  if (path === "/api/public-sitemap" && !read)
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { allow: "GET, HEAD" },
+    });
+
+  const env = parseCloudflareEnv(bindings);
+  switch (path) {
+    case "/api/rig/state":
+      return read ? state.get(request, env) : state.post(request, env);
+    case "/api/rig/source":
+      return read ? source.get(request, env) : source.post(request, env);
+    default:
+      return publicSitemap(env);
+  }
 }
 
-const FORWARDED_IDENTITY_HEADERS: ReadonlySet<string> = new Set([
-  "authorization",
-  "cf-access-authenticated-user-email",
-  "cf-access-jwt-assertion",
-  "cf-access-user",
-  "cookie",
-  "remote-user",
-  "x-forwarded-email",
-  "x-forwarded-user",
-  "x-user-email",
-  "x-user-id",
-]);
+export default {
+  async fetch(
+    request: Request,
+    env: AccessEnv & CloudflareEnv
+  ): Promise<Response> {
+    let response: Response;
+    try {
+      response = await route(request, env);
+    } catch {
+      response = new Response("Service Unavailable", { status: 503 });
+    }
+    if (request.method === "HEAD") response = new Response(null, response);
+    return secureOperationsResponse(response);
+  },
+};
 
 function isAllowedHost(request: Request): boolean {
   const url = new URL(request.url);
-  const hostMatches = request.headers.get("host") === url.host;
-  if (url.origin === OPS_ORIGIN) return hostMatches;
-
-  const isLocalRequest =
-    !("cf" in request) &&
-    (url.hostname === "localhost" || url.hostname === "127.0.0.1");
-  return isLocalRequest && hostMatches;
-}
-
-function sanitizeRequest(request: Request): Request {
-  const headers = new Headers(request.headers);
-  for (const name of request.headers.keys()) {
-    if (
-      FORWARDED_IDENTITY_HEADERS.has(name) ||
-      name.startsWith("cf-access-") ||
-      name.startsWith("x-auth-request-")
-    ) {
-      headers.delete(name);
-    }
-  }
-  return new Request(request, { headers });
-}
-
-function errorResponse(status: 403 | 405): Response {
-  return secureOperationsResponse(
-    new Response(status === 403 ? "Forbidden" : "Method Not Allowed", {
-      status,
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    })
+  if (request.headers.get("host") !== url.host) return false;
+  return (
+    url.origin === OPS_ORIGIN ||
+    (!("cf" in request) &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1"))
   );
 }
-
-const WORKER: AccessWorker = Object.freeze({
-  async fetch(request: Request, env: AccessEnv, context: ExecutionContext) {
-    if (!isAllowedHost(request)) return errorResponse(403);
-    if (!["GET", "HEAD", "POST"].includes(request.method)) {
-      return errorResponse(405);
-    }
-    if (request.method === "POST" && !isTrustedMutationRequest(request)) {
-      return errorResponse(403);
-    }
-    if (!(await verifyAccessIdentity(request, env))) return errorResponse(403);
-
-    const response = await openNextHandler.fetch(
-      sanitizeRequest(request),
-      env,
-      context
-    );
-    return secureOperationsResponse(response, request);
-  },
-});
-
-export default WORKER;

@@ -1,5 +1,7 @@
 # Saqi rig
 
+The Operations API is a plain Cloudflare Worker with three endpoints; it has no Next.js server, React dashboard, or static asset build.
+
 The rig has no local database, queue, event log, scheduler, or model registry. The Operations Worker derives the next task from production `author` and `poem` rows. Source keys prevent duplicate imports; source hashes and compare-and-swap writes reject stale updates.
 
 ## Run one task
