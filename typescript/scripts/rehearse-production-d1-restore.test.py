@@ -1,6 +1,7 @@
 import gzip
 import importlib.util
 import pathlib
+import sqlite3
 import tempfile
 import unittest
 
@@ -50,6 +51,28 @@ class RestoreRehearsalTest(unittest.TestCase):
             digest = MODULE.restore([part], directory / "restored.sqlite3")
             self.assertEqual(digest.oversized_statement_count, 1)
             self.assertGreater(digest.largest_statement_bytes, MODULE.D1_MAX_STATEMENT_BYTES)
+
+    def test_replays_exact_nul_policy_export_without_changing_archive_digest(self):
+        sql = (
+            b"CREATE TABLE catalog_unsafe_control(value TEXT PRIMARY KEY);\n"
+            + MODULE.NUL_POLICY_INSERT
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            part = directory / "part-0001"
+            part.write_bytes(gzip.compress(sql, mtime=0))
+            database = directory / "restored.sqlite3"
+            digest = MODULE.restore([part], database)
+            self.assertEqual(digest.size, len(sql))
+            with sqlite3.connect(database) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT hex(value) FROM catalog_unsafe_control").fetchone()[0],
+                    "00",
+                )
+
+    def test_unknown_nul_export_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, "Unexpected literal NUL"):
+            MODULE.portable_export_line(b"INSERT INTO author VALUES ('\x00');\n")
 
     def test_manifest_rejects_part_outside_archive_prefix(self):
         key = "saqi-corpus-archive/d1/test/manifest.json"

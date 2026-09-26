@@ -31,6 +31,18 @@ class SqlDigest:
 
 
 D1_MAX_STATEMENT_BYTES = 100_000
+NUL_POLICY_INSERT = b'INSERT INTO "catalog_unsafe_control" ("value") VALUES(\'\x00\');\n'
+PORTABLE_NUL_POLICY_INSERT = (
+    b'INSERT INTO "catalog_unsafe_control" ("value") VALUES(char(0));\n'
+)
+
+
+def portable_export_line(line: bytes) -> bytes:
+    if b"\x00" not in line:
+        return line
+    if line == NUL_POLICY_INSERT:
+        return PORTABLE_NUL_POLICY_INSERT
+    raise RuntimeError("Unexpected literal NUL in D1 SQL export")
 
 
 def download(key: str, destination: pathlib.Path) -> None:
@@ -109,9 +121,10 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
             for line in sql:
                 digest.update(line)
                 total += len(line)
+                portable_line = portable_export_line(line)
                 assert process.stdin is not None
-                process.stdin.write(line)
-                statement.extend(line)
+                process.stdin.write(portable_line)
+                statement.extend(portable_line)
                 if sqlite3.complete_statement(statement.decode("utf-8")):
                     # The D1 limit applies to the SQL statement text, not the
                     # SQLite row value. Newlines inside literals are supported.
