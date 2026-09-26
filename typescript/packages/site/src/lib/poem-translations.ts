@@ -136,26 +136,17 @@ export function poemTranslationTracks(
     hasTranslation(poem.linesEnglishSol) &&
     !tracks.some(({ key }) => key === "sol-5.6")
   ) {
-    const solProfile = TRANSLATION_MODELS.find(
-      ({ modelKey }) => modelKey === "sol-5.6",
-    );
+    const solProfile = TRANSLATION_MODELS[0];
     tracks.push({
       key: "sol",
       lines: poem.linesEnglishSol,
-      model: "Sol · provenance unavailable",
-      provider: solProfile?.modelVendorKey ?? "openai",
-      ...(poem.linesEnglishSolModel
-        ? {
-            model:
-              solProfile?.displayName ??
-              translationModelName(poem.linesEnglishSolModel),
-            provider:
-              solProfile?.modelVendorKey ??
-              translationModelProvider(poem.linesEnglishSolModel),
-          }
-        : {}),
+      model: poem.linesEnglishSolModel
+        ? solProfile.displayName
+        : "Sol · provenance unavailable",
+      provider: solProfile.modelVendorKey,
     });
   }
+
   if (hasTranslation(poem.linesEnglish)) {
     const inferred =
       !poem.linesEnglishModel ||
