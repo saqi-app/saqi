@@ -4,7 +4,10 @@ import { env } from "cloudflare:workers";
 import AuthorCatalogPage from "../../../components/AuthorCatalogPage.astro";
 import { CatalogRepository } from "../../../lib/catalog";
 
-const page = await CatalogRepository.fromD1(env.DB).getAuthorPage(
+const page = await CatalogRepository.fromD1(
+  env.DB,
+  env.SAQI_PUBLICATION_PROJECTION_ACTIVE === "1",
+).getAuthorPage(
   Astro.params["authorSlug"] ?? "",
 );
 if (!page) {
