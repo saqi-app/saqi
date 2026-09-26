@@ -28,8 +28,8 @@ if (action === "audit" && apply)
   throw new Error("Audit is read-only; omit --apply");
 if (expectEmpty && (action === "audit" || apply))
   throw new Error("--expect-empty requires a read-only backfill pass");
-if (startAfterId && (apply || action === "audit" || expectEmpty))
-  throw new Error("A starting cursor is only for read-only backfill inventory");
+if (startAfterId && (apply || expectEmpty))
+  throw new Error("A starting cursor is only for read-only inventory or audit");
 if (startAfterId.length > 200) throw new Error("Starting cursor is too long");
 if (!Number.isSafeInteger(batchLimit) || batchLimit < 1 || batchLimit > 10)
   throw new Error("Batch limit must be between 1 and 10");
