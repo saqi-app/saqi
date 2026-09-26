@@ -8,17 +8,20 @@ All local files and the disposable D1 are removed.
 
 import argparse
 import contextlib
+import datetime
 import gzip
 import importlib.util
 import json
 import itertools
 import pathlib
+import os
 import re
 import sqlite3
 import shutil
 import subprocess
 import tempfile
 import time
+import tomllib
 import urllib.error
 import urllib.request
 import uuid
@@ -32,7 +35,6 @@ SPEC.loader.exec_module(RESTORE)
 
 ACCOUNT_ID = "58e48987bbd8d9c3f50510f0ab7766b6"
 PRODUCTION_DATABASE_ID = RESTORE.DATABASE_ID
-TOKEN: dict[str, object] = {"value": None, "expires": 0.0}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 MAX_QUERY_ATTEMPTS = 7
 
@@ -51,7 +53,28 @@ class TableLayout:
     primary_key: list[str]
 
 
+def wait_for_oauth_window() -> None:
+    # This personal Mac uses Wrangler's default OAuth profile. API tokens have
+    # no local expiry. Do not begin a bulk request just before OAuth expires:
+    # Wrangler only refreshes an expired token when the next command starts.
+    if os.environ.get("CLOUDFLARE_API_TOKEN"):
+        return
+    config = pathlib.Path.home() / "Library/Preferences/.wrangler/config/default.toml"
+    if not config.exists():
+        return
+    expiration = tomllib.loads(config.read_text()).get("expiration_time")
+    if not expiration:
+        return
+    deadline = datetime.datetime.fromisoformat(expiration).timestamp()
+    remaining = deadline - time.time()
+    while 0 < remaining < 120:
+        print(json.dumps({"waiting_for_oauth_refresh_seconds": round(remaining + 2)}), flush=True)
+        time.sleep(min(remaining + 2, 30))
+        remaining = deadline - time.time()
+
+
 def wrangler(*args: str) -> str:
+    wait_for_oauth_window()
     try:
         return subprocess.run(
             ["yarn", "wrangler", *args],
@@ -64,7 +87,7 @@ def wrangler(*args: str) -> str:
         diagnostic = (error.stderr or "") + "\n" + (error.stdout or "")
         # Never echo SQL, response payloads, credentials, or signed upload URLs.
         known = [code for code in (
-            "D1_RESET_DO", "FOREIGN KEY constraint failed", "Statement too long",
+            "D1_RESET_DO", "Authentication error", "FOREIGN KEY constraint failed", "Statement too long",
             "SQLITE_CONSTRAINT", "SQLITE_ERROR", "SQLITE_BUSY",
         ) if code in diagnostic]
         raise RuntimeError(
@@ -198,16 +221,14 @@ def portable_import_plan(
 def d1_query(database_id: str, sql: str, params: list[object] | None = None, *, retry: bool = True):
     if database_id == PRODUCTION_DATABASE_ID:
         raise RuntimeError("Refusing to query production through the disposable restore client")
-    if TOKEN["value"] is None or time.monotonic() >= TOKEN["expires"]:
-        TOKEN["value"] = json.loads(wrangler("auth", "token", "--json"))["token"]
-        TOKEN["expires"] = time.monotonic() + 1200
+    token = json.loads(wrangler("auth", "token", "--json"))["token"]
     body: dict[str, object] = {"sql": sql}
     if params is not None:
         body["params"] = params
     request = urllib.request.Request(
         f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/d1/database/{database_id}/query",
         data=json.dumps(body).encode("utf-8"),
-        headers={"Authorization": f"Bearer {TOKEN['value']}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
     for attempt in range(MAX_QUERY_ATTEMPTS):
         try:

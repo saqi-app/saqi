@@ -4,7 +4,6 @@ import io
 import pathlib
 import sqlite3
 import tempfile
-import time
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -17,6 +16,22 @@ SPEC.loader.exec_module(MODULE)
 
 
 class D1ImportRehearsalTest(unittest.TestCase):
+    def test_near_expiry_waits_before_wrangler_refreshes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = pathlib.Path(temporary)
+            config = home / "Library/Preferences/.wrangler/config/default.toml"
+            config.parent.mkdir(parents=True)
+            config.write_text('expiration_time = "1970-01-01T00:01:50+00:00"')
+            clock = [100.0]
+            def advance(seconds):
+                clock[0] += seconds
+            with patch.dict(MODULE.os.environ, {}, clear=True), \
+                 patch.object(MODULE.pathlib.Path, "home", return_value=home), \
+                 patch.object(MODULE.time, "time", side_effect=lambda: clock[0]), \
+                 patch.object(MODULE.time, "sleep", side_effect=advance) as sleep:
+                MODULE.wait_for_oauth_window()
+                sleep.assert_called_once_with(12.0)
+
     def test_disposable_client_refuses_production_database(self):
         with self.assertRaisesRegex(RuntimeError, "Refusing to query production"):
             MODULE.d1_query(MODULE.PRODUCTION_DATABASE_ID, "SELECT 1")
@@ -24,7 +39,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
     def test_disposable_client_retries_transient_error(self):
         unavailable = urllib.error.HTTPError("https://api.cloudflare.com", 503, "unavailable", {}, None)
         response = io.BytesIO(b'{"success":true,"result":[{"success":true,"results":[{"ok":1}]}]}')
-        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+        with patch.object(MODULE, "wrangler", return_value='{"token":"test"}'), \
              patch.object(MODULE.urllib.request, "urlopen", side_effect=[unavailable, response]) as open_url, \
              patch.object(MODULE.time, "sleep") as sleep:
             self.assertEqual(MODULE.d1_query("disposable", "SELECT 1"), [{"ok": 1}])
@@ -33,7 +48,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
 
     def test_disposable_client_does_not_retry_bad_query(self):
         bad_query = urllib.error.HTTPError("https://api.cloudflare.com", 400, "bad query", {}, None)
-        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+        with patch.object(MODULE, "wrangler", return_value='{"token":"test"}'), \
              patch.object(MODULE.urllib.request, "urlopen", side_effect=bad_query) as open_url, \
              patch.object(MODULE.time, "sleep") as sleep:
             with self.assertRaises(urllib.error.HTTPError):
@@ -140,7 +155,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
                     target.execute("UPDATE poem SET active_source_revision_id=NULL")
 
     def test_write_never_retries_ambiguous_response(self):
-        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+        with patch.object(MODULE, "wrangler", return_value='{"token":"test"}'), \
              patch.object(MODULE.urllib.request, "urlopen", side_effect=TimeoutError) as request:
             with self.assertRaises(TimeoutError):
                 MODULE.d1_query("disposable", "INSERT INTO poem VALUES (?)", ["p"], retry=False)
