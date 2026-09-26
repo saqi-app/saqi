@@ -399,11 +399,11 @@ void test("legacy attribution requires the exact stored payload hash", async () 
       await projected.getAuthorPage("attributed-poet"),
       beforeProjection,
     );
-    assert.equal(
-      (await projected.getPoemPage("attributed-poet", "p-attributed"))?.poem
-        .linesEnglishModel,
-      "Claude 1 or 2",
+    const projectedDetail = await projected.getPoemPage(
+      "attributed-poet",
+      "p-attributed",
     );
+    assert.equal(projectedDetail?.poem.linesEnglishModel, "Claude 1 or 2");
 
     sqlite
       .prepare("UPDATE poem SET translation = ? WHERE id = 'p-attributed'")
