@@ -24,9 +24,9 @@ class RestoreRehearsalTest(unittest.TestCase):
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(sql, mtime=0))
             database = directory / "restored.sqlite3"
-            size, digest = MODULE.restore([part], database)
-            self.assertEqual(size, len(sql))
-            self.assertEqual(len(digest), 64)
+            digest = MODULE.restore([part], database)
+            self.assertEqual(digest.size, len(sql))
+            self.assertEqual(len(digest.sha256), 64)
             manifest = {
                 "counts": {"authors": 1, "poems": 1, "snapshots": 1, "fk_errors": 0}
             }

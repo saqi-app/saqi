@@ -14,11 +14,18 @@ import pathlib
 import sqlite3
 import subprocess
 import tempfile
+from dataclasses import dataclass
 
 
 OPERATIONS = pathlib.Path(__file__).resolve().parents[1] / "packages/operations"
 BUCKET = "saqi-corpus-archive"
 DATABASE_ID = "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
+
+
+@dataclass(frozen=True)
+class SqlDigest:
+    size: int
+    sha256: str
 
 
 def download(key: str, destination: pathlib.Path) -> None:
@@ -42,17 +49,7 @@ def verify_manifest(manifest: dict, manifest_key: str) -> None:
         raise ValueError("Unexpected archive format")
     if manifest.get("database_id") != DATABASE_ID:
         raise ValueError("Archive belongs to another D1 database")
-    parts = manifest.get("parts")
-    if not isinstance(parts, list) or not parts:
-        raise ValueError("Archive has no parts")
-    prefix = manifest_key.removesuffix("manifest.json")
-    for number, part in enumerate(parts, 1):
-        if part.get("key") != f"{prefix}corpus.sql.gz.part-{number:04d}":
-            raise ValueError("Unexpected archive part key")
-        if not isinstance(part.get("bytes"), int) or part["bytes"] < 1:
-            raise ValueError("Invalid archive part size")
-        if not isinstance(part.get("sha256"), str) or len(part["sha256"]) != 64:
-            raise ValueError("Invalid archive part digest")
+    verify_parts(manifest.get("parts"), manifest_key)
     counts = manifest.get("counts")
     if not isinstance(counts, dict) or any(
         not isinstance(counts.get(key), int) or counts[key] < 0
@@ -67,8 +64,22 @@ def verify_manifest(manifest: dict, manifest_key: str) -> None:
         raise ValueError("Invalid SQL digest")
 
 
-def restore(parts: list[pathlib.Path], database: pathlib.Path) -> tuple[int, str]:
-    """Stream verified gzip parts through sqlite3 without a durable SQL copy."""
+def verify_parts(parts: object, manifest_key: str) -> None:
+    if not isinstance(parts, list) or not parts:
+        raise ValueError("Archive has no parts")
+    prefix = manifest_key.removesuffix("manifest.json")
+    for number, part in enumerate(parts, 1):
+        if not isinstance(part, dict):
+            raise ValueError("Invalid archive part")
+        if part.get("key") != f"{prefix}corpus.sql.gz.part-{number:04d}":
+            raise ValueError("Unexpected archive part key")
+        if not isinstance(part.get("bytes"), int) or part["bytes"] < 1:
+            raise ValueError("Invalid archive part size")
+        if not isinstance(part.get("sha256"), str) or len(part["sha256"]) != 64:
+            raise ValueError("Invalid archive part digest")
+
+
+def restore(parts: list[pathlib.Path], database: pathlib.Path) -> SqlDigest:
     process = subprocess.Popen(
         ["sqlite3", "-bail", str(database)],
         stdin=subprocess.PIPE,
@@ -103,7 +114,7 @@ def restore(parts: list[pathlib.Path], database: pathlib.Path) -> tuple[int, str
         if process.poll() is None:
             process.kill()
             process.wait()
-    return total, digest.hexdigest()
+    return SqlDigest(size=total, sha256=digest.hexdigest())
 
 
 def verify_restored(database: pathlib.Path, manifest: dict) -> dict[str, int]:
@@ -148,8 +159,8 @@ def main() -> None:
                 raise RuntimeError(f"Archive part {number} failed its roundtrip digest")
             parts.append(part)
         database = directory / "restored.sqlite3"
-        size, digest = restore(parts, database)
-        if size != manifest["sql_bytes"] or digest != manifest["sql_sha256"]:
+        sql_digest = restore(parts, database)
+        if sql_digest.size != manifest["sql_bytes"] or sql_digest.sha256 != manifest["sql_sha256"]:
             raise RuntimeError("Decompressed SQL differs from archived source")
         counts = verify_restored(database, manifest)
         print(json.dumps({"manifest": key, "bookmark": manifest["bookmark"], "counts": counts, "restore_rehearsal": "passed"}))
