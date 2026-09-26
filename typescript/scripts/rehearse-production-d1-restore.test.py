@@ -27,6 +27,7 @@ class RestoreRehearsalTest(unittest.TestCase):
             digest = MODULE.restore([part], database)
             self.assertEqual(digest.size, len(sql))
             self.assertEqual(len(digest.sha256), 64)
+            self.assertEqual(digest.oversized_statement_count, 0)
             manifest = {
                 "counts": {"authors": 1, "poems": 1, "snapshots": 1, "fk_errors": 0}
             }
@@ -34,6 +35,21 @@ class RestoreRehearsalTest(unittest.TestCase):
             manifest["counts"]["poems"] = 2
             with self.assertRaisesRegex(RuntimeError, "count mismatch"):
                 MODULE.verify_restored(database, manifest)
+
+    def test_reports_export_lines_that_cannot_be_imported_as_d1_sql(self):
+        oversized = "x" * (MODULE.D1_MAX_STATEMENT_BYTES // 2) + "\n" + "y" * (MODULE.D1_MAX_STATEMENT_BYTES // 2)
+        sql = (
+            "CREATE TABLE author(id TEXT PRIMARY KEY);\n"
+            "CREATE TABLE poem(id TEXT PRIMARY KEY, author_id TEXT, publication_json TEXT);\n"
+            f"INSERT INTO author VALUES ('{oversized}');\n"
+        ).encode()
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            part = directory / "part-0001"
+            part.write_bytes(gzip.compress(sql, mtime=0))
+            digest = MODULE.restore([part], directory / "restored.sqlite3")
+            self.assertEqual(digest.oversized_statement_count, 1)
+            self.assertGreater(digest.largest_statement_bytes, MODULE.D1_MAX_STATEMENT_BYTES)
 
     def test_manifest_rejects_part_outside_archive_prefix(self):
         key = "saqi-corpus-archive/d1/test/manifest.json"
