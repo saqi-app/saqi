@@ -50,10 +50,20 @@ def verify_database_identity() -> None:
 
 
 def counts() -> dict[str, int]:
-    query = "SELECT (SELECT COUNT(*) FROM author) AS authors, (SELECT COUNT(*) FROM poem) AS poems, (SELECT COUNT(*) FROM poem WHERE publication_json IS NOT NULL) AS snapshots, (SELECT COUNT(*) FROM pragma_foreign_key_check) AS fk_errors"
+    # A single SELECT with four scalar subqueries took 28 seconds on the live
+    # corpus, close to D1's per-statement limit. Separate statements took
+    # under six seconds total and still share this read-only request.
+    query = (
+        "SELECT COUNT(*) AS authors FROM author; "
+        "SELECT COUNT(*) AS poems FROM poem; "
+        "SELECT COUNT(*) AS snapshots FROM poem WHERE publication_json IS NOT NULL; "
+        "SELECT COUNT(*) AS fk_errors FROM pragma_foreign_key_check;"
+    )
     value = json.loads(wrangler("d1", "execute", "saqi-db", "--remote", "--command", query, "--json", capture=True))
-    row = value[0]["results"][0]
-    return {key: int(row[key]) for key in ("authors", "poems", "snapshots", "fk_errors")}
+    keys = ("authors", "poems", "snapshots", "fk_errors")
+    if len(value) != len(keys) or not all(item.get("success") for item in value):
+        raise RuntimeError("D1 archive preflight counts failed")
+    return {key: int(value[index]["results"][0][key]) for index, key in enumerate(keys)}
 
 
 def digest(path: pathlib.Path) -> str:
