@@ -88,6 +88,15 @@ function insertPoem(database: Database.Database) {
     );
 }
 
+function copyPoems(database: Database.Database) {
+  const columns = database
+    .prepare("SELECT name FROM pragma_table_info('_poem_next')")
+    .pluck()
+    .all() as string[];
+  const names = columns.map((name) => `"${name}"`).join(",");
+  database.exec(`INSERT INTO _poem_next (${names}) SELECT ${names} FROM poem`);
+}
+
 function canonicalPoem(database: Database.Database) {
   return database
     .prepare(
@@ -119,7 +128,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0075_drop_duplicate_poem_payloads.sql"
+      "0075_drop_obsolete_corpus_tables.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     const before = database
@@ -145,6 +154,11 @@ describe("canonical migration compatibility", () => {
       );
       insertPoem(database);
       const before = canonicalPoem(database);
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0073_")
+      );
+      copyPoems(database);
       applyPending(database);
       expect(tables(database)).toEqual(["author", "poem"]);
       expect(canonicalPoem(database)).toEqual(before);
@@ -176,13 +190,18 @@ describe("canonical migration compatibility", () => {
     database.exec(
       "CREATE VIEW external_legacy_reader AS SELECT active_source_revision_id FROM poem"
     );
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0073_")
+    );
+    copyPoems(database);
     const before = tables(database);
     expect(() => applyPending(database)).toThrow();
     expect(tables(database)).toEqual(before);
     expect(
       database
         .prepare(
-          "SELECT 1 FROM d1_migrations WHERE name='0072_detach_poem_revision.sql'"
+          "SELECT 1 FROM d1_migrations WHERE name='0073_install_verified_slim_poem.sql'"
         )
         .get()
     ).toBeUndefined();
@@ -194,12 +213,41 @@ describe("canonical migration compatibility", () => {
     ).toBe("unknown");
     database.exec("DROP VIEW external_legacy_reader");
     expect(applyPending(database)).toEqual([
-      "0072_detach_poem_revision.sql",
-      "0073_detach_source_revision.sql",
-      "0074_drop_obsolete_corpus_tables.sql",
-      "0075_drop_duplicate_poem_payloads.sql",
+      "0073_install_verified_slim_poem.sql",
+      "0074_detach_source_revision.sql",
+      "0075_drop_obsolete_corpus_tables.sql",
     ]);
   });
+
+  it.each(["missing", "changed"])(
+    "rejects a %s staged copy before replacing the serving poem table",
+    (state) => {
+      const database = open();
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0071_")
+      );
+      insertPoem(database);
+      const before = canonicalPoem(database);
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0073_")
+      );
+      if (state === "changed") {
+        copyPoems(database);
+        database.exec("UPDATE _poem_next SET name_arabic='different'");
+      }
+      expect(() => applyPending(database)).toThrow();
+      expect(canonicalPoem(database)).toEqual(before);
+      expect(
+        database
+          .prepare(
+            "SELECT 1 FROM d1_migrations WHERE name='0073_install_verified_slim_poem.sql'"
+          )
+          .get()
+      ).toBeUndefined();
+    }
+  );
 
   it("keeps source/URL uniqueness and unsafe-text visibility guards after contraction", () => {
     const database = open();
