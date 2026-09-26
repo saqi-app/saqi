@@ -219,6 +219,36 @@ test("an unmapped poem slug blocks duplicate canonical creation", async () => {
   });
 });
 
+test("unmapped Arabic matches block duplicate poems even with unrelated slugs", async () => {
+  const { author, poem, repository, sqlite } = fixture();
+  const createdAuthor = await repository.upsertAuthor(author);
+  sqlite
+    .prepare(
+      "INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,sitemap_shard) VALUES(?,?,?,?,?,?,?)"
+    )
+    .run(
+      "legacy-id",
+      createdAuthor.id,
+      "unrelated-slug",
+      1,
+      poem.titleArabic,
+      '{"content":["old"]}',
+      1
+    );
+  await expect(repository.upsertPoem(poem)).rejects.toMatchObject({
+    message: "UNMAPPED_POEM_COLLISION",
+  });
+  sqlite
+    .prepare("UPDATE poem SET name_arabic = ?, content_arabic = ?")
+    .run("عنوان آخر", JSON.stringify({ content: poem.linesArabic }));
+  await expect(repository.upsertPoem(poem)).rejects.toMatchObject({
+    message: "UNMAPPED_POEM_COLLISION",
+  });
+  expect(sqlite.prepare("SELECT count(*) AS total FROM poem").get()).toEqual({
+    total: 1,
+  });
+});
+
 test("an unmapped author slug blocks duplicate canonical creation", async () => {
   const { author, repository, sqlite } = fixture();
   sqlite
@@ -226,6 +256,21 @@ test("an unmapped author slug blocks duplicate canonical creation", async () => 
       "INSERT INTO author(id,slug,name_arabic,status) VALUES(?,?,?,'init')"
     )
     .run("legacy-author", author.sourceAuthorId, author.nameArabic);
+  await expect(repository.upsertAuthor(author)).rejects.toMatchObject({
+    message: "UNMAPPED_AUTHOR_COLLISION",
+  });
+  expect(sqlite.prepare("SELECT count(*) AS total FROM author").get()).toEqual({
+    total: 1,
+  });
+});
+
+test("an unmapped Arabic author name blocks duplicate canonical creation", async () => {
+  const { author, repository, sqlite } = fixture();
+  sqlite
+    .prepare(
+      "INSERT INTO author(id,slug,name_arabic,status) VALUES(?,?,?,'init')"
+    )
+    .run("legacy-author", "old-slug", author.nameArabic);
   await expect(repository.upsertAuthor(author)).rejects.toMatchObject({
     message: "UNMAPPED_AUTHOR_COLLISION",
   });

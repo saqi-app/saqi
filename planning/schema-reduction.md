@@ -26,6 +26,8 @@ Before/after application footprint: D1 18 tables and 540,818 rows -> 2 tables an
 
 There are 26,049 poems without an established source identity. Inferring one from a poemNNN slug would collide with a different canonical poem 3,968 times; 20 author slug inferences collide as well. Three current source pointers disagree with the poem's active source revision. Two sealed import records lack source identity. The identity backfill therefore copies only established mappings. These cases need explicit reconciliation, never an automatic slug merge.
 
+Direct source admission also refuses a new source key when an unmapped poem under that author already has the same Arabic title or exact Arabic lines, even if its slug differs; unmapped authors with the same Arabic name are refused too. This can delay a genuinely new poem or a namesake author until reviewed, but it prevents an irreversible duplicate canonical URL from a missing legacy source key. The guard does not infer a mapping or discard either row.
+
 There are also 100 canonical poems with `author_id IS NULL`; 99 carry public poem flags and 73 have a legacy English or insight payload, but none has a current author/poem URL because the site joins to author. The target FK remains nullable until these rows are deliberately reconciled or archived. Canonical row parity cannot silently drop them merely because the public URL is absent.
 
 The additive backfill preflight found zero mapped poems with a null source version and zero authors/poems with multiple established source keys. Its unique indexes and non-null source_version column are therefore compatible with the observed production mappings; rerun this read-only preflight immediately before migration.
