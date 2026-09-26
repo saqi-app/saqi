@@ -85,14 +85,19 @@ interface RigPublicationPort {
 }
 
 interface RigCachePort {
-  clearCacheDirty(poemId: string, publicationHash: string): Promise<boolean>;
+  clearCacheDirty(
+    poemId: string,
+    publicationHash: null | string,
+    sourceHash: string
+  ): Promise<boolean>;
   pendingPurge(poemId?: string): Promise<null | PendingPurgeRoute>;
 }
 
 interface PendingPurgeRoute {
   authorSlug: string;
   poemId: string;
-  publicationHash: string;
+  publicationHash: null | string;
+  sourceHash: string;
 }
 
 export class RigPublicationRepository
@@ -108,6 +113,7 @@ export class RigPublicationRepository
     return this.#database
       .prepare(
         `SELECT p.id AS poemId, p.publication_hash AS publicationHash,
+              p.source_hash AS sourceHash,
               a.slug AS authorSlug
        FROM poem p JOIN author a ON a.id = p.author_id
        WHERE p.publication_cache_dirty = 1
@@ -120,14 +126,15 @@ export class RigPublicationRepository
 
   async clearCacheDirty(
     poemId: string,
-    publicationHash: string
+    publicationHash: null | string,
+    sourceHash: string
   ): Promise<boolean> {
     const result = await this.#database
       .prepare(
         `UPDATE poem SET publication_cache_dirty = 0
-       WHERE id = ?1 AND publication_hash = ?2`
+       WHERE id = ?1 AND publication_hash IS ?2 AND source_hash = ?3`
       )
-      .bind(poemId, publicationHash)
+      .bind(poemId, publicationHash, sourceHash)
       .run();
     return result.meta.changes === 1;
   }

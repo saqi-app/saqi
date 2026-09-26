@@ -240,6 +240,10 @@ async function purgeDirtyPublication(
   const row = await repository.pendingPurge(poemId);
   if (!row) return true;
   await purgePublishedPoem(cache.config, row);
-  await repository.clearCacheDirty(row.poemId, row.publicationHash);
+  await repository.clearCacheDirty(
+    row.poemId,
+    row.publicationHash,
+    row.sourceHash
+  );
   return true;
 }
