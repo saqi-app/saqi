@@ -154,6 +154,15 @@ export class DirectSourceRepository
       .first();
     if (legacy)
       throw new DirectSourceConflictError("UNMAPPED_AUTHOR_COLLISION");
+    const sameName = await this.#database
+      .prepare(
+        `SELECT id FROM author WHERE source_name IS NULL AND name_arabic = ?1
+         LIMIT 1`
+      )
+      .bind(input.nameArabic)
+      .first();
+    if (sameName)
+      throw new DirectSourceConflictError("UNMAPPED_AUTHOR_COLLISION");
     const digest = await sha256(
       canonicalJson([this.#sourceName, input.sourceAuthorId])
     );
@@ -269,6 +278,24 @@ export class DirectSourceRepository
   ): Promise<PoemUpsertResult> {
     if (input.expectedHash !== null)
       throw new DirectSourceConflictError("SOURCE_CHANGED");
+    const matchingArabic = await this.#database
+      .prepare(
+        `SELECT id FROM poem WHERE author_id = ?1 AND source_name IS NULL
+           AND (name_arabic = ?2 OR
+             CASE WHEN json_valid(content_arabic)
+               THEN json_extract(content_arabic, '$.content') =
+                 json_extract(?3, '$.content')
+               ELSE 0 END)
+         LIMIT 1`
+      )
+      .bind(
+        authorId,
+        input.titleArabic,
+        JSON.stringify({ content: input.linesArabic })
+      )
+      .first();
+    if (matchingArabic)
+      throw new DirectSourceConflictError("UNMAPPED_POEM_COLLISION");
     // Old unmapped poems often use the source's poemNNN slug. Never merge by
     // slug: a collision requires explicit identity review.
     const legacy = await this.#database
