@@ -154,15 +154,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
 
-      - name: Require the staged legacy translation retirement
-        run: >-
-          yarn workspace @saqi/operations db:execute --remote --json
-          --command "SELECT COUNT(*) AS applied FROM d1_migrations WHERE name = '0037_retire_legacy_translation_tasks.sql'"
-          | node scripts/verify-retirement-migration.mjs
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
-
       - name: Expand the production schema
         if: steps.changes.outputs.migrate == 'true'
         run: yarn workspace @saqi/operations db:migrate:remote

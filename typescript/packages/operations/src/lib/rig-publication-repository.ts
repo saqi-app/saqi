@@ -227,7 +227,6 @@ export class RigPublicationRepository
       .prepare(
         `UPDATE poem
        SET publication_json = ?1, publication_source_hash = ?2,
-           publication_version = publication_version + 1,
            publication_hash = ?3, publication_cache_dirty = 1,
            rig_status = 'complete',
            rig_version = rig_version + 1,

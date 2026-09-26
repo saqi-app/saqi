@@ -2,7 +2,6 @@ import { currentSource, LIMITS } from "./constants.js";
 
 const POEM_PATH = /^\/(poem([1-9]\d*))\.html$/;
 const AUTHOR_PATH = /^\/cat-([\p{L}\p{N}_%-][\p{L}\p{N}_.%~-]*)$/u;
-const INVENTORY_PATH = /^\/authers-[1-9]\d*$/;
 
 export interface CanonicalAuthorUrl {
   canonicalId: string;
@@ -17,13 +16,6 @@ export interface CanonicalPoemUrl {
   numericId: string;
   path: string;
   slug: string;
-}
-
-export interface CanonicalInventoryUrl {
-  cursor?: null | string;
-  href: string;
-  page: number;
-  path: string;
 }
 
 function exactSourceUrl(value: string): URL {
@@ -104,57 +96,5 @@ export function canonicalPoemUrl(value: string): CanonicalPoemUrl {
     numericId,
     path,
     slug,
-  };
-}
-
-export function canonicalInventoryUrl(value: string): CanonicalInventoryUrl {
-  const url = exactSourceUrl(value);
-  const match = INVENTORY_PATH.exec(url.pathname);
-  if (!match) throw new Error("SOURCE_INVENTORY_PATH_INVALID");
-  const page = Number(url.pathname.slice("/authers-".length));
-  if (!Number.isSafeInteger(page))
-    throw new Error("SOURCE_INVENTORY_PAGE_RANGE");
-  return { href: url.href, page, path: url.pathname };
-}
-
-export function canonicalInventoryPaginationUrl(
-  value: string,
-): CanonicalInventoryUrl & { readonly cursor: null | string } {
-  if (value.length === 0 || value.length > LIMITS.url)
-    throw new Error("SOURCE_URL_LENGTH");
-  let url: URL;
-  try {
-    url = new URL(value, currentSource().origin);
-  } catch {
-    throw new Error("SOURCE_URL_INVALID");
-  }
-  const configuredOrigin = new URL(currentSource().origin);
-  if (
-    url.origin !== configuredOrigin.origin ||
-    url.protocol !== "https:" ||
-    url.hostname !== configuredOrigin.hostname ||
-    url.port !== "" ||
-    url.username !== "" ||
-    url.password !== "" ||
-    url.hash !== ""
-  )
-    throw new Error("SOURCE_URL_FORBIDDEN");
-  const match = INVENTORY_PATH.exec(url.pathname);
-  if (!match) throw new Error("SOURCE_INVENTORY_PATH_INVALID");
-  const page = Number(url.pathname.slice("/authers-".length));
-  if (!Number.isSafeInteger(page))
-    throw new Error("SOURCE_INVENTORY_PAGE_RANGE");
-  const cursorValues = url.searchParams.getAll("cursor");
-  if (
-    (url.searchParams.size !== 0 &&
-      (url.searchParams.size !== 1 || cursorValues.length !== 1)) ||
-    cursorValues[0] === ""
-  )
-    throw new Error("SOURCE_INVENTORY_CURSOR_INVALID");
-  return {
-    cursor: cursorValues[0] ?? null,
-    href: url.href,
-    page,
-    path: url.pathname,
   };
 }

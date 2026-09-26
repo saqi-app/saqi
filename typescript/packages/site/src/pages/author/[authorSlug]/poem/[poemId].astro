@@ -15,7 +15,6 @@ import { authorPath, englishAuthorLabel, poemPath } from "../../../../lib/routes
 
 const page = await CatalogRepository.fromD1(
   env.DB,
-  env.SAQI_PUBLICATION_PROJECTION_ACTIVE === "1",
 ).getPoemPage(
   Astro.params["authorSlug"] ?? "",
   Astro.params["poemId"] ?? "",
@@ -190,6 +189,9 @@ const structuredData = [
     </h1>
   </nav>
 
+  {poem.publicationOutdated && (
+    <p>The Arabic text has changed since this translation and its insights were published. An updated translation is pending.</p>
+  )}
   <article class="poem" aria-labelledby="poem-title">
     <ol class="poem-verses" id="poem-verses" role="list">
       {bayts.map((bayt, index) => (

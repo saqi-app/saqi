@@ -1,22 +1,9 @@
 import { LIMITS } from "./constants.js";
 import {
-  AuthorInventoryProjectionSchema,
   AuthorPoemManifestProjectionSchema,
   PoemDetailProjectionSchema,
 } from "./projections.js";
-import {
-  canonicalAuthorUrl,
-  canonicalInventoryUrl,
-  canonicalPoemUrl,
-} from "./url.js";
-
-interface AuthorRecord {
-  canonicalId: string;
-  href: string;
-  name: string;
-  poemCount: null | number;
-  slug: string;
-}
+import { canonicalAuthorUrl, canonicalPoemUrl } from "./url.js";
 
 export class SourceProjectionError extends Error {
   readonly code: string;
@@ -33,11 +20,6 @@ export class SourceProjectionError extends Error {
     this.code = code;
     this.retryable = retryable;
   }
-}
-
-export interface AuthorInventory {
-  authors: AuthorRecord[];
-  complete: true;
 }
 
 interface PoemManifestRecord {
@@ -129,29 +111,6 @@ function assertUsableProjection(projection: {
   if (projection.challengeDetected) projectionFailure("SOURCE_CHALLENGE", true);
   if (projection.terminal === false)
     projectionFailure("SOURCE_PROJECTION_PARTIAL", true);
-}
-
-export function parseAuthorInventory(input: unknown): AuthorInventory {
-  const projection = parseSchema(AuthorInventoryProjectionSchema, input);
-  assertUsableProjection(projection);
-  canonicalProjectionUrl(() => canonicalInventoryUrl(projection.sourceUrl));
-  const seen = new Set<string>();
-  const authors = projection.authors.map((raw) => {
-    const url = canonicalProjectionUrl(() => canonicalAuthorUrl(raw.href));
-    if (seen.has(url.canonicalId)) projectionFailure("SOURCE_AUTHOR_DUPLICATE");
-    seen.add(url.canonicalId);
-    return {
-      canonicalId: url.canonicalId,
-      href: url.href,
-      name: requiredText(raw.name, "SOURCE_AUTHOR_NAME_EMPTY"),
-      poemCount: parseLocalizedCount(raw.poemCountText, LIMITS.poemsPerAuthor),
-      slug: url.slug,
-    };
-  });
-  authors.sort((left, right) =>
-    left.canonicalId.localeCompare(right.canonicalId),
-  );
-  return { authors, complete: true };
 }
 
 export function parseAuthorPoemManifest(input: unknown): AuthorPoemManifest {

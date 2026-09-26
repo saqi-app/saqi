@@ -83,11 +83,6 @@ access_headers=(
   --header "CF-Access-Client-Secret: ${access_client_secret}"
 )
 
-curl_probe 'authenticated publication identity' --fail --retry 2 --retry-all-errors \
-  "${access_headers[@]}" \
-  https://ops.saqi.app/api/rig/identity \
-  | node scripts/verify-publication-identity.mjs
-
 curl_probe 'authenticated live public sitemap' --fail --retry 2 --retry-all-errors \
   "${access_headers[@]}" \
   https://ops.saqi.app/api/public-sitemap \

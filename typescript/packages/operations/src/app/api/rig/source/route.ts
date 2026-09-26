@@ -13,7 +13,6 @@ import {
   NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
-import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
 import { publicCacheConfig, purgePublishedPoem } from "@/lib/public-cache";
 import { RigPublicationRepository } from "@/lib/rig-publication-repository";
 
@@ -46,12 +45,6 @@ export async function GET(request: Request): Promise<Response> {
   const env = getCloudflareEnv();
   if (env.SAQI_DIRECT_SOURCE_ACTIVE !== "1")
     return failure(503, "DIRECT_SOURCE_INACTIVE");
-  if (
-    !(await new ProductionDeploymentIdentityRepository(
-      env.DB
-    ).matchesProduction())
-  )
-    return failure(503, "PRODUCTION_DATABASE_IDENTITY_MISMATCH");
   const repository = new DirectSourceRepository(
     env.DB,
     env.SAQI_SOURCE_NAME,
@@ -102,12 +95,6 @@ export async function POST(request: Request): Promise<Response> {
   const env = getCloudflareEnv();
   if (env.SAQI_DIRECT_SOURCE_ACTIVE !== "1")
     return failure(503, "DIRECT_SOURCE_INACTIVE");
-  if (
-    !(await new ProductionDeploymentIdentityRepository(
-      env.DB
-    ).matchesProduction())
-  )
-    return failure(503, "PRODUCTION_DATABASE_IDENTITY_MISMATCH");
   let input: z.infer<typeof RequestSchema>;
   try {
     input = RequestSchema.parse(await readBoundedJson(request, 4_500_000));

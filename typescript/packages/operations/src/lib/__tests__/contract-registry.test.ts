@@ -59,8 +59,6 @@ describe("contract registry", () => {
       "operations.home",
       "operations.not-found",
       "operations.public-sitemap",
-      "operations.rig-identity",
-      "operations.publication-projection",
       "operations.rig-state",
       "operations.rig-source",
     ]);
@@ -132,10 +130,8 @@ describe("contract registry", () => {
 
   it("derives portable JSON Schema from the runtime validators", () => {
     const catalog = generateContractCatalog();
-    const endpoint = catalog.http.find(
-      ({ id }) => id === "operations.rig-identity"
-    );
-    expect(endpoint?.responses[0]?.body).toEqual(
+    const endpoint = catalog.http.find(({ id }) => id === "public.cache-purge");
+    expect(endpoint?.request.body).toEqual(
       expect.objectContaining({ type: "object" })
     );
     expect(JSON.stringify(catalog)).not.toContain("[object Object]");

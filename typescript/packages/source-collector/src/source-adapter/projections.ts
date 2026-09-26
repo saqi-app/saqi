@@ -10,25 +10,6 @@ const SOURCE_ENVELOPE = {
   sourceUrl: boundedText(LIMITS.url),
 } as const;
 
-export const AuthorInventoryProjectionSchema = z
-  .object({
-    ...SOURCE_ENVELOPE,
-    authors: z
-      .array(
-        z
-          .object({
-            href: boundedText(LIMITS.url),
-            name: boundedText(LIMITS.authorName),
-            poemCountText: boundedText(128).nullable(),
-          })
-          .strict(),
-      )
-      .max(LIMITS.authorsPerInventory),
-    kind: z.literal("author_inventory"),
-    terminal: z.boolean(),
-  })
-  .strict();
-
 export const AuthorPoemManifestProjectionSchema = z
   .object({
     ...SOURCE_ENVELOPE,

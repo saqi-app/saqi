@@ -3,19 +3,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { configureSource, currentSource } from "../constants.js";
 import {
-  parseAuthorInventory,
   parseAuthorPoemManifest,
   parseLocalizedCount,
   parsePoemDetail,
   SourceProjectionError,
 } from "../parse.js";
 import { sha256Canonical } from "../sha256-canonical.js";
-import {
-  canonicalAuthorUrl,
-  canonicalInventoryPaginationUrl,
-  canonicalInventoryUrl,
-  canonicalPoemUrl,
-} from "../url.js";
+import { canonicalAuthorUrl, canonicalPoemUrl } from "../url.js";
 
 const PROJECTION_ENVELOPE = {
   challengeDetected: false,
@@ -108,13 +102,6 @@ describe("canonical source URLs", () => {
 
   it("produces stable canonical IDs", () => {
     expect(canonicalPoemUrl("/poem1.html").canonicalId).toBe("source:poem:1");
-    expect(canonicalInventoryUrl("/authers-72").page).toBe(72);
-    expect(
-      canonicalInventoryPaginationUrl("/authers-1?cursor=opaque"),
-    ).toMatchObject({ cursor: "opaque", page: 1 });
-    expect(() =>
-      canonicalInventoryPaginationUrl("/authers-1?cursor=x&extra=y"),
-    ).toThrow("SOURCE_INVENTORY_CURSOR_INVALID");
   });
 
   it("normalizes encoded author Unicode deterministically", () => {
@@ -178,60 +165,6 @@ describe("canonical source URLs", () => {
   ])("rejects %s", (url) => {
     expect(() => canonicalPoemUrl(url)).toThrow();
     expect(() => canonicalAuthorUrl(url)).toThrow();
-  });
-});
-
-describe("author inventory", () => {
-  it("validates, sorts, and canonicalizes authors", () => {
-    const result = parseAuthorInventory({
-      ...PROJECTION_ENVELOPE,
-      authors: [
-        { href: "/cat-z", name: " زيد ", poemCountText: "۲" },
-        { href: "/cat-a", name: "أحمد", poemCountText: null },
-      ],
-      kind: "author_inventory",
-      sourceUrl: "https://source.invalid/authers-1",
-      terminal: true,
-    });
-    expect(result.authors.map(({ canonicalId }) => canonicalId)).toEqual([
-      "source:author:a",
-      "source:author:z",
-    ]);
-    expect(result.authors[1]?.name).toBe("زيد");
-  });
-
-  it("rejects duplicate canonical IDs and challenge projections", () => {
-    const base = {
-      ...PROJECTION_ENVELOPE,
-      authors: [
-        {
-          href: "/cat-%D8%A7%D9%84%D9%85%D8%B9%D8%B1%D9%8A",
-          name: "أ",
-          poemCountText: null,
-        },
-        { href: "/cat-المعري", name: "ب", poemCountText: null },
-      ],
-      kind: "author_inventory",
-      sourceUrl: "https://source.invalid/authers-1",
-      terminal: true,
-    };
-    expect(() => parseAuthorInventory(base)).toThrow("SOURCE_AUTHOR_DUPLICATE");
-    expect(() =>
-      parseAuthorInventory({ ...base, authors: [], challengeDetected: true }),
-    ).toThrow("SOURCE_CHALLENGE");
-  });
-
-  it("rejects malformed and partial projections", () => {
-    expect(() => parseAuthorInventory({})).toThrow();
-    expect(() =>
-      parseAuthorInventory({
-        ...PROJECTION_ENVELOPE,
-        authors: [],
-        kind: "author_inventory",
-        sourceUrl: "https://source.invalid/authers-1",
-        terminal: false,
-      }),
-    ).toThrow("SOURCE_PROJECTION_PARTIAL");
   });
 });
 

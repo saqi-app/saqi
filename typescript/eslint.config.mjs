@@ -12,8 +12,7 @@ export default [
     projectService: {
       allowDefaultProject: [
         "packages/source-collector/vitest.config.ts",
-        "packages/source-collector/src/__tests__/collection-source-browser-cdp.test.ts",
-        "packages/source-collector/src/source-adapter/__tests__/author-inventory.test.ts",
+        "packages/source-collector/src/__tests__/manifest-merge.test.ts",
         "packages/source-collector/src/source-adapter/__tests__/source-adapter.test.ts",
       ],
       maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 4,

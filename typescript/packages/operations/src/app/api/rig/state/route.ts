@@ -7,7 +7,6 @@ import {
   NO_STORE_HEADERS,
   readBoundedJson,
 } from "@/lib/operations-boundary";
-import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
 import { publicCacheConfig, purgePublishedPoem } from "@/lib/public-cache";
 import { RigPublicationRepository } from "@/lib/rig-publication-repository";
 import { RigStateRepository } from "@/lib/rig-state-repository";
@@ -69,12 +68,6 @@ function failure(status: number, code: string): Response {
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Next.js route handlers use HTTP method exports.
 export async function GET(request: Request): Promise<Response> {
   const env = getCloudflareEnv();
-  if (
-    !(await new ProductionDeploymentIdentityRepository(
-      env.DB
-    ).matchesProduction())
-  )
-    return failure(503, "PRODUCTION_DATABASE_IDENTITY_MISMATCH");
   const poemId = new URL(request.url).searchParams.get("poemId");
   if (poemId === null) {
     try {
@@ -101,12 +94,6 @@ export async function POST(request: Request): Promise<Response> {
   if (!hasJsonContentType(request)) return failure(415, "INVALID_CONTENT_TYPE");
   const env = getCloudflareEnv();
   if (env.SAQI_RIG_ACTIVE !== "1") return failure(503, "RIG_INACTIVE");
-  if (
-    !(await new ProductionDeploymentIdentityRepository(
-      env.DB
-    ).matchesProduction())
-  )
-    return failure(503, "PRODUCTION_DATABASE_IDENTITY_MISMATCH");
   let input: z.infer<typeof RequestSchema>;
   try {
     input = RequestSchema.parse(await readBoundedJson(request, 1_048_576));

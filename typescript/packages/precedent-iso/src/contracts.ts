@@ -1,6 +1,5 @@
 import { z, type ZodType } from "zod";
 
-import { PublicationIdentitySchema } from "./production-identity.js";
 import { ResourceIdSchema } from "./resource-id-schema.js";
 
 const EmptyHttpPartSchema = z.strictObject({});
@@ -32,22 +31,6 @@ export const PublicCachePurgeRequestSchema = z.strictObject({
   authorSlug: z.string().min(1).max(128),
   poemId: z.string().min(1).max(128),
 });
-export const PublicationProjectionRequestSchema = z.discriminatedUnion(
-  "action",
-  [
-    z.strictObject({
-      action: z.literal("backfill"),
-      afterId: z.string().max(200).default(""),
-      apply: z.boolean().default(false),
-      limit: z.number().int().min(1).max(10).default(10),
-    }),
-    z.strictObject({
-      action: z.literal("audit"),
-      afterId: z.string().max(200).default(""),
-      limit: z.number().int().min(1).max(10).default(10),
-    }),
-  ],
-);
 export const SitemapRouteParamsSchema = z.strictObject({
   shard: PositiveIntegerSegmentSchema,
 });
@@ -312,43 +295,6 @@ export const HTTP_CONTRACTS = [
     service: "operations",
     summary:
       "Read the deployed public sitemap through an internal service binding",
-  },
-  {
-    ...EMPTY_INPUT,
-    audience: "authenticated",
-    id: "operations.rig-identity",
-    method: "GET",
-    path: "/api/rig/identity",
-    responses: [
-      {
-        body: PublicationIdentitySchema,
-        contentType: "application/json",
-        status: 200,
-      },
-      {
-        body: ErrorResponseSchema,
-        contentType: "application/json",
-        status: 503,
-      },
-    ],
-    service: "operations",
-    summary: "Verify the Access-protected rig is bound to production D1",
-  },
-  {
-    audience: "authenticated",
-    body: PublicationProjectionRequestSchema,
-    id: "operations.publication-projection",
-    method: "POST",
-    params: EmptyHttpPartSchema,
-    path: "/api/publication-projection",
-    query: EmptyHttpPartSchema,
-    responses: [200, 400, 403, 415, 503].map((status) => ({
-      body: z.unknown(),
-      contentType: "application/json",
-      status,
-    })),
-    service: "operations",
-    summary: "Backfill and audit inactive public poem projections",
   },
   {
     audience: "authenticated",
