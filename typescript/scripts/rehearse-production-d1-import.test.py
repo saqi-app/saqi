@@ -18,6 +18,20 @@ SPEC.loader.exec_module(MODULE)
 
 
 class D1ImportRehearsalTest(unittest.TestCase):
+    def test_generated_schema_replays_without_schema_drift(self):
+        source = sqlite3.connect(":memory:")
+        target = sqlite3.connect(":memory:")
+        try:
+            for sql in ["CREATE TABLE poem(id TEXT PRIMARY KEY)", "CREATE INDEX poem_idx ON poem(id)", "CREATE TRIGGER poem_guard AFTER INSERT ON poem BEGIN SELECT 1; END"]:
+                source.execute(sql)
+                target.execute(MODULE.repeatable_schema(sql))
+                target.execute(MODULE.repeatable_schema(sql))
+            query = "SELECT type,name,sql FROM sqlite_master ORDER BY type,name"
+            self.assertEqual(source.execute(query).fetchall(), target.execute(query).fetchall())
+        finally:
+            source.close()
+            target.close()
+
     def test_cli_rejects_production_destination_before_network(self):
         result = subprocess.run([sys.executable, str(SCRIPT), "--execute", "--manifest-key", "saqi-corpus-archive/d1/test/manifest.json", "--database-name", "saqi-db"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
@@ -37,10 +51,10 @@ class D1ImportRehearsalTest(unittest.TestCase):
                     target.executescript(step.read_text())
                 self.assertEqual(target.execute("SELECT id,title FROM poem").fetchall(), [("p", "title")])
 
-    def test_only_data_batches_retry_network_failures(self):
+    def test_generated_batches_retry_network_failures(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = pathlib.Path(temporary) / "portable.sql"
-            for sql, calls in [("INSERT INTO poem VALUES ('p') ON CONFLICT DO NOTHING;", 2), ("CREATE TABLE poem(id TEXT);", 1)]:
+            for sql, calls in [("INSERT INTO poem VALUES ('p') ON CONFLICT DO NOTHING;", 2), ("CREATE TABLE IF NOT EXISTS poem(id TEXT);", 2)]:
                 path.write_text(sql)
                 with patch.object(MODULE, "wrangler", side_effect=[RuntimeError("fetch failed"), "ok"]) as command, patch.object(MODULE.time, "sleep"):
                     if calls == 1:
