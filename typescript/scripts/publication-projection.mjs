@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { assertKnownSkippedCandidates } from "./known-publication-skips.mjs";
+
 // Run the bounded Operations Worker migration without a local corpus or DB.
 // A restart from the beginning is safe: backfill selects only null snapshots.
 const endpoint =
@@ -28,8 +30,7 @@ if (expectEmpty && (action === "audit" || apply))
   throw new Error("--expect-empty requires a read-only backfill pass");
 if (startAfterId && (apply || action === "audit" || expectEmpty))
   throw new Error("A starting cursor is only for read-only backfill inventory");
-if (startAfterId.length > 200)
-  throw new Error("Starting cursor is too long");
+if (startAfterId.length > 200) throw new Error("Starting cursor is too long");
 if (!Number.isSafeInteger(batchLimit) || batchLimit < 1 || batchLimit > 10)
   throw new Error("Batch limit must be between 1 and 10");
 if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 20_000)
@@ -42,6 +43,7 @@ let totalScanned = 0;
 let totalEligible = 0;
 let totalShadowed = 0;
 let totalSkipped = 0;
+const skippedIds = [];
 let complete = false;
 for (let batch = 1; batch <= maxBatches; batch += 1) {
   const body = { action, afterId, limit: batchLimit };
@@ -65,6 +67,7 @@ for (let batch = 1; batch <= maxBatches; batch += 1) {
   totalEligible += result.eligible;
   totalShadowed += result.shadowed;
   totalSkipped += result.skipped.length;
+  if (expectEmpty) skippedIds.push(...result.skipped);
   process.stdout.write(
     `${JSON.stringify({
       batch,
@@ -96,10 +99,9 @@ if (!complete)
   throw new Error(
     `Projection exceeded ${maxBatches} batches; resume from start`,
   );
-if (expectEmpty && (totalEligible > 0 || totalSkipped > 0))
-  throw new Error(
-    `${totalEligible} visible publications still need backfill and ${totalSkipped} candidate${totalSkipped === 1 ? "" : "s"} skipped`,
-  );
+if (expectEmpty && totalEligible > 0)
+  throw new Error(`${totalEligible} visible publications still need backfill`);
+if (expectEmpty) assertKnownSkippedCandidates(skippedIds);
 if (action === "audit" && totalEligible === 0)
   throw new Error("Audit found no inactive publication snapshots");
 process.stdout.write(

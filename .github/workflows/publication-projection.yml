@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       operation:
-        description: Backfill, verify no work remains, or audit against the live catalog
+        description: Backfill, verify no visible work remains with the reviewed skip set, or audit against the live catalog
         required: true
         default: audit
         type: choice
