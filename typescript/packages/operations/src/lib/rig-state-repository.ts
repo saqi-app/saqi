@@ -40,7 +40,11 @@ export interface InvocationIntent {
 }
 
 interface RigQueuePort {
-  claimNextPoem(token: string, now: number): Promise<null | RigStateRow>;
+  claimNextPoem(
+    token: string,
+    now: number,
+    preferredPoemId?: string
+  ): Promise<null | RigStateRow>;
   currentEnrichment(): Promise<null | RigStateRow>;
   read(poemId: string): Promise<null | RigStateRow>;
 }
@@ -102,9 +106,17 @@ export class RigStateRepository implements RigQueuePort, RigInvocationPort {
     return raw === null ? null : StateRowSchema.parse(raw);
   }
 
-  async claimNextPoem(token: string, now: number): Promise<null | RigStateRow> {
+  async claimNextPoem(
+    token: string,
+    now: number,
+    preferredPoemId?: string
+  ): Promise<null | RigStateRow> {
     TokenSchema.parse(token);
     const active = await this.currentEnrichment();
+    if (preferredPoemId) {
+      if (active && active.poemId !== preferredPoemId) return null;
+      return this.#claimPoem(preferredPoemId, token, now);
+    }
     if (active) {
       if (
         active.status !== "claimed" ||

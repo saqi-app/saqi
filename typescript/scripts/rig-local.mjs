@@ -13,7 +13,7 @@ const scripts = {
 const [operation, ...args] = process.argv.slice(2);
 if (!Object.hasOwn(scripts, operation))
   throw new Error(
-    "Usage: rig-local.mjs collect [next-author | author URL NAME] | translate [retry-unknown POEM_ID ATTEMPT_ID]",
+    "Usage: rig-local.mjs collect [next-author | author URL NAME] | translate [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
   );
 
 const environment = { ...process.env };

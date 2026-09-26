@@ -44,6 +44,37 @@ test("the Keychain-backed entrypoint preserves unknown-outcome blocking", async 
   assert.equal(run.codexCalled, false);
 });
 
+test("a targeted smoke run sends only the requested poem ID to the D1 claim", async () => {
+  const actions = [];
+  const server = createServer(async (request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (request.method === "GET") {
+      response.end(JSON.stringify({ ok: true, state: null }));
+      return;
+    }
+    const chunks = await Array.fromAsync(request);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    actions.push(body);
+    response.end(JSON.stringify({ ok: true, state: null }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const port = server.address()?.port;
+    const run = await runScript({
+      CF_ACCESS_CLIENT_ID: "test-id",
+      CF_ACCESS_CLIENT_SECRET: "test-secret",
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
+    }, script, ["poem-2"]);
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(actions.map((item) => item.action), ["purge-cache", "claim-poem"]);
+    assert.equal(actions[1].poemId, "poem-2");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 async function exerciseUnknown(attemptId, entry = script, args = []) {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-test-"));
   const markerPath = join(directory, "codex-called");
