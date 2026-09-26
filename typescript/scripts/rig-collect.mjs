@@ -63,7 +63,11 @@ async function main() {
   const collector = await SourceChromeCollector.create({
     profileDirectory:
       process.env.SAQI_BROWSER_PROFILE ?? join(tmpdir(), "saqi-source-profile"),
+    challengeResolutionTimeoutMs: 15 * 60_000,
   });
+  process.stdout.write(
+    `Collecting ${canonical.href}. Complete any source verification in the Chrome window; it can wait up to 15 minutes.\n`,
+  );
   try {
     const signal = new AbortController().signal;
     const manifest = parseAuthorPoemManifest(
