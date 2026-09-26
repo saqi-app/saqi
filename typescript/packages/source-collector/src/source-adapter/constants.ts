@@ -36,7 +36,6 @@ export const PROJECTION_SCHEMA_VERSION = 1 as const;
 export const LIMITS = {
   authorName: 512,
   authorSlug: 256,
-  authorsPerInventory: 10_000,
   poemTitle: 512,
   poemsPerAuthor: 20_000,
   poemLines: 4_096,

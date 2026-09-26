@@ -1,6 +1,7 @@
 -- Reviewed SQL candidate, not an applied migration. Do not add to migrations until
--- full shadow parity, direct collection/publication/crash checks, and a fresh
--- archive + disposable D1 restore have passed. Apply after 0069, with all
+-- exhaustive public parity, deployed shadow checks, a fresh archive, and the
+-- disposable D1 restore have passed. Live collection/Codex checks follow this
+-- cutover per the owner's 26 September deletion priority. Apply after 0070, with all
 -- old writers stopped and graph readers removed. The current publication JSON
 -- and canonical source fields must already contain their verified replacements.
 -- Run atomically through the D1 migration ledger; do not edit applied migrations.

@@ -6,9 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "preview_urls": false,
   "workers_dev": false,
-  "vars": {
-    "SAQI_PUBLICATION_PROJECTION_ACTIVE": "1"
-  },
   "routes": [
     { "pattern": "saqi.app", "custom_domain": true },
   ],

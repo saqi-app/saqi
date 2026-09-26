@@ -76,8 +76,8 @@ async function main() {
     if (manifest.author.canonicalId !== canonical.canonicalId)
       throw new Error("SOURCE_MANIFEST_AUTHOR_MISMATCH");
     for (const poem of manifest.poems) {
-      // The manifest is certified by two independent browser passes. A crash
-      // simply repeats the current author; D1's source key and hash make it safe.
+      // A crash repeats this author; canonical source keys and source hashes
+      // make admissions idempotent. A later sweep catches source additions.
       // eslint-disable-next-line no-await-in-loop -- Each poem must read its current source hash before a guarded upsert.
       const current = await get(
         `?action=poem&sourcePoemId=${encodeURIComponent(poem.numericId)}`,

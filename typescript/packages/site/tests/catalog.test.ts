@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
-import { hash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import {
-  APPROVED_ENRICHMENT_MODEL,
-  APPROVED_ENRICHMENT_PROMPT_VERSION,
-  APPROVED_ENRICHMENT_REASONING_EFFORT,
-  APPROVED_ENRICHMENT_VALIDATIONS,
-} from "@saqi/precedent-iso";
 import Database from "better-sqlite3";
 
 import {
@@ -49,10 +42,7 @@ class TestStatement {
   }
 }
 
-function catalogRepository(
-  database: Database.Database,
-  allowInactiveProjection = false,
-): CatalogRepository {
+function catalogRepository(database: Database.Database): CatalogRepository {
   const adapter: CatalogDatabase = {
     async batch(statements) {
       return Promise.all(statements.map((statement) => statement.all()));
@@ -61,7 +51,7 @@ function catalogRepository(
       return new TestStatement(database, query);
     },
   };
-  return new CatalogRepository(adapter, allowInactiveProjection);
+  return new CatalogRepository(adapter);
 }
 
 function createDatabase() {
@@ -75,164 +65,82 @@ function createDatabase() {
   return database;
 }
 
-void test("a projected track cannot hide an existing published translation", async () => {
+void test("canonical publication preserves visible alternatives and attribution", async () => {
   const sqlite = createDatabase();
   try {
     sqlite.exec(`
-      INSERT INTO author(id, slug, name_arabic, name, hidden)
-      VALUES ('a-current', 'current-poet', 'شاعر', 'Poet', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
-        content_arabic, translation, hidden)
-      VALUES ('p-current', 'a-current', 'current', 1, 'قصيدة',
-        '{"content":["بيت"]}', '{"content":["Old English"]}', 0);
+      INSERT INTO author(id, slug, name_arabic) VALUES ('a', 'poet', 'شاعر');
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic)
+      VALUES ('p', 'a', 'poem', 1, 'قصيدة', '{"content":["بيت"]}');
     `);
-    const publication = {
-      model: "Codex Sol",
-      provider: "openai",
-      translation: { lines: ["Current English"] },
-    };
+    const publication = publicationSnapshotFromPoem({
+      id: "p",
+      authorId: "a",
+      slug: "poem",
+      verses: 1,
+      nameArabic: "قصيدة",
+      linesArabic: ["بيت"],
+      linesEnglish: ["Legacy English"],
+      linesEnglishModel: "Claude 1 or 2",
+      linesEnglishAttributionCertainty: "inferred_range",
+      linesEnglishModelVendor: "anthropic",
+      linesEnglishGemini: ["Gemini English"],
+    });
     sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-current'")
+      .prepare("UPDATE poem SET publication_json=? WHERE id='p'")
       .run(JSON.stringify(publication));
     const reader = catalogRepository(sqlite);
-    const detail = await reader.getPoemPage("current-poet", "p-current");
-    assert.deepEqual(detail?.poem.linesEnglish, ["Old English"]);
-    const summary = await reader.getAuthorPage("current-poet");
+    const page = await reader.getPoemPage("poet", "p");
+    assert.deepEqual(page?.poem.linesEnglish, ["Legacy English"]);
+    assert.deepEqual(page.poem.linesEnglishGemini, ["Gemini English"]);
+    assert.equal(page.poem.linesEnglishModel, "Claude 1 or 2");
+    const summary = await reader.getAuthorPage("poet");
     assert.deepEqual(
       summary?.poems[0]?.translationModels.map(({ key }) => key),
-      ["legacy"],
-    );
-    sqlite.exec("UPDATE poem SET translation = NULL WHERE id = 'p-current'");
-    const projected = await reader.getPoemPage("current-poet", "p-current");
-    assert.deepEqual(
-      projected?.poem.modelEnrichments?.map(({ lines }) => lines),
-      [["Current English"]],
-    );
-    assert.equal(projected.poem.linesEnglish, undefined);
-    const projectedSummary = await reader.getAuthorPage("current-poet");
-    assert.deepEqual(
-      projectedSummary?.poems[0]?.translationModels.map(({ key }) => key),
-      ["current"],
-    );
-    sqlite
-      .prepare(
-        "UPDATE poem SET publication_json = ?, translation = ? WHERE id = 'p-current'",
-      )
-      .run('{"model":"Broken"}', '{"content":["Old English"]}');
-    const fallback = await reader.getPoemPage("current-poet", "p-current");
-    assert.deepEqual(fallback?.poem.linesEnglish, ["Old English"]);
-    const fallbackSummary = await reader.getAuthorPage("current-poet");
-    assert.deepEqual(
-      fallbackSummary?.poems[0]?.translationModels.map(({ key }) => key),
-      ["legacy"],
-    );
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("one poem publication snapshot preserves every visible translation choice", async () => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      INSERT INTO author(id, slug, name_arabic, name, hidden)
-      VALUES ('a-tracks', 'tracks-poet', 'شاعر', 'Poet', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
-        content_arabic, translation, translation_gemini, hidden)
-      VALUES ('p-tracks', 'a-tracks', 'tracks', 1, 'قصيدة',
-        '{"content":["بيت"]}', '{"content":["Legacy English"]}',
-        '{"content":["Gemini English"]}', 0);
-    `);
-    const reader = catalogRepository(sqlite);
-    const oldDetail = await reader.getPoemPage("tracks-poet", "p-tracks");
-    const oldSummary = await reader.getAuthorPage("tracks-poet");
-    assert.ok(oldDetail);
-    assert.deepEqual(
-      oldSummary?.poems[0]?.translationModels.map(({ key }) => key),
       ["legacy", "gemini"],
     );
-    const shadow = publicationSnapshotFromPoem(oldDetail.poem);
+    assert.equal(summary.poems[0].translationModels[0]?.model, "Claude 2");
     sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-tracks'")
-      .run(JSON.stringify(shadow));
-    assert.equal(
-      JSON.stringify(
-        await catalogRepository(sqlite, true).getPoemPage(
-          "tracks-poet",
-          "p-tracks",
-        ),
-      ),
-      JSON.stringify(oldDetail),
+      .prepare(
+        "UPDATE poem SET source_hash=?, publication_source_hash=? WHERE id='p'",
+      )
+      .run("a".repeat(64), "b".repeat(64));
+    const changedSource = await reader.getPoemPage("poet", "p");
+    assert.equal(changedSource?.poem.publicationOutdated, true);
+    assert.deepEqual(changedSource.poem.linesEnglish, ["Legacy English"]);
+    assert.equal(await reader.getPoemPage("wrong-poet", "p"), undefined);
+    sqlite.exec("UPDATE poem SET hidden=1 WHERE id='p'");
+    assert.equal(await reader.getPoemPage("poet", "p"), undefined);
+    assert.deepEqual(await reader.listAuthors(), []);
+    sqlite.exec(
+      "UPDATE poem SET hidden=0 WHERE id='p'; UPDATE author SET hidden=1 WHERE id='a'",
     );
-    assert.deepEqual(
-      await reader.getPoemPage("tracks-poet", "p-tracks"),
-      oldDetail,
-    );
-    sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-tracks'")
-      .run(JSON.stringify({ ...shadow, active: true }));
-    assert.deepEqual(
-      await reader.getPoemPage("tracks-poet", "p-tracks"),
-      oldDetail,
-    );
-    sqlite.exec(`
-      UPDATE poem SET translation = NULL, translation_gemini = NULL
-      WHERE id = 'p-tracks';
-    `);
-    assert.deepEqual(
-      await reader.getPoemPage("tracks-poet", "p-tracks"),
-      oldDetail,
-    );
-    const updatedSummary = await reader.getAuthorPage("tracks-poet");
-    assert.ok(updatedSummary);
-    assert.deepEqual(updatedSummary.poems[0], oldSummary.poems[0]);
+    assert.equal(await reader.getPoemPage("poet", "p"), undefined);
   } finally {
     sqlite.close();
   }
 });
 
-void test("audited inactive snapshots can be selected by the reader flag", async () => {
+void test("invalid publication cannot hide readable Arabic or advertise English", async () => {
   const sqlite = createDatabase();
   try {
     sqlite.exec(`
-      INSERT INTO author(id, slug, name_arabic, hidden)
-      VALUES ('a-shadow', 'shadow-poet', 'شاعر', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
-        content_arabic, translation, hidden)
-      VALUES ('p-shadow', 'a-shadow', 'shadow', 1, 'قصيدة',
-        '{"content":["بيت"]}', '{"content":["Visible English"]}', 0);
+      INSERT INTO author(id, slug, name_arabic) VALUES ('a', 'poet', 'شاعر');
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic)
+      VALUES ('p', 'a', 'poem', 1, 'قصيدة', '{"content":[" ","","بيت"]}');
+      UPDATE poem SET publication_json='{"schemaVersion":2,"active":true,"fields":{"linesEnglish":"invalid"}}' WHERE id='p';
     `);
-    const oldReader = catalogRepository(sqlite);
-    const before = await oldReader.getPoemPage("shadow-poet", "p-shadow");
-    assert.ok(before);
-    const snapshot = publicationSnapshotFromPoem(before.poem);
+    const reader = catalogRepository(sqlite);
+    const page = await reader.getPoemPage("poet", "p");
+    assert.deepEqual(page?.poem.linesArabic, ["بيت"]);
+    assert.equal(page.poem.verses, 1);
+    assert.equal(page.poem.linesEnglish, undefined);
+    const summary = await reader.getAuthorPage("poet");
+    assert.equal(summary?.poems[0]?.hasEnglish, false);
     sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-shadow'")
-      .run(JSON.stringify(snapshot));
-    const flaggedReader = catalogRepository(sqlite, true);
-    assert.deepEqual(
-      await flaggedReader.getPoemPage("shadow-poet", "p-shadow"),
-      before,
-    );
-    assert.equal(
-      JSON.stringify(
-        await flaggedReader.getPoemPage("shadow-poet", "p-shadow"),
-      ),
-      JSON.stringify(before),
-    );
-    const beforeSummary = await oldReader.getAuthorPage("shadow-poet");
-    assert.deepEqual(
-      await flaggedReader.getAuthorPage("shadow-poet"),
-      beforeSummary,
-    );
-    sqlite.exec("UPDATE poem SET translation = NULL WHERE id = 'p-shadow'");
-    const projected = await flaggedReader.getPoemPage(
-      "shadow-poet",
-      "p-shadow",
-    );
-    const legacy = await oldReader.getPoemPage("shadow-poet", "p-shadow");
-    assert.deepEqual(projected?.poem.linesEnglish, ["Visible English"]);
-    assert.equal(legacy?.poem.linesEnglish, undefined);
+      .prepare("UPDATE poem SET content_arabic=? WHERE id='p'")
+      .run(JSON.stringify({ content: [] }));
+    assert.equal(await reader.getPoemPage("poet", "p"), undefined);
   } finally {
     sqlite.close();
   }
@@ -282,712 +190,12 @@ void test("word-gloss publications keep the author-page insights badge", async (
     sqlite
       .prepare("UPDATE poem SET publication_json=? WHERE id='p-gloss'")
       .run(JSON.stringify(publication));
-    const reader = catalogRepository(sqlite, true);
+    const reader = catalogRepository(sqlite);
     const detail = await reader.getPoemPage("gloss-poet", "p-gloss");
     assert.equal(detail?.poem.insights, undefined);
     assert.ok(detail?.poem.modelEnrichments?.[0]?.wordGlosses);
     const summary = await reader.getAuthorPage("gloss-poet");
     assert.equal(summary?.poems[0]?.hasInsights, true);
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("the projected reader needs no model history table", async () => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      INSERT INTO author(id, slug, name_arabic, hidden)
-      VALUES ('a-projection-only', 'projection-only', 'شاعر', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
-        content_arabic, translation, hidden)
-      VALUES ('p-projected', 'a-projection-only', 'projected', 1, 'قصيدة',
-        '{"content":["بيت"]}', '{"content":["Visible English"]}', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
-        content_arabic, hidden)
-      VALUES ('p-arabic-only', 'a-projection-only', 'arabic-only', 1, 'قصيدة ثانية',
-        '{"content":["بيت آخر"]}', 0);
-    `);
-    const oldPage = await catalogRepository(sqlite).getPoemPage(
-      "projection-only",
-      "p-projected",
-    );
-    assert.ok(oldPage);
-    sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-projected'")
-      .run(JSON.stringify(publicationSnapshotFromPoem(oldPage.poem)));
-    sqlite.pragma("foreign_keys = OFF");
-    sqlite.exec(`
-      DROP TABLE poem_model_publication_pointer;
-      DROP TABLE model_enrichment_artifact;
-      DROP TABLE model_enrichment_validation;
-      DROP TABLE enrichment_profile;
-    `);
-    const reader = catalogRepository(sqlite, true);
-    assert.deepEqual(
-      await reader.getPoemPage("projection-only", "p-projected"),
-      oldPage,
-    );
-    const arabicOnly = await reader.getPoemPage(
-      "projection-only",
-      "p-arabic-only",
-    );
-    assert.equal(arabicOnly?.poem.linesEnglish, undefined);
-    const summary = await reader.getAuthorPage("projection-only");
-    assert.deepEqual(
-      summary?.poems
-        .find((poem) => poem.id === "p-projected")
-        ?.translationModels.map((model) => model.key),
-      ["legacy"],
-    );
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("legacy attribution requires the exact stored payload hash", async () => {
-  const sqlite = createDatabase();
-  try {
-    const translation = '{"content":["A verse"]}';
-    const payloadHash = hash("sha256", translation, "hex");
-    sqlite.exec(`
-      INSERT INTO author (id, slug, name_arabic, name, hidden)
-      VALUES ('a-attributed', 'attributed-poet', 'شاعر', 'Poet', 0);
-    `);
-    sqlite
-      .prepare(
-        `INSERT INTO poem
-          (id, author_id, slug, verses, name_arabic, content_arabic,
-           translation, hidden)
-         VALUES ('p-attributed', 'a-attributed', 'attributed', 1, 'قصيدة',
-           '{"content":["بيت"]}', ?, 0)`,
-      )
-      .run(translation);
-    sqlite
-      .prepare(
-        "UPDATE poem SET legacy_translation_attributions = ? WHERE id = 'p-attributed'",
-      )
-      .run(
-        JSON.stringify([
-          {
-            sourcePayloadHash: payloadHash,
-            certainty: "inferred_range",
-            displayName: "Claude 1 or 2",
-            vendorKey: "anthropic",
-          },
-        ]),
-      );
-    const database = catalogRepository(sqlite);
-    const attributed = await database.getPoemPage(
-      "attributed-poet",
-      "p-attributed",
-    );
-    assert.ok(attributed);
-    assert.equal(attributed.poem.linesEnglishModel, "Claude 1 or 2");
-    assert.equal(attributed.poem.linesEnglishModelVendor, "anthropic");
-    assert.equal(
-      attributed.poem.linesEnglishAttributionCertainty,
-      "inferred_range",
-    );
-
-    const beforeProjection = await database.getAuthorPage("attributed-poet");
-    sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-attributed'")
-      .run(JSON.stringify(publicationSnapshotFromPoem(attributed.poem)));
-    const projected = catalogRepository(sqlite, true);
-    assert.deepEqual(
-      await projected.getAuthorPage("attributed-poet"),
-      beforeProjection,
-    );
-    const projectedDetail = await projected.getPoemPage(
-      "attributed-poet",
-      "p-attributed",
-    );
-    assert.equal(projectedDetail?.poem.linesEnglishModel, "Claude 1 or 2");
-
-    sqlite
-      .prepare("UPDATE poem SET translation = ? WHERE id = 'p-attributed'")
-      .run('{"content": ["A verse"]}');
-    const changed = await database.getPoemPage(
-      "attributed-poet",
-      "p-attributed",
-    );
-    assert.ok(changed);
-    assert.equal(changed.poem.linesEnglishModel, undefined);
-    assert.equal(changed.poem.linesEnglishModelVendor, undefined);
-    const summary = await database.getAuthorPage("attributed-poet");
-    assert.deepEqual(
-      summary?.poems[0]?.translationModels.map(
-        ({ key, provider, attributionCertainty }) => ({
-          key,
-          provider,
-          attributionCertainty,
-        }),
-      ),
-      [
-        {
-          key: "legacy",
-          provider: "anthropic",
-          attributionCertainty: "inferred_range",
-        },
-      ],
-      "list fallback must not acquire exact attribution from a mismatched payload hash",
-    );
-    const exactPayload = JSON.stringify({
-      content: ["A verse"],
-      model: "claude-opus-5",
-    });
-    sqlite
-      .prepare("UPDATE poem SET translation = ? WHERE id = 'p-attributed'")
-      .run(exactPayload);
-    sqlite
-      .prepare(
-        "UPDATE poem SET legacy_translation_attributions = ? WHERE id = 'p-attributed'",
-      )
-      .run(
-        JSON.stringify([
-          {
-            sourcePayloadHash: hash("sha256", exactPayload, "hex"),
-            certainty: "inferred_range",
-            displayName: "Claude 1 or 2",
-            vendorKey: "anthropic",
-          },
-        ]),
-      );
-    const exact = await database.getPoemPage("attributed-poet", "p-attributed");
-    assert.equal(exact?.poem.linesEnglishModel, "claude-opus-5");
-    assert.equal(exact.poem.linesEnglishAttributionCertainty, undefined);
-    const exactSummary = await database.getAuthorPage("attributed-poet");
-    assert.equal(
-      exactSummary?.poems[0]?.translationModels[0]?.model,
-      "Claude Opus 5",
-    );
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("catalog SQL excludes hidden, empty, and malformed content", async (t) => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      INSERT INTO author (id, slug, name_arabic, name, hidden) VALUES
-        ('a-good', 'good-poet', 'شاعر', 'Poet', 0),
-        ('a-empty', 'empty-poet', 'فارغ', 'Empty', 0),
-        ('a-percent', 'poet%20legacy', 'قديم', 'Legacy', 0),
-        ('a-malformed', 'bad/poet', '   ', 'Bad', 0),
-        ('a-hidden', 'hidden-poet', 'خفي', 'Hidden', 1);
-      INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic, translation, hidden) VALUES
-        ('p-valid', 'a-good', 'valid', 99, 'قصيدة', '{"content":["سطر أول","سطر ثان"]}', '{"content":["Line one","Line two"]}', 0),
-        ('p-invalid-json', 'a-good', 'invalid-json', 1, 'سيئة', '{', NULL, 0),
-        ('p-blank', 'a-good', 'blank', 1, 'فارغة', '{"content":["   "]}', NULL, 0),
-        ('p-hidden', 'a-good', 'hidden', 1, 'خفية', '{"content":["بيت"]}', NULL, 1),
-        ('p-percent-author', 'a-percent', 'percent-author', 1, 'قديمة', '{"content":["بيت"]}', NULL, 0),
-        ('p-malformed-author', 'a-malformed', 'bad-author', 1, 'قصيدة', '{"content":["بيت"]}', NULL, 0),
-        ('p-hidden-author', 'a-hidden', 'hidden-author', 1, 'خفية', '{"content":["بيت"]}', NULL, 0);
-    `);
-    const database = catalogRepository(sqlite);
-
-    const authors = await database.listAuthors();
-    assert.deepEqual(
-      authors.map(({ author, poemCount }) => [author.id, poemCount]),
-      [["a-good", 1]],
-    );
-    const authorPage = await database.getAuthorPage("good-poet");
-    assert.ok(authorPage);
-    assert.equal(authorPage.poems.length, 1);
-    const [firstPoem] = authorPage.poems;
-    assert.ok(firstPoem);
-    assert.equal(firstPoem.hasEnglish, true);
-    assert.equal(firstPoem.hasInsights, false);
-    assert.equal(firstPoem.verses, 1, "verse count comes from content");
-    sqlite
-      .prepare("UPDATE poem SET translation = ? WHERE id = 'p-valid'")
-      .run(JSON.stringify({ content: [" ".repeat(3)] }));
-    sqlite.prepare("UPDATE poem SET insights = ? WHERE id = 'p-valid'").run(
-      JSON.stringify({
-        summary: "A concise reading.",
-        themes: ["Memory"],
-        historicalContext: "A historical setting.",
-        literaryDevices: ["Metaphor"],
-        culturalSignificance: "A cultural note.",
-        notableLines: [{ line: "سطر أول", explanation: "A notable image." }],
-      }),
-    );
-    const pageWithBlankTranslation = await database.getAuthorPage("good-poet");
-    assert.ok(pageWithBlankTranslation);
-    const [blankTranslationPoem] = pageWithBlankTranslation.poems;
-    assert.ok(blankTranslationPoem);
-    assert.equal(blankTranslationPoem.hasEnglish, false);
-    assert.equal(blankTranslationPoem.hasInsights, true);
-    assert.equal(await database.getAuthorPage("empty-poet"), undefined);
-
-    const poemPage = await database.getPoemPage("good-poet", "p-valid");
-    assert.ok(poemPage);
-    assert.ok(poemPage.poem.insights);
-    assert.equal(poemPage.author.id, "a-good");
-    assert.equal(poemPage.poem.authorId, poemPage.author.id);
-    assert.deepEqual(poemPage.poem.linesArabic, ["سطر أول", "سطر ثان"]);
-    assert.equal(poemPage.poem.insights.summary, "A concise reading.");
-    assert.equal(poemPage.poem.insightsTrack, "legacy");
-    const artifactHash = "a".repeat(64);
-    const normalizedPayload = JSON.stringify({
-      insights: {
-        culturalSignificance: "A cultural note.",
-        historicalContext: "A grounded setting.",
-        literaryDevices: ["Metaphor"],
-        notableLines: [{ explanation: "A notable image.", line: "سطر أول" }],
-        summary: "A concise reading.",
-        themes: ["Memory"],
-      },
-      schemaId: "saqi.poem-enrichment-output",
-      schemaVersion: 3,
-      translation: { lines: ["Sol line one", "Sol line two"] },
-      wordGlosses: {
-        tokenizerVersion: "saqi-orthographic-v1",
-        lines: [
-          {
-            lineIndex: 0,
-            segments: [
-              { kind: "word", meaning: "line", surface: "سطر", tokenIndex: 0 },
-              { kind: "text", surface: " " },
-              { kind: "word", meaning: "first", surface: "أول", tokenIndex: 1 },
-            ],
-          },
-          {
-            lineIndex: 1,
-            segments: [
-              { kind: "word", meaning: "line", surface: "سطر", tokenIndex: 0 },
-              { kind: "text", surface: " " },
-              {
-                kind: "word",
-                meaning: "second",
-                surface: "ثان",
-                tokenIndex: 1,
-              },
-            ],
-          },
-        ],
-      },
-    });
-    sqlite
-      .prepare(
-        `INSERT INTO crawl_import_bundle
-          (id, schema_version, manifest_hash, expected_record_count, status,
-           writer_epoch, created_at)
-         VALUES ('bundle-sol', 1, ?, 1, 'open', 1, 1)`,
-      )
-      .run(artifactHash);
-    sqlite
-      .prepare(
-        `INSERT INTO crawl_import_record
-          (bundle_id, ordinal, record_hash, source_name, source_author_id,
-           source_author_url, author_name_arabic, canonical_author_id,
-           source_poem_id, source_poem_url, canonical_poem_id, title_arabic,
-           content_arabic, content_hash, observed_at)
-         VALUES ('bundle-sol', 0, ?, 'source', 'author-1',
-           'https://example.test/author', 'شاعر', 'a-good', 'poem-1',
-           'https://example.test/poem', 'p-valid', 'قصيدة',
-           '{"content":["سطر أول","سطر ثان"]}', ?, 1)`,
-      )
-      .run(artifactHash, artifactHash);
-    sqlite.exec(`
-      INSERT INTO source_author_identity VALUES
-        ('source-author-1', 'source', 'author-1', 'https://example.test/author',
-         'شاعر', 'a-good', 1, 1);
-      INSERT INTO source_poem_identity (
-        id, source_name, external_id, source_author_id, canonical_url,
-        canonical_poem_id, first_observed_at, last_observed_at, tombstoned_at
-      ) VALUES
-        ('source-poem-1', 'source', 'poem-1', 'source-author-1',
-         'https://example.test/poem', 'p-valid', 1, 1, NULL);
-    `);
-    sqlite
-      .prepare(
-        `INSERT INTO poem_source_revision (
-           id, source_poem_id, schema_version, content_hash, title_arabic,
-           content_arabic, observed_at, created_at, import_bundle_id,
-           import_ordinal
-         ) VALUES
-          ('revision-1', 'source-poem-1', 1, ?, 'قصيدة',
-           '{"content":["سطر أول","سطر ثان"]}', 1, 1,
-           'bundle-sol', 0)`,
-      )
-      .run(artifactHash);
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_artifact (
-           id, source_revision_id, task_key, variant, schema_version,
-           prompt_version, model, model_key, reasoning_effort, payload_hash,
-           payload, created_at
-         ) VALUES
-          ('artifact-1', 'revision-1', 'enrich:revision-1', 0, 3, ?,
-           ?, 'sol-5.6', ?, ?, ?, 1)`,
-      )
-      .run(
-        APPROVED_ENRICHMENT_PROMPT_VERSION,
-        APPROVED_ENRICHMENT_MODEL,
-        APPROVED_ENRICHMENT_REASONING_EFFORT,
-        artifactHash,
-        normalizedPayload,
-      );
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_validation VALUES
-          ('validation-1', 'artifact-1', 'reviewer-1', 'v1', 0, 'pass',
-           'none', ?, '{}', 1)`,
-      )
-      .run(artifactHash);
-    sqlite.exec(`
-      UPDATE poem SET active_source_revision_id = 'revision-1'
-      WHERE id = 'p-valid';
-      INSERT INTO poem_model_publication_pointer VALUES
-        ('p-valid', 'sol-5.6', 'revision-1', 'artifact-1', 1, 1, 1);
-    `);
-    const publishedSolPage = await database.getPoemPage("good-poet", "p-valid");
-    const availableModels = async () => {
-      const page = await database.getAuthorPage("good-poet");
-      return page?.poems
-        .find(({ id }) => id === "p-valid")
-        ?.translationModels.filter(({ key }) => key === "sol-5.6");
-    };
-    assert.deepEqual(
-      await availableModels(),
-      [],
-      "unapproved validation does not advertise a model",
-    );
-    assert.equal(
-      publishedSolPage?.poem.linesEnglishSol,
-      undefined,
-      "an arbitrary passing validator must not expose Sol output",
-    );
-    const [fidelity, grounding] = APPROVED_ENRICHMENT_VALIDATIONS;
-    assert.ok(fidelity);
-    assert.ok(grounding);
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_validation VALUES
-          ('validation-fidelity', 'artifact-1', ?, ?, ?, 'pass',
-           'none', ?, '{}', 2)`,
-      )
-      .run(
-        fidelity.validatorKey,
-        fidelity.validatorVersion,
-        fidelity.attempt,
-        artifactHash,
-      );
-    const singlyReviewedSolPage = await database.getPoemPage(
-      "good-poet",
-      "p-valid",
-    );
-    assert.deepEqual(
-      await availableModels(),
-      [],
-      "both required validators must accept the publication",
-    );
-    assert.equal(
-      singlyReviewedSolPage?.poem.linesEnglishSol,
-      undefined,
-      "one approved validator must not expose Sol output",
-    );
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_validation VALUES
-          ('validation-grounding', 'artifact-1', ?, ?, ?, 'pass',
-           'none', ?, '{}', 3)`,
-      )
-      .run(
-        grounding.validatorKey,
-        grounding.validatorVersion,
-        grounding.attempt,
-        artifactHash,
-      );
-    const exactlyReviewedSolPage = await database.getPoemPage(
-      "good-poet",
-      "p-valid",
-    );
-    assert.ok(exactlyReviewedSolPage);
-    const beforeModelSummary = await database.getAuthorPage("good-poet");
-    const modelSnapshot = publicationSnapshotFromPoem(
-      exactlyReviewedSolPage.poem,
-      true,
-    );
-    sqlite
-      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-valid'")
-      .run(JSON.stringify(modelSnapshot));
-    assert.deepEqual(
-      await database.getPoemPage("good-poet", "p-valid"),
-      exactlyReviewedSolPage,
-    );
-    const updatedModelSummary = await database.getAuthorPage("good-poet");
-    assert.deepEqual(
-      updatedModelSummary?.poems[0],
-      beforeModelSummary?.poems[0],
-    );
-    sqlite.exec("UPDATE poem SET publication_json = NULL WHERE id = 'p-valid'");
-    assert.deepEqual(
-      await availableModels(),
-      [{ key: "sol-5.6", model: "Sol 5.6", provider: "openai" }],
-      "normal v2 publications expose compact model metadata",
-    );
-    assert.equal(
-      exactlyReviewedSolPage.poem.linesEnglishSol,
-      undefined,
-      "normalized publication must not expose the stale legacy projection",
-    );
-    const [modelEnrichment] =
-      exactlyReviewedSolPage.poem.modelEnrichments ?? [];
-    assert.ok(modelEnrichment);
-    assert.equal(modelEnrichment.model, "gpt-5.6-sol");
-    assert.equal(modelEnrichment.displayName, "Sol 5.6");
-    assert.equal(modelEnrichment.vendorKey, "openai");
-    assert.equal(modelEnrichment.backendKey, "openai-codex-cli");
-    assert.equal(modelEnrichment.backendName, "Codex CLI");
-    assert.equal(
-      modelEnrichment.profileKey,
-      "sol-5.6/word-gloss-v3-output-v3/source-v1",
-    );
-    assert.equal(
-      modelEnrichment.insights?.summary,
-      "A concise reading.",
-      "complete v3 insights remain visible through the normalized model track",
-    );
-    assert.equal(modelEnrichment.reasoningEffort, "medium");
-    assert.equal(
-      modelEnrichment.wordGlosses?.lines[0]?.segments[0]?.surface,
-      "سطر",
-    );
-    sqlite
-      .prepare(
-        `INSERT INTO model_enrichment_validation VALUES
-          ('obsolete-rejection', 'artifact-1', 'obsolete-review', 'v0', 99,
-           'fail', 'critical', ?, '{}', 4)`,
-      )
-      .run(artifactHash);
-    const stillPublished = await database.getPoemPage("good-poet", "p-valid");
-    assert.equal(
-      stillPublished?.poem.modelEnrichments?.[0]?.modelKey,
-      "sol-5.6",
-      "an unrelated obsolete failure must not poison the exact active policy",
-    );
-    assert.equal(
-      await database.getPoemPage("wrong-poet", "p-valid"),
-      undefined,
-    );
-    assert.equal(
-      await database.getPoemPage("good-poet", "p-invalid-json"),
-      undefined,
-    );
-    const sitemapPoems = await database.listSitemapPoems(1);
-    assert.equal(sitemapPoems.length, 1);
-    assert.equal(sitemapPoems[0]?.author.id, sitemapPoems[0]?.poem.authorId);
-    sqlite.exec("DROP TRIGGER model_enrichment_artifact_immutable_update");
-    for (const lines of [[], ["", " "], "not an array"]) {
-      await t.test(
-        `unusable publication lines: ${JSON.stringify(lines)}`,
-        async () => {
-          sqlite
-            .prepare(
-              "UPDATE model_enrichment_artifact SET payload = ? WHERE id = 'artifact-1'",
-            )
-            .run(JSON.stringify({ translation: { lines } }));
-          assert.deepEqual(
-            await availableModels(),
-            [],
-            "missing usable lines do not advertise a publication",
-          );
-        },
-      );
-    }
-    sqlite
-      .prepare(
-        "UPDATE model_enrichment_artifact SET payload = ? WHERE id = 'artifact-1'",
-      )
-      .run(normalizedPayload);
-    sqlite.exec(
-      "UPDATE model_enrichment_artifact SET reasoning_effort = 'low' WHERE id = 'artifact-1'",
-    );
-    assert.deepEqual(
-      await availableModels(),
-      [],
-      "mismatched profile settings do not advertise a publication",
-    );
-    sqlite.exec(
-      "UPDATE model_enrichment_artifact SET reasoning_effort = 'high' WHERE id = 'artifact-1'",
-    );
-    sqlite.exec(`
-      UPDATE model_enrichment_artifact SET prompt_version = 'sol-word-gloss-v2'
-        WHERE id = 'artifact-1';
-      INSERT INTO model_enrichment_validation
-        SELECT id || '-v2', artifact_id, validator_key, 'sol-word-gloss-v2', attempt,
-          outcome, highest_severity, report_hash, report, created_at
-        FROM model_enrichment_validation WHERE id IN ('validation-fidelity', 'validation-grounding');
-    `);
-    assert.deepEqual(
-      await availableModels(),
-      [{ key: "sol-5.6", model: "Sol 5.6", provider: "openai" }],
-      "readable v2 high publications remain visible after the v3 medium upgrade",
-    );
-    sqlite.exec(`
-      UPDATE model_enrichment_artifact SET prompt_version = 'sol-enrichment-v1', schema_version = 1,
-        payload = '{"translation":{"lines":["First","Second"]},"insights":{"summary":"Reading","themes":["Memory"],"historicalContext":"History","literaryDevices":["Metaphor"],"culturalSignificance":"Culture","notableLines":[{"line":"First","explanation":"Meaning"}]}}'
-        WHERE id = 'artifact-1';
-      INSERT INTO model_enrichment_validation
-        SELECT id || '-legacy', artifact_id, validator_key, 'sol-enrichment-v1', attempt,
-          outcome, highest_severity, report_hash, report, created_at
-        FROM model_enrichment_validation WHERE id IN ('validation-fidelity', 'validation-grounding');
-    `);
-    assert.deepEqual(
-      await availableModels(),
-      [{ key: "sol-5.6", model: "Sol 5.6", provider: "openai" }],
-      "readable v1 publications retain the same model identity without duplicate recipe badges",
-    );
-    sqlite.exec(
-      "UPDATE poem SET active_source_revision_id = NULL WHERE id = 'p-valid'",
-    );
-    assert.deepEqual(
-      await availableModels(),
-      [],
-      "stale publication revisions do not advertise a model",
-    );
-  } finally {
-    sqlite.close();
-  }
-});
-
-void test("catalog rejects generated refusals and overlong translation tracks", async () => {
-  const sqlite = createDatabase();
-  try {
-    sqlite.exec(`
-      DROP TRIGGER poem_generated_title_guard_before_insert;
-      DROP TRIGGER poem_generated_title_guard_before_update;
-    `);
-    sqlite.exec(`
-      INSERT INTO author (id, slug, name_arabic) VALUES ('a-quality', 'quality-poet', 'شاعر');
-      INSERT INTO poem
-        (id, author_id, slug, verses, name_arabic, name_english, poem_title_first_line, content_arabic, translation)
-      VALUES
-        ('p-refusal', 'a-quality', 'refusal', 1, 'قصيدة أولى',
-         'Unfortunately I am unable to translate this poem',
-         'Valid legacy title',
-         '{"content":["سطر"]}',
-         '{"content":["Unfortunately I am unable to translate this poem"]}'),
-        ('p-preamble', 'a-quality', 'preamble', 1, 'قصيدة تمهيدية',
-         'Here is the English translation of the Arabic poem title: Will I Ever Say One Day',
-         NULL,
-         '{"content":["سطر"]}',
-         '{"content":["A line"]}'),
-        ('p-multiline', 'a-quality', 'multiline', 1, 'قصيدة متعددة',
-         'A plausible title\n\nقصيدة متعددة',
-         NULL,
-         '{"content":["سطر"]}',
-         '{"content":["A line"]}'),
-        ('p-first-person', 'a-quality', 'first-person', 1, 'لي صديق',
-         'I Have a Friend Who Keeps My Secrets',
-         NULL,
-         '{"content":["سطر"]}',
-         '{"content":["A line"]}'),
-        ('p-overlong', 'a-quality', 'overlong', 1, 'قصيدة ثانية', NULL, NULL,
-         '{"content":["سطر"]}',
-         '{"content":["Line one","Hallucinated extra line"]}'),
-        ('p-blank-pair', 'a-quality', 'blank-pair', 2, 'قصيدة ثالثة', NULL, NULL,
-         '{"content":[" ","","سطر أول","سطر ثان"]}',
-         '{"content":[" ","","Line one","Line two"]}');
-      UPDATE poem SET insights = '{"summary":"Only a summary"}' WHERE id = 'p-overlong';
-    `);
-    const database = catalogRepository(sqlite);
-
-    const authorPage = await database.getAuthorPage("quality-poet");
-    assert.ok(authorPage);
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-refusal")?.nameEnglish,
-      "Valid legacy title",
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-overlong")?.hasInsights,
-      false,
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-overlong")?.hasEnglish,
-      false,
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-blank-pair")?.hasEnglish,
-      true,
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-preamble")?.nameEnglish,
-      undefined,
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-multiline")?.nameEnglish,
-      undefined,
-    );
-    assert.equal(
-      authorPage.poems.find((poem) => poem.id === "p-first-person")
-        ?.nameEnglish,
-      "I Have a Friend Who Keeps My Secrets",
-    );
-
-    const refusal = await database.getPoemPage("quality-poet", "p-refusal");
-    assert.ok(refusal);
-    assert.equal(refusal.poem.nameEnglish, "Valid legacy title");
-    assert.equal(refusal.poem.linesEnglish, undefined);
-
-    const overlong = await database.getPoemPage("quality-poet", "p-overlong");
-    assert.ok(overlong);
-    assert.equal(overlong.poem.linesEnglish, undefined);
-    assert.equal(overlong.poem.insights, undefined);
-
-    const normalized = await database.getPoemPage(
-      "quality-poet",
-      "p-blank-pair",
-    );
-    assert.ok(normalized);
-    assert.deepEqual(normalized.poem.linesArabic, ["سطر أول", "سطر ثان"]);
-    assert.deepEqual(normalized.poem.linesEnglish, ["Line one", "Line two"]);
-    assert.equal(normalized.poem.verses, 1);
-
-    for (const model of [" ", "x".repeat(101), `bad\u{202e}model`]) {
-      sqlite
-        .prepare(
-          "UPDATE poem SET translation_gemini = ? WHERE id = 'p-blank-pair'",
-        )
-        .run(JSON.stringify({ content: ["One", "Two"], model }));
-      const page = await database.getPoemPage("quality-poet", "p-blank-pair");
-      assert.deepEqual(page?.poem.linesEnglishGemini, ["One", "Two"]);
-      assert.equal(page.poem.linesEnglishGeminiModel, undefined);
-    }
-
-    sqlite
-      .prepare("UPDATE poem SET name_english = ? WHERE id = 'p-blank-pair'")
-      .run(`Spoof\u{202e}title`);
-    const unsafeTitlePage = await database.getPoemPage(
-      "quality-poet",
-      "p-blank-pair",
-    );
-    assert.ok(unsafeTitlePage);
-    assert.equal(unsafeTitlePage.poem.nameEnglish, undefined);
-
-    sqlite
-      .prepare(
-        "UPDATE poem SET translation_gemini = ? WHERE id = 'p-blank-pair'",
-      )
-      .run(JSON.stringify({ content: [`One\u{202e}`, "Two"] }));
-    const unsafeTranslationPage = await database.getPoemPage(
-      "quality-poet",
-      "p-blank-pair",
-    );
-    assert.ok(unsafeTranslationPage);
-    assert.equal(unsafeTranslationPage.poem.linesEnglishGemini, undefined);
-
-    sqlite
-      .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-blank-pair'")
-      .run(JSON.stringify({ content: [`سطر\u{0001}`] }));
-    assert.equal(
-      await database.getPoemPage("quality-poet", "p-blank-pair"),
-      undefined,
-    );
   } finally {
     sqlite.close();
   }

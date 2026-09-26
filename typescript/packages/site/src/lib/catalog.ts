@@ -1,11 +1,3 @@
-import {
-  APPROVED_ENRICHMENT_PROFILES,
-  approvedEnrichmentValidations,
-  PoemEnrichmentOutputV3Schema,
-  PoemWordGlossesSchema,
-  READABLE_ENRICHMENT_PROFILES,
-  type ReadableEnrichmentProfile,
-} from "@saqi/precedent-iso";
 import { z } from "zod";
 
 import {
@@ -13,21 +5,15 @@ import {
   catalogDatabaseFromD1,
 } from "./catalog-database";
 import {
-  LEGACY_GEMINI_ATTRIBUTION_NOTE,
-  LEGACY_GEMINI_MODEL_ESTIMATE,
-  LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
   LEGACY_TRANSLATION_MODEL_ESTIMATE,
   poemTranslationTracks,
-  translationModelName,
   type TranslationModelProvider,
-  translationModelProvider,
 } from "./poem-translations";
 import { PublicationSnapshotSchema } from "./publication-snapshot";
 import {
   type Author,
   type Poem,
   SnapshotAuthorSchema,
-  SnapshotPoemInsightsSchema,
   SnapshotPoemSchema,
 } from "./snapshot-contract";
 
@@ -45,16 +31,19 @@ const UNSAFE_CONTROL_CODE_POINTS: readonly number[] = [
 const UNSAFE_CONTROL_CODE_POINTS_SQL = JSON.stringify(
   UNSAFE_CONTROL_CODE_POINTS,
 );
-const safeTextSql = (column: string) => `NOT EXISTS (
-    SELECT 1
-    FROM json_each('${UNSAFE_CONTROL_CODE_POINTS_SQL}') unsafe_code_point
-    WHERE instr(${column}, char(unsafe_code_point.value)) > 0
-  )`;
 const SAFE_IDENTITY_SQL = (
   column: string,
 ) => `length(trim(${column})) BETWEEN 1 AND 500
   AND ${column} = trim(${column})
   AND ${safeTextSql(column)}`;
+function safeTextSql(column: string) {
+  return `NOT EXISTS (
+    SELECT 1
+    FROM json_each('${UNSAFE_CONTROL_CODE_POINTS_SQL}') unsafe_code_point
+    WHERE instr(${column}, char(unsafe_code_point.value)) > 0
+  )`;
+}
+
 const SAFE_ROUTE_SEGMENT_SQL = (column: string) => `${SAFE_IDENTITY_SQL(column)}
   AND ${column} NOT IN ('.', '..')
   AND instr(${column}, '/') = 0`;
@@ -76,180 +65,6 @@ const PUBLIC_POEM_COUNT = `(SELECT count(*) FROM poem public_poem
 const HAS_PUBLIC_POEM = `EXISTS (SELECT 1 FROM poem public_poem
   WHERE public_poem.author_id = a.id
     AND public_poem.hidden = 0 AND public_poem.publishable = 1)`;
-const validTranslationSql = (column: string) => `CASE WHEN
-  json_valid(${column})
-  AND json_type(${column}, '$.content') = 'array'
-  AND json_array_length(${column}, '$.content') BETWEEN 1 AND 2000
-  AND json_array_length(${column}, '$.content') <= json_array_length(p.content_arabic, '$.content')
-  AND EXISTS (
-    SELECT 1 FROM json_each(${column}, '$.content') line
-    WHERE line.type = 'text' AND trim(line.value) <> ''
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM json_each(${column}, '$.content') line
-    WHERE line.type <> 'text'
-      OR length(line.value) > 5000
-      OR NOT (${safeTextSql("line.value")})
-      OR lower(line.value) LIKE '%roses are red%'
-      OR lower(line.value) LIKE '%unable to translate%'
-      OR lower(line.value) LIKE '%cannot translate%'
-      OR lower(line.value) LIKE '%can''t translate%'
-      OR lower(line.value) LIKE '%as an ai%'
-      OR lower(line.value) LIKE '%translation guidelines%'
-      OR lower(line.value) LIKE '%translate the following%'
-      OR lower(line.value) LIKE '%provide a summary instead%'
-      OR (lower(line.value) LIKE '%i''m sorry%' AND lower(line.value) LIKE '%translat%')
-  )
-THEN 1 ELSE 0 END`;
-const validInsightsSql = (column: string) => `CASE WHEN
-  json_valid(${column})
-  AND json_type(${column}) = 'object'
-  AND (SELECT count(*) FROM json_each(${column})) = 6
-  AND json_type(${column}, '$.summary') = 'text'
-  AND length(trim(json_extract(${column}, '$.summary'))) BETWEEN 1 AND 20000
-  AND ${safeTextSql(`json_extract(${column}, '$.summary')`)}
-  AND json_type(${column}, '$.historicalContext') = 'text'
-  AND length(trim(json_extract(${column}, '$.historicalContext'))) BETWEEN 1 AND 20000
-  AND ${safeTextSql(`json_extract(${column}, '$.historicalContext')`)}
-  AND json_type(${column}, '$.culturalSignificance') = 'text'
-  AND length(trim(json_extract(${column}, '$.culturalSignificance'))) BETWEEN 1 AND 20000
-  AND ${safeTextSql(`json_extract(${column}, '$.culturalSignificance')`)}
-  AND json_type(${column}, '$.themes') = 'array'
-  AND json_array_length(${column}, '$.themes') BETWEEN 1 AND 100
-  AND NOT EXISTS (
-    SELECT 1 FROM json_each(${column}, '$.themes') item
-    WHERE item.type <> 'text'
-      OR length(trim(item.value)) NOT BETWEEN 1 AND 20000
-      OR NOT (${safeTextSql("item.value")})
-  )
-  AND json_type(${column}, '$.literaryDevices') = 'array'
-  AND json_array_length(${column}, '$.literaryDevices') BETWEEN 1 AND 100
-  AND NOT EXISTS (
-    SELECT 1 FROM json_each(${column}, '$.literaryDevices') item
-    WHERE item.type <> 'text'
-      OR length(trim(item.value)) NOT BETWEEN 1 AND 20000
-      OR NOT (${safeTextSql("item.value")})
-  )
-  AND json_type(${column}, '$.notableLines') = 'array'
-  AND json_array_length(${column}, '$.notableLines') BETWEEN 1 AND 100
-  AND NOT EXISTS (
-    SELECT 1 FROM json_each(${column}, '$.notableLines') notable
-    WHERE notable.type <> 'object'
-      OR (SELECT count(*) FROM json_each(notable.value)) <> 2
-      OR json_type(notable.value, '$.line') <> 'text'
-      OR length(trim(json_extract(notable.value, '$.line'))) NOT BETWEEN 1 AND 20000
-      OR NOT (${safeTextSql("json_extract(notable.value, '$.line')")})
-      OR json_type(notable.value, '$.explanation') <> 'text'
-      OR length(trim(json_extract(notable.value, '$.explanation'))) NOT BETWEEN 1 AND 20000
-      OR NOT (${safeTextSql("json_extract(notable.value, '$.explanation')")})
-  )
-THEN 1 ELSE 0 END`;
-
-const sqlText = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const approvedValidationSql = (
-  validation: {
-    readonly attempt: number;
-    readonly validatorKey: string;
-    readonly validatorVersion: string;
-  },
-  validationTable = "model_enrichment_validation",
-) => `EXISTS (
-        SELECT 1 FROM ${validationTable} accepted
-        WHERE accepted.artifact_id = artifact.id
-          AND accepted.validator_key = ${sqlText(validation.validatorKey)}
-          AND accepted.validator_version = ${sqlText(validation.validatorVersion)}
-          AND accepted.attempt = ${String(validation.attempt)}
-          AND accepted.outcome = 'pass'
-          AND accepted.highest_severity IN ('none', 'minor')
-      )`;
-
-const validatedModelPublicationSql = (profile: ReadableEnrichmentProfile) =>
-  `p.active_source_revision_id IS NOT NULL
-  AND EXISTS (
-    SELECT 1
-    FROM poem_model_publication_pointer publication
-    JOIN model_enrichment_artifact artifact
-      ON artifact.id = publication.enrichment_artifact_id
-    WHERE publication.poem_id = p.id
-      AND publication.model_key = ${sqlText(profile.modelKey)}
-      AND publication.source_revision_id = p.active_source_revision_id
-      AND artifact.source_revision_id = p.active_source_revision_id
-      AND artifact.model_key = ${sqlText(profile.modelKey)}
-      AND artifact.model = ${sqlText(profile.model)}
-      AND artifact.reasoning_effort = ${sqlText(profile.reasoningEffort)}
-      AND artifact.prompt_version = ${sqlText(profile.promptVersion)}
-      AND ${approvedEnrichmentValidations(profile)
-        .all.map((validation) => approvedValidationSql(validation))
-        .join("\n      AND ")}
-  )`;
-
-const validatedModelArtifactSql = (profile: ReadableEnrichmentProfile) =>
-  `artifact.model_key = ${sqlText(profile.modelKey)}
-    AND artifact.model = ${sqlText(profile.model)}
-    AND artifact.reasoning_effort = ${sqlText(profile.reasoningEffort)}
-    AND artifact.prompt_version = ${sqlText(profile.promptVersion)}
-    AND ${approvedEnrichmentValidations(profile)
-      .all.map((validation) => approvedValidationSql(validation))
-      .join("\n    AND ")}`;
-
-const VALIDATED_MODEL_PUBLICATION = READABLE_ENRICHMENT_PROFILES.map(
-  (profile) => `(${validatedModelPublicationSql(profile)})`,
-).join("\n    OR ");
-const VALIDATED_MODEL_ARTIFACT = READABLE_ENRICHMENT_PROFILES.map(
-  (profile) => `(${validatedModelArtifactSql(profile)})`,
-).join("\n    OR ");
-const MODEL_DISPLAY_ORDER_SQL = APPROVED_ENRICHMENT_PROFILES.map(
-  (profile) =>
-    `WHEN ${sqlText(profile.modelKey)} THEN ${String(profile.displayOrder)}`,
-).join("\n      ");
-const MAX_PUBLIC_MODEL_TRACKS = 20;
-const MODEL_AVAILABILITY_METADATA_SQL = (
-  field: "displayName" | "modelVendorKey",
-) =>
-  `CASE artifact.model_key ${READABLE_ENRICHMENT_PROFILES.map(
-    (profile) =>
-      `WHEN ${sqlText(profile.modelKey)} THEN ${sqlText(profile[field])}`,
-  ).join(" ")} END`;
-
-// List metadata uses the existing validated publication authority. Detail pages
-// retain full payload validation; lists do not transfer or reparse gloss payloads.
-const MODEL_AVAILABILITY_SQL = `(SELECT json_group_array(json(available.model)) FROM (
-  SELECT json_object(
-    'key', artifact.model_key,
-    'model', ${MODEL_AVAILABILITY_METADATA_SQL("displayName")},
-    'provider', ${MODEL_AVAILABILITY_METADATA_SQL("modelVendorKey")}
-  ) AS model
-  FROM poem_model_publication_pointer publication
-  JOIN model_enrichment_artifact artifact ON artifact.id = publication.enrichment_artifact_id
-  WHERE publication.poem_id = p.id
-    AND publication.source_revision_id = p.active_source_revision_id
-    AND artifact.source_revision_id = p.active_source_revision_id
-    AND publication.model_key = artifact.model_key
-    AND (${VALIDATED_MODEL_ARTIFACT})
-    AND json_type(artifact.payload, '$.translation.lines') = 'array'
-    AND json_array_length(artifact.payload, '$.translation.lines') BETWEEN 1 AND 2000
-    AND json_array_length(artifact.payload, '$.translation.lines') <= json_array_length(p.content_arabic, '$.content')
-    AND EXISTS (
-      SELECT 1 FROM json_each(artifact.payload, '$.translation.lines') line
-      WHERE line.type = 'text' AND trim(line.value) <> ''
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM json_each(artifact.payload, '$.translation.lines') line
-      WHERE line.type <> 'text'
-    )
-  ORDER BY CASE artifact.model_key ${MODEL_DISPLAY_ORDER_SQL} ELSE 2147483647 END,
-    artifact.model_key
-  LIMIT ${String(MAX_PUBLIC_MODEL_TRACKS)}
-) available)`;
-
-const LEGACY_AVAILABILITY_COLUMNS = `
-  ${validTranslationSql("p.translation")} AS hasLegacyTranslation,
-  ${validTranslationSql("p.translation_gemini")} AS hasGeminiTranslation,
-  CASE WHEN json_valid(p.translation)
-    THEN json_extract(p.translation, '$.model') ELSE NULL END AS legacyModel,
-  CASE WHEN json_valid(p.translation_gemini)
-    THEN json_extract(p.translation_gemini, '$.model') ELSE NULL END AS geminiModel`;
-
 const AuthorRowSchema = z.object({
   id: z.string(),
   slug: z.string(),
@@ -277,13 +92,6 @@ const PoemSummaryRowSchema = z.object({
   nameArabic: z.string(),
   nameEnglish: z.string().nullable(),
   nameEnglishLegacy: z.string().nullable(),
-  hasInsights: z.literal([0, 1]),
-  hasCurrentPublication: z.literal([0, 1]),
-  hasLegacyTranslation: z.literal([0, 1]),
-  hasGeminiTranslation: z.literal([0, 1]),
-  geminiModel: z.unknown(),
-  legacyModel: z.unknown(),
-  translationModels: z.string(),
   publicationJson: z.string().nullable(),
 });
 const SitemapPoemRowSchema = z.object({
@@ -293,8 +101,6 @@ const SitemapPoemRowSchema = z.object({
 });
 
 const PoemRowSchema = z.object({
-  activeSourceRevisionId: z.string().nullable(),
-  hasActivePointer: z.literal([0, 1]),
   id: z.string(),
   slug: z.string(),
   authorId: z.string(),
@@ -303,35 +109,15 @@ const PoemRowSchema = z.object({
   nameEnglish: z.string().nullable(),
   nameEnglishLegacy: z.string().nullable(),
   contentArabic: z.string(),
-  translation: z.string().nullable(),
-  legacyTranslationAttributions: z.string().nullable(),
-  translationGemini: z.string().nullable(),
-  insights: z.string().nullable(),
   publicationJson: z.string().nullable(),
+  sourceHash: z.string().nullable(),
+  publicationSourceHash: z.string().nullable(),
 });
 
 const SafeCatalogLineSchema = z
   .string()
   .max(5_000)
   .refine((line) => !UNSAFE_CONTROL.test(line));
-const CurrentPublicationSchema = z.strictObject({
-  insights: SnapshotPoemInsightsSchema.optional(),
-  model: z.string().trim().min(1).max(100),
-  provider: z.enum(["anthropic", "google", "openai", "other"]),
-  translation: z.strictObject({
-    lines: z.array(SafeCatalogLineSchema).min(1).max(2_000),
-  }),
-  wordGlosses: PoemWordGlossesSchema.optional(),
-});
-const TranslationContentSchema = z.object({
-  content: z
-    .array(SafeCatalogLineSchema)
-    .min(1)
-    .max(2_000)
-    .refine((lines) => lines.some((line) => line.trim().length > 0)),
-  model: z.unknown().optional(),
-  reasoningEffort: z.unknown().optional(),
-});
 const ArabicContentSchema = z.object({
   content: z
     .array(SafeCatalogLineSchema)
@@ -339,42 +125,6 @@ const ArabicContentSchema = z.object({
     .max(2_000)
     .refine((lines) => lines.some((line) => line.trim().length > 0)),
 });
-const ProviderVendorSchema = z.enum(["anthropic", "google", "openai", "other"]);
-const ModelEnrichmentSchema = z.strictObject({
-  backendKey: z.string().trim().min(1).max(100).optional(),
-  backendName: z.string().trim().min(1).max(100).optional(),
-  displayName: z.string().trim().min(1).max(100).optional(),
-  model: z.string().trim().min(1).max(100),
-  modelKey: z.string().trim().min(1).max(100),
-  payload: z.union([
-    z.strictObject({
-      insights: SnapshotPoemInsightsSchema,
-      translation: z.strictObject({
-        lines: z.array(SafeCatalogLineSchema).min(1).max(2_000),
-      }),
-    }),
-    PoemEnrichmentOutputV3Schema,
-    z.strictObject({
-      schemaId: z.literal("saqi.poem-enrichment-output"),
-      schemaVersion: z.literal(2),
-      translation: z.strictObject({
-        lines: z.array(SafeCatalogLineSchema).min(1).max(2_000),
-      }),
-      wordGlosses: PoemWordGlossesSchema,
-    }),
-  ]),
-  profileKey: z.string().trim().min(1).max(100).optional(),
-  reasoningEffort: z.string().trim().min(1).max(100),
-  vendorKey: ProviderVendorSchema.optional(),
-});
-const ModelEnrichmentRowSchema = z.object({ enrichment: z.string() });
-const LegacyModelAttributionRowSchema = z.object({
-  certainty: z.string().trim().min(1).max(100),
-  displayName: z.string().trim().min(1).max(100),
-  sourcePayloadHash: z.string().regex(/^[a-f0-9]{64}$/u),
-  vendorKey: ProviderVendorSchema,
-});
-
 export type { CatalogDatabase } from "./catalog-database";
 
 export interface IndexedAuthor {
@@ -406,110 +156,43 @@ interface TranslationAvailability {
   provider: TranslationModelProvider;
 }
 
-const TranslationAvailabilitySchema = z.object({
-  key: z.string().min(1),
-  model: z.string().min(1),
-  provider: ProviderVendorSchema,
-});
-
 function summaryTranslationModels(
   row: z.infer<typeof PoemSummaryRowSchema>,
-  allowInactiveProjection = false,
 ): TranslationAvailability[] {
-  const projected = activePublicationSnapshot(
-    row.publicationJson,
-    allowInactiveProjection,
-  );
+  const projected = activePublicationSnapshot(row.publicationJson);
   if (projected) {
-    return poemTranslationTracks(projected.fields).flatMap((track) =>
-      track.model && track.provider
-        ? [
-            {
-              key: track.key,
-              // Author summaries keep their existing concise estimate; the poem
-              // detail retains the more specific stored attribution range.
-              model:
-                track.key === "legacy" &&
-                track.attributionCertainty === "inferred_range"
-                  ? LEGACY_TRANSLATION_MODEL_ESTIMATE
-                  : track.model,
-              provider: track.provider,
-              ...(track.attributionCertainty ||
-              (track.key === "gemini" && track.attributionNote)
-                ? {
-                    attributionCertainty:
-                      track.attributionCertainty ?? "user_supplied",
-                  }
-                : {}),
-              ...(track.attributionNote
-                ? { attributionNote: track.attributionNote }
-                : {}),
-            },
-          ]
-        : [],
-    );
-  }
-  const models: TranslationAvailability[] =
-    TranslationAvailabilitySchema.array().parse(
-      JSON.parse(row.translationModels),
-    );
-  if (row.hasCurrentPublication === 1) return models;
-  if (row.hasLegacyTranslation === 1) {
-    // Exact legacy attribution is hash-scoped on detail reads. Do not attach a
-    // poem-level attribution to list metadata without verifying its payload hash.
-    const model = storedModelLabel(row.legacyModel);
-    models.push({
-      key: "legacy",
-      model: translationModelName(model ?? LEGACY_TRANSLATION_MODEL_ESTIMATE),
-      provider: model ? translationModelProvider(model) : "anthropic",
-      ...(model
-        ? {}
-        : {
-            attributionCertainty: "inferred_range",
-            attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
-          }),
+    return poemTranslationTracks(projected.fields).flatMap((track) => {
+      if (!track.model || !track.provider) return [];
+      const model: TranslationAvailability = {
+        key: track.key,
+        model:
+          track.key === "legacy" &&
+          track.attributionCertainty === "inferred_range"
+            ? LEGACY_TRANSLATION_MODEL_ESTIMATE
+            : track.model,
+        provider: track.provider,
+      };
+      if (
+        track.attributionCertainty ||
+        (track.key === "gemini" && track.attributionNote)
+      )
+        model.attributionCertainty =
+          track.attributionCertainty ?? "user_supplied";
+      if (track.attributionNote) model.attributionNote = track.attributionNote;
+      return [model];
     });
   }
-  if (row.hasGeminiTranslation === 1) {
-    const storedModel = storedModelLabel(row.geminiModel);
-    const model = storedModel ?? LEGACY_GEMINI_MODEL_ESTIMATE;
-    models.push({
-      key: "gemini",
-      model: translationModelName(model),
-      provider: translationModelProvider(model),
-      ...(storedModel
-        ? {}
-        : {
-            attributionCertainty: "user_supplied",
-            attributionNote: LEGACY_GEMINI_ATTRIBUTION_NOTE,
-          }),
-    });
-  }
-  return models;
+  return [];
 }
 
-function activePublicationSnapshot(
-  raw: null | string,
-  allowInactiveProjection = false,
-) {
+function activePublicationSnapshot(raw: null | string) {
   if (!raw) return undefined;
   try {
     const parsed = PublicationSnapshotSchema.safeParse(JSON.parse(raw));
-    return parsed.success && (parsed.data.active || allowInactiveProjection)
-      ? parsed.data
-      : undefined;
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }
-}
-
-function storedModelLabel(value: unknown): string | undefined {
-  return typeof value === "string" &&
-    value.trim().length > 0 &&
-    value.trim().length <= 100 &&
-    !UNSAFE_CONTROL.test(value)
-    ? value.trim()
-    : undefined;
 }
 
 // Keep every current poet on one page; retain a high safety bound for future
@@ -550,23 +233,22 @@ interface CatalogReader {
 
 function authorFromRow(raw: unknown): Author {
   const row = AuthorRowSchema.parse(raw);
-  return SnapshotAuthorSchema.parse({
+  const author: Author = {
     id: row.id,
     slug: row.slug,
     nameArabic: row.nameArabic,
-    ...(row.nameEnglish ? { nameEnglish: row.nameEnglish } : {}),
-  });
+  };
+  if (row.nameEnglish) author.nameEnglish = row.nameEnglish;
+  return SnapshotAuthorSchema.parse(author);
 }
 
 function authorFromJoinedRow(raw: unknown): Author {
   const row = JoinedAuthorRowSchema.parse(raw);
-  return SnapshotAuthorSchema.parse({
+  return authorFromRow({
     id: row.catalogAuthorId,
     slug: row.catalogAuthorSlug,
     nameArabic: row.catalogAuthorNameArabic,
-    ...(row.catalogAuthorNameEnglish
-      ? { nameEnglish: row.catalogAuthorNameEnglish }
-      : {}),
+    nameEnglish: row.catalogAuthorNameEnglish,
   });
 }
 
@@ -595,72 +277,11 @@ function englishTitleFields(
 
 function usableTitle(...values: (null | string)[]): string | undefined {
   return values.find(
-    (value): value is string =>
-      typeof value === "string" && isUsableGeneratedText(value),
+    (value): value is string => value !== null && isUsableGeneratedText(value),
   );
 }
 
-function optionalModelEnrichment(
-  raw: null | string,
-  sourceLineCount: number,
-  retainedLineIndexes: number[],
-) {
-  if (!raw) return undefined;
-  try {
-    const parsed = ModelEnrichmentSchema.safeParse(JSON.parse(raw));
-    if (
-      !parsed.success ||
-      parsed.data.payload.translation.lines.length > sourceLineCount
-    )
-      return undefined;
-    const source = parsed.data.payload.translation.lines;
-    const payload = parsed.data.payload;
-    if (source.some((line) => GENERATION_FAILURE_PATTERN.test(line)))
-      return undefined;
-    return {
-      ...(parsed.data.backendKey ? { backendKey: parsed.data.backendKey } : {}),
-      ...(parsed.data.backendName
-        ? { backendName: parsed.data.backendName }
-        : {}),
-      ...(parsed.data.displayName
-        ? { displayName: parsed.data.displayName }
-        : {}),
-      lines:
-        source.length === retainedLineIndexes.length
-          ? source
-          : retainedLineIndexes.map((index) => source[index] ?? ""),
-      model: parsed.data.model,
-      modelKey: parsed.data.modelKey,
-      ...(parsed.data.profileKey ? { profileKey: parsed.data.profileKey } : {}),
-      reasoningEffort: parsed.data.reasoningEffort,
-      ...(parsed.data.vendorKey ? { vendorKey: parsed.data.vendorKey } : {}),
-      ...("wordGlosses" in payload
-        ? {
-            wordGlosses: {
-              ...payload.wordGlosses,
-              lines: retainedLineIndexes.map((sourceIndex, lineIndex) => ({
-                lineIndex,
-                segments:
-                  payload.wordGlosses.lines.find(
-                    (line) => line.lineIndex === sourceIndex,
-                  )?.segments ?? [],
-              })),
-            },
-          }
-        : {}),
-      ...("insights" in payload ? { insights: payload.insights } : {}),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function poemFromRow(
-  raw: unknown,
-  dynamicModelEnrichments: readonly string[] = [],
-  legacyAttribution?: z.infer<typeof LegacyModelAttributionRowSchema>,
-  allowInactiveProjection = false,
-): Poem | undefined {
+function poemFromRow(raw: unknown): Poem | undefined {
   const parsedRow = PoemRowSchema.safeParse(raw);
   if (!parsedRow.success) return undefined;
   const row = parsedRow.data;
@@ -686,40 +307,7 @@ function poemFromRow(
   const linesArabic = retainedLineIndexes.map(
     (index) => sourceLines[index] ?? "",
   );
-  const currentPublication =
-    publicationSnapshotPoem(row, linesArabic, allowInactiveProjection) ??
-    currentPublicationPoem(
-      row,
-      sourceLines,
-      retainedLineIndexes,
-      linesArabic,
-      dynamicModelEnrichments.length === 0,
-    );
-  if (currentPublication) return currentPublication;
-  const english = optionalLines(
-    row.translation,
-    sourceLines.length,
-    retainedLineIndexes,
-  );
-  const englishGemini = optionalLines(
-    row.translationGemini,
-    sourceLines.length,
-    retainedLineIndexes,
-  );
-  const modelEnrichments = dynamicModelEnrichments
-    .map((enrichment) =>
-      optionalModelEnrichment(
-        enrichment,
-        sourceLines.length,
-        retainedLineIndexes,
-      ),
-    )
-    .filter((value): value is NonNullable<typeof value> => value !== undefined);
-  const primaryModelEnrichment = modelEnrichments.at(0);
-  const insights =
-    (primaryModelEnrichment && "insights" in primaryModelEnrichment
-      ? primaryModelEnrichment.insights
-      : undefined) ?? optionalInsights(row.insights);
+  const snapshot = activePublicationSnapshot(row.publicationJson);
   const parsedPoem = SnapshotPoemSchema.safeParse({
     id: row.id,
     slug: row.slug,
@@ -728,186 +316,17 @@ function poemFromRow(
     nameArabic: row.nameArabic,
     ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
     linesArabic,
-    ...(english ? { linesEnglish: english.lines } : {}),
-    ...((english?.model ?? legacyAttribution?.displayName)
-      ? {
-          linesEnglishModel:
-            english?.model ?? legacyAttribution?.displayName ?? undefined,
-        }
-      : {}),
-    ...(legacyAttribution && !english?.model
-      ? {
-          linesEnglishAttributionCertainty: legacyAttribution.certainty,
-          linesEnglishModelVendor: legacyAttribution.vendorKey,
-        }
-      : {}),
-    ...(englishGemini ? { linesEnglishGemini: englishGemini.lines } : {}),
-    ...(englishGemini?.model
-      ? { linesEnglishGeminiModel: englishGemini.model }
-      : {}),
-    ...(modelEnrichments.length > 0 ? { modelEnrichments } : {}),
-    ...(insights ? { insights } : {}),
-    ...(insights
-      ? {
-          insightsTrack: primaryModelEnrichment
-            ? ("model" as const)
-            : ("legacy" as const),
-        }
-      : {}),
-    ...(primaryModelEnrichment?.model
-      ? { insightsModel: primaryModelEnrichment.model }
-      : {}),
-    ...(primaryModelEnrichment?.reasoningEffort
-      ? { insightsReasoningEffort: primaryModelEnrichment.reasoningEffort }
-      : {}),
+    ...snapshot?.fields,
   });
-  return parsedPoem.success ? parsedPoem.data : undefined;
-}
-
-function publicationSnapshotPoem(
-  row: z.infer<typeof PoemRowSchema>,
-  linesArabic: readonly string[],
-  allowInactiveProjection = false,
-): Poem | undefined {
-  const snapshot = activePublicationSnapshot(
-    row.publicationJson,
-    allowInactiveProjection,
-  );
-  if (!snapshot) return undefined;
-  const parsed = SnapshotPoemSchema.safeParse({
-    id: row.id,
-    slug: row.slug,
-    authorId: row.authorId,
-    verses: Math.ceil(linesArabic.length / 2),
-    nameArabic: row.nameArabic,
-    ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
-    linesArabic,
-    ...snapshot.fields,
-  });
-  return parsed.success ? parsed.data : undefined;
-}
-
-function currentPublicationPoem(
-  row: z.infer<typeof PoemRowSchema>,
-  sourceLines: readonly string[],
-  retainedLineIndexes: readonly number[],
-  linesArabic: readonly string[],
-  hasNoModelSelections: boolean,
-): Poem | undefined {
-  // A one-track projection cannot replace an existing visible selection.
+  if (!parsedPoem.success) return undefined;
   if (
-    !row.publicationJson ||
-    row.translation ||
-    row.translationGemini ||
-    row.hasActivePointer !== 0 ||
-    !hasNoModelSelections
+    snapshot &&
+    row.sourceHash &&
+    row.publicationSourceHash &&
+    row.sourceHash !== row.publicationSourceHash
   )
-    return undefined;
-  try {
-    const published = CurrentPublicationSchema.safeParse(
-      JSON.parse(row.publicationJson),
-    );
-    if (
-      !published.success ||
-      published.data.translation.lines.length > sourceLines.length ||
-      published.data.translation.lines.some((line) =>
-        GENERATION_FAILURE_PATTERN.test(line),
-      )
-    )
-      return undefined;
-    const source = published.data.translation.lines;
-    const lines =
-      source.length === retainedLineIndexes.length
-        ? source
-        : retainedLineIndexes.map((index) => source[index] ?? "");
-    const projected = SnapshotPoemSchema.safeParse({
-      id: row.id,
-      slug: row.slug,
-      authorId: row.authorId,
-      verses: Math.ceil(linesArabic.length / 2),
-      nameArabic: row.nameArabic,
-      ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
-      linesArabic,
-      modelEnrichments: [
-        {
-          lines,
-          model: published.data.model,
-          modelKey: "current",
-          reasoningEffort: "unknown",
-          vendorKey: published.data.provider,
-          ...(published.data.wordGlosses
-            ? { wordGlosses: published.data.wordGlosses }
-            : {}),
-        },
-      ],
-      ...(published.data.insights
-        ? {
-            insights: published.data.insights,
-            insightsModel: published.data.model,
-            insightsTrack: "model",
-          }
-        : {}),
-    });
-    return projected.success ? projected.data : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function optionalLines(
-  raw: null | string,
-  sourceLineCount: number,
-  retainedLineIndexes: number[],
-): { lines: string[]; model?: string; reasoningEffort?: string } | undefined {
-  if (!raw) return undefined;
-  try {
-    const parsed = TranslationContentSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success || parsed.data.content.length > sourceLineCount)
-      return undefined;
-    if (
-      parsed.data.content.some((line) => GENERATION_FAILURE_PATTERN.test(line))
-    ) {
-      return undefined;
-    }
-    const lines =
-      parsed.data.content.length === retainedLineIndexes.length
-        ? parsed.data.content
-        : retainedLineIndexes.map((index) => parsed.data.content[index] ?? "");
-    const result: {
-      lines: string[];
-      model?: string;
-      reasoningEffort?: string;
-    } = {
-      lines,
-    };
-    if (
-      typeof parsed.data.model === "string" &&
-      parsed.data.model.trim().length > 0 &&
-      parsed.data.model.trim().length <= 100 &&
-      !UNSAFE_CONTROL.test(parsed.data.model)
-    )
-      result.model = parsed.data.model.trim();
-    if (
-      typeof parsed.data.reasoningEffort === "string" &&
-      parsed.data.reasoningEffort.trim().length > 0 &&
-      parsed.data.reasoningEffort.trim().length <= 100 &&
-      !UNSAFE_CONTROL.test(parsed.data.reasoningEffort)
-    )
-      result.reasoningEffort = parsed.data.reasoningEffort.trim();
-    return result;
-  } catch {
-    return undefined;
-  }
-}
-
-function optionalInsights(raw: null | string) {
-  if (!raw) return undefined;
-  try {
-    const parsed = SnapshotPoemInsightsSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
+    parsedPoem.data.publicationOutdated = true;
+  return parsedPoem.data;
 }
 
 const AUTHOR_COLUMNS = `a.id,
@@ -920,13 +339,7 @@ const JOINED_AUTHOR_COLUMNS = `a.id AS catalogAuthorId,
   a.name_arabic AS catalogAuthorNameArabic,
   NULLIF(trim(a.name), '') AS catalogAuthorNameEnglish`;
 
-const BASE_POEM_COLUMNS = `p.id,
-  p.active_source_revision_id AS activeSourceRevisionId,
-  CASE WHEN EXISTS (
-    SELECT 1 FROM poem_model_publication_pointer existing
-    WHERE existing.poem_id = p.id
-      AND existing.source_revision_id = p.active_source_revision_id
-  ) THEN 1 ELSE 0 END AS hasActivePointer,
+const POEM_COLUMNS = `p.id,
   p.slug,
   p.author_id AS authorId,
   p.verses,
@@ -934,31 +347,9 @@ const BASE_POEM_COLUMNS = `p.id,
   NULLIF(trim(p.name_english), '') AS nameEnglish,
   NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy,
   p.content_arabic AS contentArabic,
-  p.translation,
-  p.translation_gemini AS translationGemini,
-  p.insights,
-  p.publication_json AS publicationJson`;
-
-const NORMALIZED_POEM_COLUMNS = `${BASE_POEM_COLUMNS},
-  p.legacy_translation_attributions AS legacyTranslationAttributions`;
-
-// Once the audited projection is selected, public reads must be independent
-// of the model/source history graph so those tables can be contracted.
-const PROJECTED_POEM_COLUMNS = `p.id,
-  NULL AS activeSourceRevisionId,
-  0 AS hasActivePointer,
-  p.slug,
-  p.author_id AS authorId,
-  p.verses,
-  p.name_arabic AS nameArabic,
-  NULLIF(trim(p.name_english), '') AS nameEnglish,
-  NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy,
-  p.content_arabic AS contentArabic,
-  NULL AS translation,
-  NULL AS translationGemini,
-  NULL AS insights,
   p.publication_json AS publicationJson,
-  NULL AS legacyTranslationAttributions`;
+  p.source_hash AS sourceHash,
+  p.publication_source_hash AS publicationSourceHash`;
 
 const BASE_POEM_SUMMARY_COLUMNS = `p.id,
   p.slug,
@@ -972,82 +363,18 @@ const BASE_POEM_SUMMARY_COLUMNS = `p.id,
   NULLIF(trim(p.name_english), '') AS nameEnglish,
   NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy`;
 
-const SAFE_CURRENT_PUBLICATION_JSON = `(CASE
-  WHEN json_valid(p.publication_json) THEN p.publication_json
-  ELSE '{}' END)`;
-const VALID_CURRENT_PUBLICATION_SQL = `(
-  p.translation IS NULL
-  AND p.translation_gemini IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM poem_model_publication_pointer existing
-    WHERE existing.poem_id = p.id
-      AND existing.source_revision_id = p.active_source_revision_id
-  )
-  AND
-  json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.translation.lines') = 'array'
-  AND json_array_length(${SAFE_CURRENT_PUBLICATION_JSON}, '$.translation.lines')
-    BETWEEN 1 AND 2000
-  AND json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model') = 'text'
-  AND length(trim(json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model')))
-    BETWEEN 1 AND 100
-  AND json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.provider')
-    IN ('anthropic', 'google', 'openai', 'other')
-)`;
-
-const NORMALIZED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
-  p.publication_json AS publicationJson,
-  ${LEGACY_AVAILABILITY_COLUMNS},
-  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
-    THEN 1 ELSE 0 END AS hasCurrentPublication,
-  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
-    THEN json_array(json_object('key', 'current',
-      'model', json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.model'),
-      'provider', json_extract(${SAFE_CURRENT_PUBLICATION_JSON}, '$.provider')))
-    ELSE ${MODEL_AVAILABILITY_SQL} END AS translationModels,
-  CASE WHEN ${VALID_CURRENT_PUBLICATION_SQL}
-    THEN CASE WHEN json_type(${SAFE_CURRENT_PUBLICATION_JSON}, '$.insights') = 'object'
-      THEN 1 ELSE 0 END
-    WHEN ${validInsightsSql("p.insights")} = 1
-      OR (${VALIDATED_MODEL_PUBLICATION})
-      THEN 1 ELSE 0 END AS hasInsights`;
-
-const PROJECTED_POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
-  p.publication_json AS publicationJson,
-  0 AS hasLegacyTranslation,
-  0 AS hasGeminiTranslation,
-  NULL AS legacyModel,
-  NULL AS geminiModel,
-  0 AS hasCurrentPublication,
-  '[]' AS translationModels,
-  0 AS hasInsights`;
-
-async function sha256Utf8Exact(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
+const POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
+  p.publication_json AS publicationJson`;
 
 export class CatalogRepository implements CatalogReader {
   readonly #database: CatalogDatabase;
-  readonly #allowInactiveProjection: boolean;
 
-  constructor(database: CatalogDatabase, allowInactiveProjection = false) {
+  constructor(database: CatalogDatabase) {
     this.#database = database;
-    this.#allowInactiveProjection = allowInactiveProjection;
   }
 
-  static fromD1(
-    database: D1Database,
-    allowInactiveProjection = false,
-  ): CatalogRepository {
-    return new CatalogRepository(
-      catalogDatabaseFromD1(database),
-      allowInactiveProjection,
-    );
+  static fromD1(database: D1Database): CatalogRepository {
+    return new CatalogRepository(catalogDatabaseFromD1(database));
   }
 
   async listAuthors(): Promise<IndexedAuthor[]> {
@@ -1121,11 +448,7 @@ export class CatalogRepository implements CatalogReader {
         .bind(slug, AUTHOR_PAGE_SIZE, offset);
       return this.#database.batch([authorStatement, poemsStatement]);
     };
-    const pageResults = await loadPage(
-      this.#allowInactiveProjection
-        ? PROJECTED_POEM_SUMMARY_COLUMNS
-        : NORMALIZED_POEM_SUMMARY_COLUMNS,
-    );
+    const pageResults = await loadPage(POEM_SUMMARY_COLUMNS);
     const authorRow = pageResults.at(0)?.results.at(0);
     if (!authorRow) return undefined;
     const parsedAuthor = AuthorPageRowSchema.parse(authorRow);
@@ -1139,14 +462,8 @@ export class CatalogRepository implements CatalogReader {
       poems: PoemSummaryRowSchema.array()
         .parse(pageResults.at(1)?.results ?? [])
         .map((row) => {
-          const translationModels = summaryTranslationModels(
-            row,
-            this.#allowInactiveProjection,
-          );
-          const publication = activePublicationSnapshot(
-            row.publicationJson,
-            this.#allowInactiveProjection,
-          );
+          const translationModels = summaryTranslationModels(row);
+          const publication = activePublicationSnapshot(row.publicationJson);
           return {
             authorId: row.authorId,
             hasEnglish: translationModels.length > 0,
@@ -1155,7 +472,7 @@ export class CatalogRepository implements CatalogReader {
                 (publication.fields.modelEnrichments ?? []).some(
                   (enrichment) => enrichment.wordGlosses !== undefined,
                 )
-              : row.hasInsights === 1,
+              : false,
             id: row.id,
             nameArabic: row.nameArabic,
             ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
@@ -1185,35 +502,12 @@ export class CatalogRepository implements CatalogReader {
         )
         .bind(authorSlug, poemId)
         .all();
-    const result = await loadPoem(
-      this.#allowInactiveProjection
-        ? PROJECTED_POEM_COLUMNS
-        : NORMALIZED_POEM_COLUMNS,
-    );
+    const result = await loadPoem(POEM_COLUMNS);
     const row = result.results[0];
     if (!row) return undefined;
     const parsedRow = PoemRowSchema.safeParse(row);
     if (!parsedRow.success) return undefined;
-    const activeSnapshot = activePublicationSnapshot(
-      parsedRow.data.publicationJson,
-      this.#allowInactiveProjection,
-    );
-    const [dynamicModelEnrichments, legacyAttribution] =
-      activeSnapshot || this.#allowInactiveProjection
-        ? ([[], undefined] as const)
-        : await Promise.all([
-            this.#loadRegistryModelEnrichments(poemId),
-            this.#loadLegacyModelAttribution(
-              parsedRow.data.translation,
-              parsedRow.data.legacyTranslationAttributions,
-            ),
-          ]);
-    const poem = poemFromRow(
-      row,
-      dynamicModelEnrichments,
-      legacyAttribution,
-      this.#allowInactiveProjection,
-    );
+    const poem = poemFromRow(row);
     return poem ? { author: authorFromJoinedRow(row), poem } : undefined;
   }
 
@@ -1238,82 +532,5 @@ export class CatalogRepository implements CatalogReader {
         author: { id: row.authorId, slug: row.authorSlug },
         poem: { id: row.id, authorId: row.authorId },
       }));
-  }
-
-  async #loadLegacyModelAttribution(
-    storedPayload: null | string,
-    storedAttributions: null | string,
-  ): Promise<undefined | z.infer<typeof LegacyModelAttributionRowSchema>> {
-    if (!storedPayload || !storedAttributions) return undefined;
-    const sourcePayloadHash = await sha256Utf8Exact(storedPayload);
-    try {
-      const parsed = LegacyModelAttributionRowSchema.array().safeParse(
-        JSON.parse(storedAttributions),
-      );
-      return parsed.success
-        ? parsed.data.find(
-            (attribution) =>
-              attribution.sourcePayloadHash === sourcePayloadHash,
-          )
-        : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  async #loadRegistryModelEnrichments(poemId: string): Promise<string[]> {
-    const result = await this.#database
-      .prepare(
-        `SELECT json_object(
-                  'backendKey', profile.backend_key,
-                  'backendName', profile.backend_display_name,
-                  'displayName', profile.model_display_name,
-                  'model', profile.runtime_model_id,
-                  'modelKey', profile.public_track_key,
-                  'profileKey', profile.profile_key,
-                  'reasoningEffort', profile.reasoning_effort,
-                  'vendorKey', CASE profile.vendor_key
-                    WHEN 'anthropic' THEN 'anthropic'
-                    WHEN 'google' THEN 'google'
-                    WHEN 'openai' THEN 'openai'
-                    ELSE 'other'
-                  END,
-                  'payload', json(artifact.payload)
-                ) AS enrichment
-           FROM poem_model_publication_pointer publication
-           JOIN model_enrichment_artifact artifact
-             ON artifact.id = publication.enrichment_artifact_id
-           JOIN poem_source_revision revision
-             ON revision.id = artifact.source_revision_id
-           JOIN enrichment_profile profile
-             ON profile.public_track_key = artifact.model_key
-            AND profile.runtime_model_id = artifact.model
-            AND profile.prompt_version = artifact.prompt_version
-            AND profile.reasoning_effort = artifact.reasoning_effort
-            AND profile.input_schema_version = revision.schema_version
-            AND profile.output_schema_version = artifact.schema_version
-           JOIN poem p ON p.id = publication.poem_id
-          WHERE publication.poem_id = ?1
-            AND p.active_source_revision_id IS NOT NULL
-            AND publication.source_revision_id = p.active_source_revision_id
-            AND artifact.source_revision_id = p.active_source_revision_id
-            AND publication.model_key = artifact.model_key
-            AND profile.public_track_key = publication.model_key
-            AND profile.runtime_model_id = artifact.model
-            AND profile.prompt_version = artifact.prompt_version
-            AND profile.reasoning_effort = artifact.reasoning_effort
-            AND (${VALIDATED_MODEL_ARTIFACT})
-          ORDER BY CASE profile.public_track_key
-              ${MODEL_DISPLAY_ORDER_SQL}
-              ELSE 2147483647
-            END,
-            profile.public_track_key
-          LIMIT ${String(MAX_PUBLIC_MODEL_TRACKS)}`,
-      )
-      .bind(poemId)
-      .all();
-    return ModelEnrichmentRowSchema.array()
-      .parse(result.results)
-      .map(({ enrichment }) => enrichment);
   }
 }

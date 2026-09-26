@@ -35,7 +35,7 @@ function fixture() {
       name_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL,
       sitemap_shard INTEGER NOT NULL, source_name TEXT,
       source_poem_id TEXT, source_url TEXT, source_hash TEXT,
-      source_version INTEGER NOT NULL DEFAULT 0, collected_at INTEGER,
+      collected_at INTEGER,
       publication_json TEXT, publication_source_hash TEXT, publication_hash TEXT,
       publication_cache_dirty INTEGER NOT NULL DEFAULT 0
     );
@@ -133,14 +133,13 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
   ).rejects.toMatchObject({ message: "SOURCE_CHANGED" });
   const row = sqlite
     .prepare(
-      "SELECT content_arabic AS contentArabic, publication_json AS publicationJson, publication_source_hash AS publicationSourceHash, publication_cache_dirty AS publicationCacheDirty, source_version AS sourceVersion FROM poem WHERE id = ?"
+      "SELECT content_arabic AS contentArabic, publication_json AS publicationJson, publication_source_hash AS publicationSourceHash, publication_cache_dirty AS publicationCacheDirty FROM poem WHERE id = ?"
     )
     .get(created.id) as Record<string, unknown>;
   expect(row).toMatchObject({
     publicationJson: '{"visible":"old English and insights"}',
     publicationSourceHash: created.sourceHash,
     publicationCacheDirty: 1,
-    sourceVersion: 2,
   });
   const pending = await publisher.pendingPurge(created.id);
   expect(pending).toMatchObject({

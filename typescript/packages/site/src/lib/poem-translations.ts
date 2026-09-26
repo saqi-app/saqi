@@ -26,7 +26,7 @@ export interface WordGlossTrack {
 // Display estimates do not change the immutable legacy attribution records.
 // The earliest translator (7758078) used claude-2; later configurations varied.
 export const LEGACY_TRANSLATION_MODEL_ESTIMATE = "Claude 2";
-export const LEGACY_GEMINI_MODEL_ESTIMATE = "Gemini 3.5 Flash";
+const LEGACY_GEMINI_MODEL_ESTIMATE = "Gemini 3.5 Flash";
 export const LEGACY_TRANSLATION_ATTRIBUTION_NOTE =
   "Claude 2 is inferred from the historical translator configuration. The original record does not identify its model.";
 export const LEGACY_GEMINI_ATTRIBUTION_NOTE =

@@ -29,7 +29,7 @@ export const SnapshotAuthorSchema = z.object({
   nameEnglish: NonBlankSchema.optional(),
 });
 
-export const SnapshotPoemInsightsSchema = z.strictObject({
+const SnapshotPoemInsightsSchema = z.strictObject({
   summary: InsightTextSchema,
   themes: z.array(InsightTextSchema).min(1).max(100),
   historicalContext: InsightTextSchema,
@@ -47,6 +47,7 @@ export const SnapshotPoemInsightsSchema = z.strictObject({
 });
 
 export const SnapshotPoemSchema = z.object({
+  publicationOutdated: z.literal(true).optional(),
   id: RouteSegmentSchema,
   slug: RouteSegmentSchema,
   authorId: NonBlankSchema,

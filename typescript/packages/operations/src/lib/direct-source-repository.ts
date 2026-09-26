@@ -292,7 +292,7 @@ export class DirectSourceRepository
     const result = await this.#database
       .prepare(
         `UPDATE poem SET name_arabic = ?1, content_arabic = ?2,
-                verses = ?3, source_hash = ?4, source_version = source_version + 1,
+                verses = ?3, source_hash = ?4,
                 source_url = ?5, collected_at = unixepoch(),
                 publication_cache_dirty = 1
          WHERE id = ?6 AND author_id = ?7 AND source_hash = ?8`
@@ -350,8 +350,8 @@ export class DirectSourceRepository
         `INSERT OR IGNORE INTO poem
        (id, author_id, slug, verses, name_arabic, content_arabic,
         sitemap_shard, source_name, source_poem_id, source_url,
-        source_hash, source_version, collected_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 1, unixepoch())`
+        source_hash, collected_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, unixepoch())`
       )
       .bind(
         id,
