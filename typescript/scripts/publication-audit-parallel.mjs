@@ -18,10 +18,24 @@ const expectedPublications = Number(
 );
 if (!Number.isSafeInteger(expectedPublications) || expectedPublications < 1)
   throw new Error("Expected publication count must be a positive integer");
-const script = fileURLToPath(new URL("publication-projection.mjs", import.meta.url));
+const script = fileURLToPath(
+  new URL("publication-projection.mjs", import.meta.url),
+);
 const children = [];
 try {
-  const summaries = await Promise.all(ranges.map((range, index) => auditLane(range, index)));
+  // Four simultaneous catalog comparisons exceeded the live Worker's stable
+  // read capacity. Keep the four bounded ranges but run at most two at once.
+  const summaries = [];
+  for (let index = 0; index < ranges.length; index += 2) {
+    // eslint-disable-next-line no-await-in-loop -- The next pair starts only after the previous pair has passed.
+    summaries.push(
+      ...(await Promise.all(
+        ranges
+          .slice(index, index + 2)
+          .map((range, offset) => auditLane(range, index + offset)),
+      )),
+    );
+  }
   const totals = summaries.reduce(
     (sum, item) => ({
       scanned: sum.scanned + item.totalScanned,
@@ -32,12 +46,21 @@ try {
     { scanned: 0, eligible: 0, shadowed: 0, skipped: 0 },
   );
   if (totals.skipped !== 0)
-    throw new Error(`${totals.skipped} stored publications no longer have a visible page`);
-  if (totals.eligible < expectedPublications || totals.eligible > expectedPublications + 27)
-    throw new Error(`Audited ${totals.eligible} publications; expected ${expectedPublications} plus at most 27 crossing duplicates`);
+    throw new Error(
+      `${totals.skipped} stored publications no longer have a visible page`,
+    );
+  if (
+    totals.eligible < expectedPublications ||
+    totals.eligible > expectedPublications + 27
+  )
+    throw new Error(
+      `Audited ${totals.eligible} publications; expected ${expectedPublications} plus at most 27 crossing duplicates`,
+    );
   if (totals.shadowed !== 0 && totals.shadowed !== totals.eligible)
     throw new Error("Shadow reads covered only part of the audited corpus");
-  process.stdout.write(`${JSON.stringify({ complete: true, lanes: ranges.length, ...totals })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ complete: true, lanes: ranges.length, ...totals })}\n`,
+  );
 } finally {
   for (const child of children) {
     if (child.exitCode === null) child.kill("SIGTERM");
@@ -52,6 +75,7 @@ function auditLane(range, index) {
         ...process.env,
         SAQI_PROJECTION_AFTER_ID: range.start,
         SAQI_PROJECTION_STOP_AFTER_ID: range.stop,
+        SAQI_PROJECTION_PACE_MS: "250",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -61,7 +85,8 @@ function auditLane(range, index) {
       process.stdout.write(`[${label}] ${line}\n`);
       try {
         const parsed = JSON.parse(line);
-        if (parsed.complete === true && parsed.action === "audit") summary = parsed;
+        if (parsed.complete === true && parsed.action === "audit")
+          summary = parsed;
       } catch {
         // The child owns validation; retain non-JSON diagnostics in the log.
       }

@@ -13,6 +13,7 @@ const bookmark = process.env.SAQI_D1_RESTORE_BOOKMARK;
 const startAfterId = process.env.SAQI_PROJECTION_AFTER_ID ?? "";
 const stopAfterId = process.env.SAQI_PROJECTION_STOP_AFTER_ID ?? "";
 const batchLimit = Number(process.env.SAQI_PROJECTION_BATCH_LIMIT ?? 10);
+const paceMs = Number(process.env.SAQI_PROJECTION_PACE_MS ?? 0);
 const action = process.argv.includes("--audit") ? "audit" : "backfill";
 const apply = process.argv.includes("--apply");
 const expectEmpty = process.argv.includes("--expect-empty");
@@ -38,6 +39,10 @@ if (stopAfterId && stopAfterId <= startAfterId)
   throw new Error("Stopping cursor must follow the starting cursor");
 if (!Number.isSafeInteger(batchLimit) || batchLimit < 1 || batchLimit > 10)
   throw new Error("Batch limit must be between 1 and 10");
+if (!Number.isSafeInteger(paceMs) || paceMs < 0 || paceMs > 5000)
+  throw new Error("Audit pacing must be between 0 and 5000 ms");
+if (paceMs && (action !== "audit" || apply))
+  throw new Error("Pacing is only supported for a read-only audit");
 if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 20_000)
   throw new Error("--max-batches must be between 1 and 20000");
 if (apply && !/^[0-9a-f-]{40,100}$/u.test(bookmark ?? ""))
@@ -103,6 +108,9 @@ for (let batch = 1; batch <= maxBatches; batch += 1) {
     break;
   }
   afterId = result.afterId;
+  if (paceMs)
+    // eslint-disable-next-line no-await-in-loop -- Pace each read-only audit batch to avoid overloading the live Worker.
+    await new Promise((resolve) => setTimeout(resolve, paceMs));
 }
 if (!complete)
   throw new Error(
@@ -128,7 +136,8 @@ process.stdout.write(
 );
 
 async function fetchBatch(body, batch) {
-  for (let retry = 0; retry <= 3; retry += 1) {
+  const maxRetries = action === "audit" ? 8 : 3;
+  for (let retry = 0; retry <= maxRetries; retry += 1) {
     // eslint-disable-next-line no-await-in-loop -- Retries are bounded and preserve this batch's cursor.
     const response = await fetch(endpoint, {
       method: "POST",
@@ -143,11 +152,11 @@ async function fetchBatch(body, batch) {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(45_000),
     }).catch((error) => {
-      if (retry >= 3) throw error;
+      if (retry >= maxRetries) throw error;
       return null;
     });
     if (
-      retry < 3 &&
+      retry < maxRetries &&
       (!response || [429, 502, 503, 504].includes(response.status))
     ) {
       process.stderr.write(
@@ -156,7 +165,12 @@ async function fetchBatch(body, batch) {
       // eslint-disable-next-line no-await-in-loop -- Release a failed response before retrying.
       await response?.body?.cancel();
       // eslint-disable-next-line no-await-in-loop -- Bound backoff reduces bursts against the Worker.
-      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** retry));
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.min(500 * 2 ** retry, 5000) + Math.floor(Math.random() * 500),
+        ),
+      );
       continue;
     }
     if (!response?.ok)
