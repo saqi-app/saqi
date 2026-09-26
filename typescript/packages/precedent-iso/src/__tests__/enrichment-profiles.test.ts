@@ -4,16 +4,12 @@ import {
   acceptedPublicationEnrichmentProfile,
   approvedEnrichmentProfile,
   approvedEnrichmentProfileByModelKey,
-  CorpusImportActionSchema,
   LEGACY_ENRICHMENT_PROFILES,
-  MAX_CORPUS_IMPORT_RECORDS,
   publicationEnrichmentProfile,
   readableEnrichmentProfile,
-} from "../corpus-import.js";
+} from "../enrichment-profiles.js";
 
-const HASH = "a".repeat(64);
-
-describe("corpus import contracts", () => {
+describe("enrichment profiles", () => {
   it.each([
     ["sol-word-gloss-v3", "medium", true],
     ["sol-word-gloss-v2", "high", false],
@@ -78,72 +74,4 @@ describe("corpus import contracts", () => {
       expect(publicationEnrichmentProfile(profile)).toBeUndefined();
     }
   });
-
-  it("requires an existing canonical author for every staged record", () => {
-    expect(
-      CorpusImportActionSchema.safeParse(
-        stageAction({ canonicalAuthorId: null }),
-      ).success,
-    ).toBe(false);
-  });
-
-  it("caps each deterministic D1 staging chunk", () => {
-    const record = stageAction().input.records[0]!;
-    const oversized = stageAction();
-    oversized.input.bundle.expectedRecordCount = MAX_CORPUS_IMPORT_RECORDS + 1;
-    oversized.input.records = Array.from(
-      { length: MAX_CORPUS_IMPORT_RECORDS + 1 },
-      () => record,
-    );
-    expect(CorpusImportActionSchema.safeParse(oversized).success).toBe(false);
-  });
-
-  it("rejects fractional observation timestamps and identity delimiters", () => {
-    expect(
-      CorpusImportActionSchema.safeParse(
-        stageAction({ observedAt: "2026-08-25T12:00:00.001Z" }),
-      ).success,
-    ).toBe(false);
-    expect(
-      CorpusImportActionSchema.safeParse(
-        stageAction({ sourcePoemId: "one\u{1F}two" }),
-      ).success,
-    ).toBe(false);
-  });
 });
-
-function stageAction(recordOverrides: Record<string, unknown> = {}) {
-  return {
-    action: "stage-and-plan" as const,
-    input: {
-      bundle: {
-        expectedRecordCount: 1,
-        id: "bundle-1",
-        manifestHash: HASH,
-        schemaVersion: 1,
-        writerEpoch: 1,
-      },
-      records: [
-        {
-          authorNameArabic: "شاعر",
-          bundleId: "bundle-1",
-          canonicalAuthorId: "author-1",
-          canonicalPoemId: null,
-          contentArabic: { content: ["بيت"] },
-          contentHash: HASH,
-          observedAt: "2026-08-25T12:00:00Z",
-          ordinal: 0,
-          recordHash: HASH,
-          sourceAuthorId: "495",
-          sourceAuthorUrl: "https://source.invalid/cat-495",
-          sourceName: "primary-source",
-          sourcePoemId: "101680",
-          sourcePoemUrl: "https://source.invalid/poem101680.html",
-          titleArabic: "عنوان",
-          ...recordOverrides,
-        },
-      ],
-      rootHash: HASH,
-    },
-  };
-}
