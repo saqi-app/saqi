@@ -1,6 +1,6 @@
 # Saqi schema reduction: two public tables, no local SQLite
 
-26 September 2026. Historical 18-public/23-local baseline: `c94995e5f05ad1b71b3210d2e73446b447f712ea`. Production D1 is now migrated through 0075: **two application tables, zero local SQLite tables**. The migration implementation is merged at `3e5ba6518a3456854c808c0dea9d42971aca5cf5` (PR #141). Current release evidence is below; the later investigation entries retain their historical dates and intermediate counts.
+26 September 2026. Historical 18-public/23-local baseline: `c94995e5f05ad1b71b3210d2e73446b447f712ea`. Production D1 is now migrated through 0079: **two application tables, zero local SQLite tables**. The final column migration is merged and deployed at `0d68334d9a2b029c1b3959fea8b83e540df2323f` (PR #148). Current release evidence is below; the later investigation entries retain their historical dates and intermediate counts.
 
 ## Recommendation
 
@@ -17,6 +17,13 @@ Migration 0068 also drops the retired scraper's `author.status` and its index, t
 Migration 0069 removes the old poem indexes on `hidden` and `verses`. No current runtime SQL names either index. Real D1 query plans use `idx_poem_public_author_title` for author poem pages, `idx_poem_public_sitemap` for sitemap shards, and the explicit `poem_needs_enrichment` index for rig claims. This is a schema-only reduction; deploy it after the full publication audit to avoid changing the planner under the ongoing backfill.
 
 ### Current release status
+
+- Final follow-up: PRs #145–#148 removed the Operations Next.js application, redundant repository interfaces and unused shared models/contract registry; 254 installed dependencies (about 104 MiB) disappeared. Operations is a plain Worker. Migrations 0076–0079 removed poem.hidden, source_url, collected_at and rig_last_error. **Two application tables, 35 columns total, zero local SQLite tables.** [Deployment passed](https://github.com/saqi-app/saqi/actions/runs/36275294471).
+- [Final column evidence](evidence/2026-09-26-final-columns/verification.json) proves every retained value matches for 1,392 authors, 104,961 poems and 77,742 snapshots, with integrity OK and zero FK errors. The next-task query median improved from 0.2184 to 0.1339 ms; canonical author-count query from 552.8023 to 25.7153 ms (five server-side samples each, identical result sets; warm-cache measurements, not an SLA). Both now use the appropriate partial indexes.
+- The real local runner produced a new English translation, poem insights and **20 clickable word meanings** in one Codex invocation, then published them. Browser verification and a post-drop idempotent rerun passed. [Live proof and command](evidence/2026-09-26-final-columns/local-rig-proof.json). New publications now require word meanings; existing glosses remain preserved.
+- Latest verified private backup: `saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/manifest.json`; bookmark `0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd`. It includes the new word-gloss publication. All six 25 MB-or-smaller parts and the manifest passed download/hash verification. The helper now uses smaller parts after a large upload failed. [Manifest](evidence/2026-09-26-final-columns/archive-manifest.json).
+
+The following bullets record the earlier graph contraction; their intermediate counts and backups are historical. Use the final backup and compatible rollback versions above/below for current recovery.
 
 - Production migrations 0071–0075 are applied. Read-only verification confirms exactly `author` and `poem` application tables, 1,392 authors, 104,960 poems, 77,739 publication snapshots, and zero FK errors. Every canonical identity, source hash, publication hash, and current invocation value checked before and after is unchanged; all author columns match. The retained-value guard in 0073 compared every retained poem field before replacement. D1 reports **440,123,392 bytes**, down from 1,349,824,512 bytes (67.4%). Wrangler's ledger is platform metadata, not a third application table.
 - Full archived-corpus output parity covers 104,860 addressable poems, 104,657 publicly renderable poem pages, 1,277 author pages, the author index, and 16 sitemap shards. Output SHA-256: `69c4eb38d84f278e4e0ac9bddf77dc4ae99a45d118d5878359bc1ccb4fa9235d`. This preserves every visible translation, selector, model label, poem insight, and word gloss. The simpler SQL flag-only count is 104,894; it is not the renderer's stricter visibility count.
@@ -225,18 +232,19 @@ Live smoke candidate: source author `poet-ibn-umar-al-damadi` ([source page](htt
 
 ### Exact Worker rollback commands
 
-Stop all local collectors/translators before recovery. Prefer a forward fix: the canonical-only application remains compatible with both the old and final databases. Do not rerun the normal deployment workflow as a rollback; it applies pending migrations first. The following previously deployed canonical-only Worker versions support the final two-table database:
+Stop all local collectors/translators before recovery. Prefer a forward fix: the canonical-only application remains compatible with both the old and final databases. Do not rerun the normal deployment workflow as a rollback; it applies pending migrations first. The following pre-drop-compatible Worker versions (release ae9d954) support the final 24-column poem table. Older canonical-only versions can still read removed columns and must not be used:
 
 ```sh
 # From typescript/packages/operations, after stopping local writers:
-yarn wrangler rollback 70191bdb-b1ef-43b7-b95f-564eb53ec967 --name saqi-ops --message 'Restore canonical-only operations' --yes
-yarn wrangler rollback e7d22f81-8804-4a57-b563-c6d00288337e --name saqi-public --message 'Restore canonical-only public reader' --yes
+yarn wrangler rollback 1de00fbf-5ea0-421a-9a54-6adcb2657bf1 --name saqi-ops --message 'Restore canonical-only operations' --yes
+yarn wrangler rollback 39ad654f-da26-4b03-a615-1fe3fbd719a1 --name saqi-public --message 'Restore canonical-only public reader' --yes
+yarn wrangler rollback edf5dd91-8d7d-4117-8e56-96a2de2f8d1b --name saqi-www --message 'Restore compatible www redirect' --yes
 ```
 
-The verified pre-contraction archive key and export bookmark are recorded in Current release status. A database restore discards later writes, including the successful live recovery publication. Preserve and reconcile those writes before using this command:
+The verified final pre-column-drop archive key and export bookmark are recorded in Current release status. A database restore discards later writes, including the successful live recovery publication. Preserve and reconcile those writes before using this command:
 
 ```sh
-yarn wrangler d1 time-travel restore saqi-db --bookmark 00002989-0000001d-000050f2-3bdb6e5ec5f51af651bdf7073883ccce
+yarn wrangler d1 time-travel restore saqi-db --bookmark 0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd
 ```
 
 Then repeat canonical counts, publication/source-hash parity, `PRAGMA foreign_key_check`, author/poem URL checks, and schema inspection before restarting a writer. The private R2 archive is the durable recovery source after Time Travel retention expires. Earlier archive keys are historical evidence, not substitutes for the fresh backup. Do not restore a Worker that queries the deleted model/source graph unless its database has also been restored. After an ambiguous D1 timeout, inspect the migration ledger and actual schema: 0073 proved that a timeout response can follow a committed migration.

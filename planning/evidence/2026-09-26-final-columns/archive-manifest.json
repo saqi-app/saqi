@@ -1,0 +1,45 @@
+{
+  "format": "saqi.d1-sql-gzip-parts.v1",
+  "database_id": "ffaae610-4dae-4d7e-bf86-8232f46ca2b5",
+  "bookmark": "0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd",
+  "counts": {
+    "authors": 1392,
+    "poems": 104961,
+    "snapshots": 77742,
+    "fk_errors": 0
+  },
+  "sql_bytes": 404638693,
+  "sql_sha256": "41b9904b7cf6d6f1f3e2f053fae0551d8572159f84d4ca96176b964c37dfea90",
+  "parts": [
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0001",
+      "bytes": 25000000,
+      "sha256": "e7b56fc1dd7d346ceaf8e79f91c5a8cdcc5da8bd51f1b3b488dceda30e517afb"
+    },
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0002",
+      "bytes": 25000000,
+      "sha256": "0fbd9fa9c88260b8cd1e5637e259e3877abf54a3f628962cea27ce9a6e814a76"
+    },
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0003",
+      "bytes": 25000000,
+      "sha256": "802640e5a8385fd128c30392bb84f6e838d670d8a1f7a13ca4e675f24919fe54"
+    },
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0004",
+      "bytes": 25000000,
+      "sha256": "f88479719d0ba96ae3eeeabad506c00a884cff6aa0f2efe9d9a4aae0c0c1fcc9"
+    },
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0005",
+      "bytes": 25000000,
+      "sha256": "29294e847d7e5dae259d6c0d457ec3fe896c0d01e63b7e38c1ed0459eb88741f"
+    },
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/corpus.sql.gz.part-0006",
+      "bytes": 382404,
+      "sha256": "20110969451b2e6c195b5d536dd1c2772e2f6d044232e1d8a7ad50289c3c24fa"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "results": [
+    [
+      {
+        "name": "d1_migrations"
+      },
+      {
+        "name": "author"
+      },
+      {
+        "name": "poem"
+      }
+    ],
+    [
+      {
+        "name": "0079_drop_unused_poem_rig_last_error.sql"
+      },
+      {
+        "name": "0078_drop_unused_poem_collected_at.sql"
+      },
+      {
+        "name": "0077_drop_unused_poem_source_url.sql"
+      },
+      {
+        "name": "0076_drop_unused_poem_hidden.sql"
+      }
+    ],
+    [
+      {
+        "author_columns": 11
+      }
+    ],
+    [
+      {
+        "poem_columns": 24
+      }
+    ],
+    [
+      {
+        "active_unknown": 0
+      }
+    ],
+    []
+  ],
+  "d1_bytes": 440877056
+}

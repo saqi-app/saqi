@@ -1,0 +1,24 @@
+{
+  "poem_id": "01b23266c707a68453d2f290b35893754d48ffdb6bddfbcfadcedb5459be3862",
+  "url": "https://saqi.app/author/poet-almaarri/poem/01b23266c707a68453d2f290b35893754d48ffdb6bddfbcfadcedb5459be3862",
+  "local_command": "SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs translate 01b23266c707a68453d2f290b35893754d48ffdb6bddfbcfadcedb5459be3862",
+  "publication": {
+    "rig_status": "complete",
+    "publication_cache_dirty": 0,
+    "publication_hash": "92b055190fc1cb031c92573865bc867ef20b5a266b0e75f6a3d1659428528b0a",
+    "current_source": 1,
+    "english_lines": 4,
+    "gloss_lines": 4,
+    "words": 20,
+    "has_insights": 1
+  },
+  "active_invocations": 0,
+  "browser_verified": [
+    "English translation",
+    "Poem insights panel",
+    "20 Arabic word buttons",
+    "Click حِمامي shows my death"
+  ],
+  "compatible_deployment": "https://github.com/saqi-app/saqi/actions/runs/36274389069",
+  "compatible_sha": "ae9d954a5714b2f349c4f4cc11f65c52134f2b17"
+}

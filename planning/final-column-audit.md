@@ -51,3 +51,15 @@ Deploy readers/writers that omit the four retired columns first. Unchanged sourc
 Before/after checks: author/poem/snapshot counts, hash of every retained row/column ordered by canonical ID, zero FK errors, unchanged set of publishable poem IDs, unchanged author visibility, indexed next-task and public-count query plans. Verify generated /docs, author/poem/search/sitemap behavior and a real local publication with English translation, poem insights and word glosses. Roll back the Worker only to the pre-drop-compatible reader release; reverting further requires restoring the matching archived database. Drop-column loss is limited to obsolete poem URL/timestamp diagnostics and the unused poem-level visibility switch; the private archive retains those old values.
 
 D1 rewrite rehearsal: disposable database `saqi-column-rewrite-rehearsal-20260926` held 10,000 synthetic rows containing 450,000,000 payload bytes. Dropping hidden/source_url/collected_at/rig_last_error in separate statements took 1.12/3.78/4.85/3.91 seconds respectively, preserving the row count and payload bytes. Local migration replay, hidden-flag abort guard, FK/integrity checks, and site tests pass with 24 poem columns.
+
+## Applied and verified
+
+Migrations 0076–0079 are live at release `0d68334` ([successful deployment](https://github.com/saqi-app/saqi/actions/runs/36275294471)). All 35 retained columns match byte-for-byte under canonical JSON row hashing across 1,392 authors and 104,961 poems, including all 77,742 snapshots. Integrity is OK and FK errors are zero. See [before](evidence/2026-09-26-final-columns/before.json), [after](evidence/2026-09-26-final-columns/after.json), and [query evidence](evidence/2026-09-26-final-columns/verification.json). The original unused poem hidden flags were all zero; author.hidden still protects one author and publishable still excludes 66 invalid poems.
+
+A real local Codex call generated four English lines, poem insights and twenty word meanings for [this previously Arabic-only poem](https://saqi.app/author/poet-almaarri/poem/01b23266c707a68453d2f290b35893754d48ffdb6bddfbcfadcedb5459be3862). The browser showed the translation, insights and clickable Arabic glosses. A second local run after the column drop skipped the same completed poem without another invocation. Zero claimed/dispatching/unknown invocations remain. This adds no local SQLite database and no new D1 table.
+
+![Live word meaning](evidence/2026-09-26-final-columns/word-gloss-live.png)
+
+![Final schema](evidence/2026-09-26-final-columns/docs-live.png)
+
+Recovery uses the fresh six-part archive and compatible Worker versions in [schema-reduction.md](schema-reduction.md#exact-worker-rollback-commands). The temporary full SQL export was deleted after in-memory replay and comparison.
