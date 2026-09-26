@@ -1,18 +1,18 @@
 -- Freeze the existing 39-code-point publishability rule inside the two poem
 -- triggers, then remove the write-maintained policy table. The public catalog
 -- and direct writers already use the same deterministic code-point list.
-CREATE TABLE _unsafe_policy_parity_guard (
+CREATE TABLE IF NOT EXISTS _unsafe_policy_parity_guard (
   invalid_count INTEGER NOT NULL CHECK (invalid_count = 0)
 );
-INSERT INTO _unsafe_policy_parity_guard (invalid_count)
+INSERT INTO _unsafe_policy_parity_guard (invalid_count) -- sarj-noqa: SARJ105 — Intentional CHECK failure aborts the atomic migration if the installed set has a different cardinality.
 SELECT (SELECT count(*) FROM catalog_unsafe_control) - 39;
-INSERT INTO _unsafe_policy_parity_guard (invalid_count)
+INSERT INTO _unsafe_policy_parity_guard (invalid_count) -- sarj-noqa: SARJ105 — Intentional CHECK failure aborts the atomic migration if any installed point differs.
 SELECT count(*) FROM catalog_unsafe_control control
 WHERE NOT EXISTS (
   SELECT 1 FROM json_each('[0,1,2,3,4,5,6,7,8,11,12,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,127,8234,8235,8236,8237,8238,8294,8295,8296,8297]') expected
   WHERE control.value = char(expected.value)
 );
-DROP TABLE _unsafe_policy_parity_guard;
+DROP TABLE IF EXISTS _unsafe_policy_parity_guard;
 
 DROP TRIGGER IF EXISTS poem_publishability_after_insert;
 DROP TRIGGER IF EXISTS poem_publishability_after_update;
@@ -127,4 +127,4 @@ BEGIN
   WHERE id = NEW.id;
 END;
 
-DROP TABLE catalog_unsafe_control;
+DROP TABLE IF EXISTS catalog_unsafe_control;
