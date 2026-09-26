@@ -252,13 +252,15 @@ export class RigStateRepository implements RigQueuePort, RigInvocationPort {
   async #nextRetryPoem(): Promise<null | string> {
     const candidate = await this.#database
       .prepare(
-        `SELECT id FROM poem INDEXED BY poem_rig_retry
-         WHERE rig_status = 'retry' AND hidden = 0 AND publishable = 1
-           AND source_hash IS NOT NULL
-           AND (publication_json IS NULL
-             OR publication_source_hash IS NULL
-             OR publication_source_hash <> source_hash)
-         ORDER BY id LIMIT 1`
+        `SELECT p.id FROM poem p INDEXED BY poem_rig_retry
+         WHERE p.rig_status = 'retry' AND p.hidden = 0 AND p.publishable = 1
+           AND p.source_hash IS NOT NULL
+           AND EXISTS (SELECT 1 FROM author a
+                       WHERE a.id = p.author_id AND a.hidden = 0)
+           AND (p.publication_json IS NULL
+             OR p.publication_source_hash IS NULL
+             OR p.publication_source_hash <> p.source_hash)
+         ORDER BY p.id LIMIT 1`
       )
       .first<{ id: string }>();
     return candidate?.id ?? null;
@@ -270,6 +272,8 @@ export class RigStateRepository implements RigQueuePort, RigInvocationPort {
         `SELECT p.id FROM poem p INDEXED BY poem_needs_enrichment
          WHERE p.hidden = 0 AND p.publishable = 1
            AND p.source_hash IS NOT NULL
+           AND EXISTS (SELECT 1 FROM author a
+                       WHERE a.id = p.author_id AND a.hidden = 0)
            AND (p.publication_json IS NULL
              OR p.publication_source_hash IS NULL
              OR p.publication_source_hash <> p.source_hash)
@@ -304,6 +308,8 @@ export class RigStateRepository implements RigQueuePort, RigInvocationPort {
              rig_updated_at = ?2
          WHERE id = ?3 AND hidden = 0 AND publishable = 1
            AND source_hash IS NOT NULL
+           AND EXISTS (SELECT 1 FROM author a
+                       WHERE a.id = poem.author_id AND a.hidden = 0)
            AND (publication_json IS NULL
              OR publication_source_hash IS NULL
              OR publication_source_hash <> source_hash)

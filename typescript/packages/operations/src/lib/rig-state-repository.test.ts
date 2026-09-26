@@ -18,7 +18,8 @@ function fixture() {
   TEST_DATABASES.push(sqlite);
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(`
-    CREATE TABLE author(id TEXT PRIMARY KEY, name_arabic TEXT NOT NULL);
+    CREATE TABLE author(id TEXT PRIMARY KEY, name_arabic TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE poem(id TEXT PRIMARY KEY, hidden INTEGER NOT NULL,
       publishable INTEGER NOT NULL, author_id TEXT,
       name_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL);
@@ -73,6 +74,25 @@ function fixture() {
   } as unknown as D1Database);
   return { publisher, repository, sqlite };
 }
+
+test("hidden authors do not enter the Codex queue or expose a claimed source", async () => {
+  const { publisher, repository, sqlite } = fixture();
+  const owner = "11111111-1111-4111-8111-111111111111";
+  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  sqlite
+    .prepare("UPDATE poem SET rig_status = 'retry' WHERE id = 'poem-1'")
+    .run();
+  await expect(repository.claimNextPoem(owner, 100)).resolves.toBeNull();
+
+  sqlite.prepare("UPDATE author SET hidden = 0 WHERE id = 'author-1'").run();
+  await expect(repository.claimNextPoem(owner, 100)).resolves.toMatchObject({
+    poemId: "poem-1",
+  });
+  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  await expect(
+    publisher.readClaimedSource("poem-1", owner, 101)
+  ).resolves.toBeNull();
+});
 
 test("a lost dispatch response cannot cause a second Codex invocation", async () => {
   const { publisher, repository, sqlite } = fixture();
