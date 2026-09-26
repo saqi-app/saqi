@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0064_retire_collection_dashboard.sql");
+    expect(first.at(-1)).toBe("0065_index_rig_retry.sql");
     expect(
       database
         .prepare(
@@ -179,6 +179,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     expect(
       database
@@ -281,6 +282,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
   });
 
@@ -473,6 +475,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     expect(
       database
@@ -567,6 +570,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -648,6 +652,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     expect(
       database
@@ -706,6 +711,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     expect(
       database
@@ -900,6 +906,7 @@ describe("production migration compatibility", () => {
       "0062_expand_canonical_rig_state.sql",
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
+      "0065_index_rig_retry.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
