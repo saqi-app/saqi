@@ -135,7 +135,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
                     self.assertLessEqual(step.stat().st_size, 300)
                     target.executescript("BEGIN;" + step.read_text() + "COMMIT;")
                 self.assertEqual(target.execute("PRAGMA foreign_key_check").fetchall(), [])
-                self.assertEqual(target.execute("SELECT * FROM poem").fetchall(), [('p', 'r')])
+                self.assertEqual(target.execute("SELECT id,active_source_revision_id FROM poem").fetchall(), [('p', 'r')])
                 with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
                     target.execute("UPDATE poem SET active_source_revision_id=NULL")
 

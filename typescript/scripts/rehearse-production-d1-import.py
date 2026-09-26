@@ -102,10 +102,33 @@ def restore_table_order(database: sqlite3.Connection, tables: list[str]) -> list
         ready = sorted(table for table, parents in dependencies.items() if parents <= set(ordered))
         if not ready:
             raise RuntimeError("Archive has an unreviewed foreign-key cycle")
-        for table in ready:
-            ordered.append(table)
-            del dependencies[table]
+        ordered.extend(ready)
+        dependencies = {table: parents for table, parents in dependencies.items() if table not in ready}
     return ordered
+
+
+def table_inserts(database: sqlite3.Connection, table: str):
+    columns = table_layout(database, table).columns
+    names = ",".join(f'"{column}"' for column in columns)
+    deferred = DEFERRED_COLUMNS.get(table, set()) & set(columns)
+    for row in database.execute(f'SELECT {names} FROM "{table}"'):
+        values = [None if column in deferred else row[column] for column in columns]
+        sql = f'INSERT INTO "{table}" ({names}) VALUES (' + ",".join(map(sql_literal, values)) + ")"
+        if len(sql.encode("utf-8")) + 2 <= RESTORE.D1_MAX_STATEMENT_BYTES:
+            yield sql
+            continue
+        if table not in {"poem", "model_enrichment_artifact"} or columns[0] != "id":
+            raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
+        placeholders = ",".join("?" for _ in columns)
+        yield BoundInsert(table, row["id"], f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', values)
+
+
+def restore_cycle_updates(database: sqlite3.Connection, tables: list[str]):
+    for table in sorted(set(DEFERRED_COLUMNS) & set(tables)):
+        columns = DEFERRED_COLUMNS[table] & set(table_layout(database, table).columns)
+        for column in sorted(columns):
+            for row in database.execute(f'SELECT id,"{column}" FROM "{table}" WHERE "{column}" IS NOT NULL'):
+                yield f'UPDATE "{table}" SET "{column}"={sql_literal(row[column])} WHERE id={sql_literal(row["id"])}'
 
 
 def portable_import_plan(
@@ -151,30 +174,16 @@ def portable_import_plan(
                 append(database.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()[0])
             flush()
             for table in ordered:
-                layout = table_layout(database, table)
-                columns = layout.columns
-                names = ",".join(f'"{column}"' for column in columns)
-                deferred = DEFERRED_COLUMNS.get(table, set()) & set(columns)
-                for row in database.execute(f'SELECT {names} FROM "{table}"'):
-                    values = [None if column in deferred else row[column] for column in columns]
-                    sql = f'INSERT INTO "{table}" ({names}) VALUES (' + ",".join(map(sql_literal, values)) + ")"
-                    if len(sql.encode("utf-8")) + 2 <= RESTORE.D1_MAX_STATEMENT_BYTES:
-                        append(sql)
-                    else:
-                        if table not in {"poem", "model_enrichment_artifact"} or columns[0] != "id":
-                            raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
+                for statement in table_inserts(database, table):
+                    if isinstance(statement, BoundInsert):
                         flush()
-                        placeholders = ",".join("?" for _ in columns)
-                        steps.append(BoundInsert(table, row["id"], f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', values))
+                        steps.append(statement)
+                    else:
+                        append(statement)
                 flush()
             # Restore the two nullable cycle edges before installing any triggers.
-            for table, candidates in DEFERRED_COLUMNS.items():
-                if table not in tables:
-                    continue
-                columns = candidates & set(table_layout(database, table).columns)
-                for column in sorted(columns):
-                    for row in database.execute(f'SELECT id,"{column}" FROM "{table}" WHERE "{column}" IS NOT NULL'):
-                        append(f'UPDATE "{table}" SET "{column}"={sql_literal(row[column])} WHERE id={sql_literal(row["id"])}')
+            for statement in restore_cycle_updates(database, tables):
+                append(statement)
             flush()
             for row in database.execute("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name"):
                 append(row[0])
