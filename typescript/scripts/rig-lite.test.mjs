@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -10,6 +10,89 @@ import { test } from "node:test";
 
 const script = new URL("rig-lite.mjs", import.meta.url);
 const localScript = new URL("rig-local.mjs", import.meta.url);
+
+test("killing the runner before acknowledgement recovers the exact result without another invocation", { timeout: 20_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "saqi-rig-crash-"));
+  const callsPath = join(directory, "calls");
+  const output = { translation: { lines: ["Recovered English"] } };
+  await writeFile(join(directory, "codex"), String.raw`#!/usr/bin/env node
+const fs = require("node:fs");
+fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
+fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify(output))});
+process.stdin.resume();
+`, { mode: 0o700 });
+  let state = null;
+  let attemptId;
+  let acknowledgeCount = 0;
+  let publishCount = 0;
+  const reachedAcknowledgement = Promise.withResolvers();
+  const server = createServer(async (request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (request.method === "GET") {
+      response.end(JSON.stringify({ ok: true, state }));
+      return;
+    }
+    const body = JSON.parse(Buffer.concat(await Array.fromAsync(request)).toString("utf8"));
+    switch (body.action) {
+      case "claim-poem":
+        state = { poemId: "crash-poem", status: "claimed", version: 1 };
+        break;
+      case "source":
+        response.end(JSON.stringify({ ok: true, poem: { authorName: "Author", titleArabic: "عنوان", linesArabic: ["سطر"] } }));
+        return;
+      case "dispatch":
+        attemptId = body.attemptId;
+        state = { poemId: "crash-poem", status: "dispatching", version: 2, checkpointJson: JSON.stringify({ invocation: { attemptId } }) };
+        break;
+      case "acknowledge":
+        acknowledgeCount += 1;
+        assert.equal(body.attemptId, attemptId);
+        assert.equal(body.expectedVersion, 2);
+        assert.deepEqual(body.output, output);
+        if (acknowledgeCount === 1) {
+          reachedAcknowledgement.resolve();
+          return;
+        }
+        state = { poemId: "crash-poem", status: "claimed", version: 3 };
+        break;
+      case "publish":
+        assert.equal(body.expectedVersion, 3);
+        publishCount += 1;
+        state = null;
+        break;
+    }
+    response.end(JSON.stringify({ ok: true, state, cachePending: false }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const environment = {
+    CF_ACCESS_CLIENT_ID: "test-id",
+    CF_ACCESS_CLIENT_SECRET: "test-secret",
+    PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
+    SAQI_TEST_CALLS: callsPath,
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_RIG_ENDPOINT: `http://127.0.0.1:${server.address().port}/rig`,
+  };
+  const child = spawn(process.execPath, [script.pathname], { env: { ...process.env, ...environment }, stdio: "ignore" });
+  const exited = once(child, "exit");
+  try {
+    await reachedAcknowledgement.promise;
+    child.kill("SIGKILL");
+    await exited;
+    const result = await runScript(environment);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(acknowledgeCount, 2);
+    assert.equal(publishCount, 1);
+    assert.equal(await readFile(callsPath, "utf8"), "call\n");
+    await assert.rejects(access(join(tmpdir(), `saqi-rig-${attemptId}.json`)), { code: "ENOENT" });
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    if (attemptId) await rm(join(tmpdir(), `saqi-rig-${attemptId}.json`), { force: true });
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("a durable Codex result is acknowledged and published after restart without another call", async () => {
   const attemptId = randomUUID();
