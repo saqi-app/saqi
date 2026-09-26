@@ -41,12 +41,13 @@ class D1ImportRehearsalTest(unittest.TestCase):
             self.assertEqual(open_url.call_count, 1)
             sleep.assert_not_called()
 
-    def test_oversized_publication_is_restored_with_a_bound_value(self):
+    def test_oversized_publication_is_inserted_with_a_bound_value(self):
         publication = '{"english":"' + "x" * 53_000 + ";\n" + "y" * 53_000 + '"}'
         with tempfile.TemporaryDirectory() as temporary:
             directory = pathlib.Path(temporary)
             original = directory / "original.sqlite3"
             with sqlite3.connect(original) as connection:
+                connection.execute('CREATE TABLE "_cf_KV" (key TEXT PRIMARY KEY, value BLOB) WITHOUT ROWID')
                 connection.execute("CREATE TABLE poem(id TEXT PRIMARY KEY, title TEXT, publication_json TEXT)")
                 connection.execute(
                     "INSERT INTO poem VALUES (?, ?, ?)", ("poem-1", "Arabic's title", publication)
@@ -54,29 +55,39 @@ class D1ImportRehearsalTest(unittest.TestCase):
                 dump = "\n".join(connection.iterdump()).encode()
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(dump, mtime=0))
-            portable = directory / "portable.sql"
-            oversized = MODULE.portable_sql([part], original, portable)
+            plan = MODULE.portable_import_plan([part], original, directory)
+            oversized = [step for step in plan if isinstance(step, MODULE.BoundInsert)]
             self.assertEqual(len(oversized), 1)
-            self.assertEqual(oversized[0].poem_id, "poem-1")
-            self.assertEqual(oversized[0].publication, publication)
-            self.assertNotIn(publication.encode(), portable.read_bytes())
+            self.assertEqual(oversized[0].row_id, "poem-1")
+            self.assertIn(publication, oversized[0].params)
+            self.assertTrue(all(publication.encode() not in step.read_bytes() for step in plan if isinstance(step, pathlib.Path)))
             target = directory / "target.sqlite3"
             with sqlite3.connect(target) as connection:
-                connection.executescript(portable.read_text())
-                self.assertIsNone(
-                    connection.execute("SELECT publication_json FROM poem").fetchone()[0]
-                )
-                connection.execute(
-                    "UPDATE poem SET publication_json = ? WHERE id = ?", (publication, "poem-1")
-                )
+                for step in plan:
+                    if isinstance(step, pathlib.Path):
+                        connection.executescript(step.read_text())
+                    else:
+                        connection.execute(step.sql, step.params)
                 self.assertEqual(
                     connection.execute("SELECT title, publication_json FROM poem").fetchone(),
                     ("Arabic's title", publication),
                 )
+                self.assertIsNone(
+                    connection.execute("SELECT name FROM sqlite_master WHERE name = '_cf_KV'").fetchone()
+                )
 
     def test_identifies_an_export_insert_with_explicit_columns(self):
         sql = 'INSERT INTO "poem" ("id","publication_json") VALUES(\'poem-1\',\'x\');'
-        self.assertEqual(MODULE.INSERT_POEM.match(sql).group("id"), "poem-1")
+        self.assertEqual(MODULE.INSERT_ROW.match(sql).group("id"), "poem-1")
+
+    def test_disposable_import_repairs_exact_nul_policy_insert(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            part = pathlib.Path(temporary) / "part-0001"
+            part.write_bytes(gzip.compress(MODULE.RESTORE.NUL_POLICY_INSERT, mtime=0))
+            self.assertEqual(
+                list(MODULE.sql_statements([part])),
+                [MODULE.RESTORE.PORTABLE_NUL_POLICY_INSERT],
+            )
 
     def test_oversized_other_table_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -89,8 +100,33 @@ class D1ImportRehearsalTest(unittest.TestCase):
                 dump = "\n".join(connection.iterdump()).encode()
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(dump, mtime=0))
-            with self.assertRaisesRegex(RuntimeError, "Oversized non-poem"):
-                MODULE.portable_sql([part], original, directory / "portable.sql")
+            with self.assertRaisesRegex(RuntimeError, "reviewed bound-import rule"):
+                MODULE.portable_import_plan([part], original, directory)
+
+    def test_oversized_artifact_stays_before_its_validation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            original = directory / "original.sqlite3"
+            with sqlite3.connect(original) as connection:
+                connection.execute("CREATE TABLE model_enrichment_artifact(id TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+                connection.execute("CREATE TABLE model_enrichment_validation(id TEXT PRIMARY KEY, artifact_id TEXT REFERENCES model_enrichment_artifact(id))")
+                connection.execute("INSERT INTO model_enrichment_artifact VALUES (?, ?)", ("artifact-1", "x" * 110_000))
+                connection.execute("INSERT INTO model_enrichment_validation VALUES ('validation-1', 'artifact-1')")
+                dump = "\n".join(connection.iterdump()).encode()
+            part = directory / "part-0001"
+            part.write_bytes(gzip.compress(dump, mtime=0))
+            plan = MODULE.portable_import_plan([part], original, directory)
+            self.assertEqual([step.table for step in plan if isinstance(step, MODULE.BoundInsert)], ["model_enrichment_artifact"])
+            target = directory / "target.sqlite3"
+            with sqlite3.connect(target) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                for step in plan:
+                    if isinstance(step, pathlib.Path):
+                        connection.executescript(step.read_text())
+                    else:
+                        connection.execute(step.sql, step.params)
+                self.assertEqual(connection.execute("SELECT count(*) FROM model_enrichment_validation").fetchone()[0], 1)
+                self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_compares_every_column_and_foreign_keys(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Import a private corpus archive into a disposable D1 and compare every row.
 
-The archive's one oversized publication INSERT is imported with a NULL
-publication_json, then restored with a bound D1 query parameter. Production is
-never the destination. All local files and the disposable D1 are removed.
+SQL statements above D1's text limit are inserted with bound parameters at
+their original position in the export. Production is never the destination.
+All local files and the disposable D1 are removed.
 """
 
 import argparse
@@ -30,8 +30,8 @@ SPEC.loader.exec_module(RESTORE)
 
 ACCOUNT_ID = "58e48987bbd8d9c3f50510f0ab7766b6"
 PRODUCTION_DATABASE_ID = RESTORE.DATABASE_ID
-INSERT_POEM = re.compile(
-    r'^INSERT INTO "poem"\s*(?:\([^)]*\))?\s*VALUES\s*\(\s*\'(?P<id>(?:\'\'|[^\'])*)\'',
+INSERT_ROW = re.compile(
+    r'^INSERT INTO "(?P<table>[a-z][a-z0-9_]*)"\s*(?:\([^)]*\))?\s*VALUES\s*\(\s*\'(?P<id>(?:\'\'|[^\'])*)\'',
     re.IGNORECASE | re.DOTALL,
 )
 TOKEN: dict[str, object] = {"value": None, "expires": 0.0}
@@ -40,10 +40,11 @@ MAX_QUERY_ATTEMPTS = 7
 
 
 @dataclass(frozen=True)
-class PublicationPatch:
-    poem_id: str
-    publication: str
-    insert_sql: bytes
+class BoundInsert:
+    table: str
+    row_id: str
+    sql: str
+    params: list[object]
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ def sql_statements(parts: list[pathlib.Path]):
         joined.seek(0)
         with gzip.GzipFile(fileobj=joined) as stream:
             for line in stream:
-                pending.extend(line)
+                pending.extend(RESTORE.portable_export_line(line))
                 if sqlite3.complete_statement(pending.decode("utf-8")):
                     yield bytes(pending)
                     pending.clear()
@@ -80,57 +81,77 @@ def sql_statements(parts: list[pathlib.Path]):
         raise RuntimeError("Archive ends with incomplete SQL")
 
 
-def sql_literal(connection: sqlite3.Connection, value: object) -> str:
-    return connection.execute("SELECT quote(?)", (value,)).fetchone()[0]
+def bind_oversized_insert(database: sqlite3.Connection, statement: bytes) -> BoundInsert:
+    match = INSERT_ROW.match(statement.decode("utf-8"))
+    if match is None or match.group("table") not in {"poem", "model_enrichment_artifact"}:
+        raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
+    table = match.group("table")
+    row_id = match.group("id").replace("''", "'")
+    columns = [row[1] for row in database.execute(f"PRAGMA table_info({table})")]
+    if not columns or columns[0] != "id" or any(
+        re.fullmatch(r"[a-z][a-z0-9_]*", column) is None for column in columns
+    ):
+        raise RuntimeError(f"Unexpected {table} column layout")
+    names = ",".join(f'"{column}"' for column in columns)
+    row = database.execute(f'SELECT {names} FROM "{table}" WHERE id = ?', (row_id,)).fetchone()
+    if row is None:
+        raise RuntimeError(f"Archived {table} row is missing")
+    params = [row[column] for column in columns]
+    if any(isinstance(value, bytes) for value in params):
+        raise RuntimeError(f"Archived {table} row has an unsupported BLOB")
+    placeholders = ",".join("?" for _ in columns)
+    return BoundInsert(table, row_id, f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', params)
 
 
-def rewrite_oversized_poem(
-    database: sqlite3.Connection, columns: list[str], statement: bytes
-) -> PublicationPatch:
-    match = INSERT_POEM.match(statement.decode("utf-8"))
-    if match is None:
-        raise RuntimeError("Oversized non-poem SQL statement needs another restore method")
-    poem_id = match.group("id").replace("''", "'")
-    names = ",".join('"' + column.replace('"', '""') + '"' for column in columns)
-    row = database.execute(f"SELECT {names} FROM poem WHERE id = ?", (poem_id,)).fetchone()
-    if row is None or row["publication_json"] is None:
-        raise RuntimeError("Oversized poem has no publication value")
-    values = [
-        sql_literal(database, None if column == "publication_json" else row[column])
-        for column in columns
-    ]
-    replacement = f'INSERT INTO "poem" ({names}) VALUES({",".join(values)});\n'.encode()
-    if len(replacement) > RESTORE.D1_MAX_STATEMENT_BYTES:
-        raise RuntimeError("Oversized poem remains too large without publication_json")
-    return PublicationPatch(poem_id, row["publication_json"], replacement)
-
-
-def portable_sql(
-    parts: list[pathlib.Path], restored: pathlib.Path, destination: pathlib.Path
-) -> list[PublicationPatch]:
-    oversized: list[PublicationPatch] = []
+def portable_import_plan(
+    parts: list[pathlib.Path], restored: pathlib.Path, directory: pathlib.Path
+) -> list[pathlib.Path | BoundInsert]:
+    steps: list[pathlib.Path | BoundInsert] = []
+    oversized_count = 0
     with contextlib.closing(sqlite3.connect(f"file:{restored}?mode=ro", uri=True)) as database:
         database.row_factory = sqlite3.Row
-        columns = [row[1] for row in database.execute("PRAGMA table_info(poem)")]
-        if "publication_json" not in columns or columns[0] != "id":
-            raise RuntimeError("Archived poem schema has an unexpected column order")
-        with destination.open("wb") as output:
+        segment_number = 1
+        segment = directory / f"portable-{segment_number:04d}.sql"
+        output = segment.open("wb")
+        segment_bytes = 0
+        try:
             for statement in sql_statements(parts):
                 if statement.strip().upper() in (b"BEGIN TRANSACTION;", b"COMMIT;"):
                     # Wrangler wraps imports in its own transaction.
                     continue
+                if re.match(rb'^\s*CREATE TABLE(?: IF NOT EXISTS)? "?_cf_KV"?\s*\(', statement, re.IGNORECASE):
+                    # D1 creates this reserved platform table itself. Cloudflare's
+                    # import guide requires removing its exported CREATE TABLE.
+                    continue
+                if b"_cf_KV" in statement:
+                    raise RuntimeError("Unexpected statement for D1's reserved _cf_KV table")
                 if len(statement) <= RESTORE.D1_MAX_STATEMENT_BYTES:
                     output.write(statement)
+                    segment_bytes += len(statement)
                     continue
-                patch = rewrite_oversized_poem(database, columns, statement)
-                output.write(patch.insert_sql)
-                oversized.append(patch)
-    if not oversized:
-        raise RuntimeError("Expected at least one oversized publication INSERT")
-    return oversized
+                output.close()
+                if segment_bytes:
+                    steps.append(segment)
+                else:
+                    segment.unlink()
+                steps.append(bind_oversized_insert(database, statement))
+                oversized_count += 1
+                segment_number += 1
+                segment = directory / f"portable-{segment_number:04d}.sql"
+                output = segment.open("wb")
+                segment_bytes = 0
+        finally:
+            output.close()
+        if segment_bytes:
+            steps.append(segment)
+        else:
+            segment.unlink()
+    if not oversized_count:
+        raise RuntimeError("Expected at least one oversized archived INSERT")
+    return steps
 
 
-def d1_query(database_id: str, sql: str, params: list[str] | None = None):
+def d1_query(database_id: str, sql: str, params: list[object] | None = None):
     if database_id == PRODUCTION_DATABASE_ID:
         raise RuntimeError("Refusing to query production through the disposable restore client")
     if TOKEN["value"] is None or time.monotonic() >= TOKEN["expires"]:
@@ -285,22 +306,20 @@ def main() -> None:
             if digest.size != manifest["sql_bytes"] or digest.sha256 != manifest["sql_sha256"]:
                 raise RuntimeError("Archive SQL digest mismatch")
             RESTORE.verify_restored(restored, manifest)
-            portable = directory / "portable.sql"
-            bound_publications = portable_sql(parts, restored, portable)
+            steps = portable_import_plan(parts, restored, directory)
             output = wrangler("d1", "create", name)
             created = True
             match = re.search(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}", output)
             if match is None or match.group() == PRODUCTION_DATABASE_ID:
                 raise RuntimeError("Cannot verify disposable D1 identity")
             database_id = match.group()
-            print(json.dumps({"disposable_d1": name, "oversized_rows": len(bound_publications)}), flush=True)
-            wrangler("d1", "execute", name, "--remote", "--file", str(portable), "--yes")
-            for patch in bound_publications:
-                d1_query(
-                    database_id,
-                    "UPDATE poem SET publication_json = ? WHERE id = ?",
-                    [patch.publication, patch.poem_id],
-                )
+            bound_count = sum(isinstance(step, BoundInsert) for step in steps)
+            print(json.dumps({"disposable_d1": name, "oversized_rows": bound_count}), flush=True)
+            for step in steps:
+                if isinstance(step, pathlib.Path):
+                    wrangler("d1", "execute", name, "--remote", "--file", str(step), "--yes")
+                else:
+                    d1_query(database_id, step.sql, step.params)
             counts = compare_rows(restored, database_id)
             print(json.dumps({"disposable_d1": name, "counts": counts, "d1_import_rehearsal": "passed"}), flush=True)
     finally:
