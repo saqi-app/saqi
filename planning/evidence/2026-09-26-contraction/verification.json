@@ -58,5 +58,8 @@
   "public_output_sha256": "69c4eb38d84f278e4e0ac9bddf77dc4ae99a45d118d5878359bc1ccb4fa9235d",
   "backup_manifest": "saqi-corpus-archive/d1/2026-09-26T19-18-17Z-4bf0454f4a8544a9a0c448fb968afb79/manifest.json",
   "pending": null,
-  "collection_evidence": "regular-chrome-import.json"
+  "collection_evidence": "regular-chrome-import.json",
+  "post_cutover_backup": "saqi-corpus-archive/d1/2026-09-26T21-04-42Z-4849865c46ef4e28ba601583564e3664/manifest.json",
+  "final_deployment": "https://github.com/saqi-app/saqi/actions/runs/36271924158",
+  "final_deployed_commit": "367827d5730ef4c93c327ebe07a438cc07f43098"
 }
