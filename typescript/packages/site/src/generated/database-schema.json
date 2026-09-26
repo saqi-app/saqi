@@ -29,7 +29,8 @@
     "0063_backfill_known_source_identity.sql",
     "0064_retire_collection_dashboard.sql",
     "0065_index_rig_retry.sql",
-    "0066_inline_unsafe_publishability.sql"
+    "0066_inline_unsafe_publishability.sql",
+    "0067_drop_author_counters.sql"
   ],
   "databases": [
     {
@@ -70,25 +71,7 @@
               "primaryKey": false
             },
             {
-              "name": "poem_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "gemini_translation_count",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
               "name": "hidden",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "public_poem_count",
               "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
