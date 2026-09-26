@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0065_index_rig_retry.sql");
+    expect(first.at(-1)).toBe("0066_inline_unsafe_publishability.sql");
     expect(
       database
         .prepare(
@@ -99,7 +99,7 @@ describe("production migration compatibility", () => {
     expect(schemaSnapshot(database)).toEqual(before);
   });
 
-  it("restores deployed catalog controls on populated databases", () => {
+  it("inlines deployed catalog controls without changing populated poems", () => {
     const database = open();
     applyPending(
       database,
@@ -120,9 +120,11 @@ describe("production migration compatibility", () => {
     applyPending(database, migrationFiles());
     expect(
       database
-        .prepare("SELECT 1 FROM catalog_unsafe_control WHERE value = ?")
-        .get("\u{202a}"),
-    ).toEqual({ 1: 1 });
+        .prepare(
+          "SELECT 1 FROM sqlite_schema WHERE name = 'catalog_unsafe_control'",
+        )
+        .get(),
+    ).toBeUndefined();
     expect(
       database
         .prepare("SELECT publishable FROM poem WHERE id = ?")
@@ -180,6 +182,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     expect(
       database
@@ -283,6 +286,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
   });
 
@@ -476,6 +480,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     expect(
       database
@@ -571,6 +576,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -653,6 +659,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     expect(
       database
@@ -712,6 +719,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     expect(
       database
@@ -907,6 +915,7 @@ describe("production migration compatibility", () => {
       "0063_backfill_known_source_identity.sql",
       "0064_retire_collection_dashboard.sql",
       "0065_index_rig_retry.sql",
+      "0066_inline_unsafe_publishability.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
@@ -1611,14 +1620,13 @@ function expectCorpusRevisionSchema(database: Database.Database): void {
 }
 
 function expectCatalogPublishability(database: Database.Database): void {
-  const values = database
-    .prepare("SELECT hex(value) FROM catalog_unsafe_control ORDER BY value")
-    .pluck()
-    .all() as string[];
-  expect(values).toHaveLength(39);
-  expect(values).toContain("00");
-  expect(values).toContain("E280AA");
-  expect(values).toContain("E281A9");
+  expect(
+    database
+      .prepare(
+        "SELECT 1 FROM sqlite_schema WHERE name = 'catalog_unsafe_control'",
+      )
+      .get(),
+  ).toBeUndefined();
 
   const poemId = "00000000-0000-4000-8000-000000000002";
   if (!database.prepare("SELECT 1 FROM poem WHERE id = ?").get(poemId))
