@@ -211,10 +211,65 @@ void test("audited inactive snapshots can be selected by the reader flag", async
       beforeSummary,
     );
     sqlite.exec("UPDATE poem SET translation = NULL WHERE id = 'p-shadow'");
-    const projected = await flaggedReader.getPoemPage("shadow-poet", "p-shadow");
+    const projected = await flaggedReader.getPoemPage(
+      "shadow-poet",
+      "p-shadow",
+    );
     const legacy = await oldReader.getPoemPage("shadow-poet", "p-shadow");
     assert.deepEqual(projected?.poem.linesEnglish, ["Visible English"]);
     assert.equal(legacy?.poem.linesEnglish, undefined);
+  } finally {
+    sqlite.close();
+  }
+});
+
+void test("the projected reader needs no model history table", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(`
+      INSERT INTO author(id, slug, name_arabic, hidden)
+      VALUES ('a-projection-only', 'projection-only', 'شاعر', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
+        content_arabic, translation, hidden)
+      VALUES ('p-projected', 'a-projection-only', 'projected', 1, 'قصيدة',
+        '{"content":["بيت"]}', '{"content":["Visible English"]}', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic,
+        content_arabic, hidden)
+      VALUES ('p-arabic-only', 'a-projection-only', 'arabic-only', 1, 'قصيدة ثانية',
+        '{"content":["بيت آخر"]}', 0);
+    `);
+    const oldPage = await catalogRepository(sqlite).getPoemPage(
+      "projection-only",
+      "p-projected",
+    );
+    assert.ok(oldPage);
+    sqlite
+      .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-projected'")
+      .run(JSON.stringify(publicationSnapshotFromPoem(oldPage.poem)));
+    sqlite.pragma("foreign_keys = OFF");
+    sqlite.exec(`
+      DROP TABLE poem_model_publication_pointer;
+      DROP TABLE model_enrichment_artifact;
+      DROP TABLE model_enrichment_validation;
+      DROP TABLE enrichment_profile;
+    `);
+    const reader = catalogRepository(sqlite, true);
+    assert.deepEqual(
+      await reader.getPoemPage("projection-only", "p-projected"),
+      oldPage,
+    );
+    const arabicOnly = await reader.getPoemPage(
+      "projection-only",
+      "p-arabic-only",
+    );
+    assert.equal(arabicOnly?.poem.linesEnglish, undefined);
+    const summary = await reader.getAuthorPage("projection-only");
+    assert.deepEqual(
+      summary?.poems
+        .find((poem) => poem.id === "p-projected")
+        ?.translationModels.map((model) => model.key),
+      ["legacy"],
+    );
   } finally {
     sqlite.close();
   }
