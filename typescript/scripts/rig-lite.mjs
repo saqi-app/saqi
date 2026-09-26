@@ -45,8 +45,9 @@ async function main() {
     process.stdout.write(`Manual retry authorized for ${poemId}\n`);
     return;
   }
-  if (process.argv.length > 2)
-    throw new Error("Usage: rig-lite.mjs [retry-unknown POEM_ID ATTEMPT_ID]");
+  if (process.argv.length > 3)
+    throw new Error("Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]");
+  const preferredPoemId = process.argv[2];
   if (process.env.SAQI_RIG_ACTIVE !== "1")
     throw new Error(
       "Rig inactive: complete publication parity and set SAQI_RIG_ACTIVE=1",
@@ -65,7 +66,9 @@ async function main() {
     }
   }
   const token = randomUUID();
-  const claimResponse = await request({ action: "claim-poem", token });
+  const claimRequest = { action: "claim-poem", token };
+  if (preferredPoemId) claimRequest.poemId = preferredPoemId;
+  const claimResponse = await request(claimRequest);
   const claim = claimResponse.state;
   if (!claim) {
     process.stdout.write("No poem ready; a prior claim may still be live.\n");

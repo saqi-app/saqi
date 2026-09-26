@@ -94,6 +94,29 @@ test("hidden authors do not enter the Codex queue or expose a claimed source", a
   ).resolves.toBeNull();
 });
 
+test("a specific due poem can be claimed without bypassing the active-work fence", async () => {
+  const { repository, sqlite } = fixture();
+  const owner = "11111111-1111-4111-8111-111111111111";
+  const otherOwner = "22222222-2222-4222-8222-222222222222";
+  await expect(
+    repository.claimNextPoem(owner, 100, "poem-2")
+  ).resolves.toMatchObject({
+    poemId: "poem-2",
+  });
+  await expect(
+    repository.claimNextPoem(otherOwner, 101, "poem-1")
+  ).resolves.toBeNull();
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = NULL, rig_lease_expires_at = NULL WHERE id = 'poem-2'"
+    )
+    .run();
+  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  await expect(
+    repository.claimNextPoem(otherOwner, 102, "poem-1")
+  ).resolves.toBeNull();
+});
+
 test("a lost dispatch response cannot cause a second Codex invocation", async () => {
   const { publisher, repository, sqlite } = fixture();
   const owner = "11111111-1111-4111-8111-111111111111";

@@ -16,7 +16,11 @@ const VersionSchema = z.number().int().positive();
 const TokenSchema = z.uuid();
 const PoemIdSchema = z.string().min(1).max(200);
 const RequestSchema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("claim-poem"), token: TokenSchema }),
+  z.strictObject({
+    action: z.literal("claim-poem"),
+    token: TokenSchema,
+    poemId: PoemIdSchema.optional(),
+  }),
   z.strictObject({
     action: z.literal("source"),
     poemId: PoemIdSchema,
@@ -114,7 +118,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     switch (input.action) {
       case "claim-poem": {
-        const claimed = await state.claimNextPoem(input.token, now);
+        const claimed = await state.claimNextPoem(
+          input.token,
+          now,
+          input.poemId
+        );
         return Response.json(
           { ok: true, state: claimed },
           { headers: NO_STORE_HEADERS }
