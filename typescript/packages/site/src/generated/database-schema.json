@@ -28,7 +28,8 @@
     "0062_expand_canonical_rig_state.sql",
     "0063_backfill_known_source_identity.sql",
     "0064_retire_collection_dashboard.sql",
-    "0065_index_rig_retry.sql"
+    "0065_index_rig_retry.sql",
+    "0066_inline_unsafe_publishability.sql"
   ],
   "databases": [
     {
@@ -121,18 +122,6 @@
               "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
-            }
-          ],
-          "foreignKeys": []
-        },
-        {
-          "name": "catalog_unsafe_control",
-          "columns": [
-            {
-              "name": "value",
-              "type": "TEXT",
-              "nullable": false,
-              "primaryKey": true
             }
           ],
           "foreignKeys": []
