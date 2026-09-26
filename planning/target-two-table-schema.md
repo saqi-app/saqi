@@ -25,6 +25,7 @@ CREATE TABLE poem (
   slug TEXT NOT NULL UNIQUE,
   title_arabic TEXT NOT NULL,
   title_english TEXT,
+  verses INTEGER NOT NULL CHECK (verses >= 0),
   sort_title_arabic TEXT NOT NULL,
   content_arabic TEXT NOT NULL CHECK (json_valid(content_arabic)),
   hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
@@ -71,3 +72,5 @@ CREATE INDEX poem_cache_purge_due ON poem(id)
 `publication_json` holds only currently visible English tracks, their labels and insights in the validated v2 shape. `publication_source_hash` is the source version that output represents; `publication_hash` makes duplicate publication idempotent. A mismatched `cache_purged_hash` is the durable cache-purge retry marker, replacing a separate dirty bit. `rig_checkpoint_json` contains only the current attempt/result, not history. A stale writer must lose the `rig_version` and source-hash compare-and-swap before it can publish. No local queue, audit, model history, month rollup, or counter table remains.
 
 `poem.author_id` stays nullable in this sketch because production has 100 canonical poems with no author row; 73 have a legacy English or insight payload. They currently have no readable author/poem URL, but silently deleting them would fail canonical row parity. Resolve or deliberately archive them before considering `NOT NULL`. Likewise, legacy English titles, Arabic sort keys, `sitemap_shard`, and publishability flags need exact reader parity before their old columns/triggers are replaced. The final target intentionally removes `source_version`, `publication_version`, `publication_cache_dirty`, all three author counters, and old model/source foreign keys; hash/CAS, live counts, and one cache-purge hash absorb their core behaviors.
+
+The `verses` field is core until a replacement proves the existing eligibility rule: a 26 September read-only production query found 104,880 of 104,960 stored values differ from `json_array_length(content_arabic, '$.content')`. Do not replace it with a raw line count. The single `title_english` target also needs a validator-aware backfill: 16,564 poems have no nonblank `name_english` but do have `poem_title_first_line`; the site chooses the first *usable* title, excluding generation-failure text. Keep both current title columns during the reader cutover, then backfill the selected usable title and compare every public page before dropping the fallback column.
