@@ -155,6 +155,15 @@ void test("one poem publication snapshot preserves every visible translation cho
     sqlite
       .prepare("UPDATE poem SET publication_json = ? WHERE id = 'p-tracks'")
       .run(JSON.stringify(shadow));
+    assert.equal(
+      JSON.stringify(
+        await catalogRepository(sqlite, true).getPoemPage(
+          "tracks-poet",
+          "p-tracks",
+        ),
+      ),
+      JSON.stringify(oldDetail),
+    );
     assert.deepEqual(
       await reader.getPoemPage("tracks-poet", "p-tracks"),
       oldDetail,
@@ -204,6 +213,12 @@ void test("audited inactive snapshots can be selected by the reader flag", async
     assert.deepEqual(
       await flaggedReader.getPoemPage("shadow-poet", "p-shadow"),
       before,
+    );
+    assert.equal(
+      JSON.stringify(
+        await flaggedReader.getPoemPage("shadow-poet", "p-shadow"),
+      ),
+      JSON.stringify(before),
     );
     const beforeSummary = await oldReader.getAuthorPage("shadow-poet");
     assert.deepEqual(

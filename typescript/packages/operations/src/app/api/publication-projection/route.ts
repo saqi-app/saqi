@@ -10,7 +10,10 @@ import {
 } from "@/lib/operations-boundary";
 import { ProductionDeploymentIdentityRepository } from "@/lib/production-deployment-identity-repository";
 
-import { CatalogRepository } from "../../../../../site/src/lib/catalog";
+import {
+  CatalogRepository,
+  type PoemPage,
+} from "../../../../../site/src/lib/catalog";
 import { poemTranslationTracks } from "../../../../../site/src/lib/poem-translations";
 import {
   publicationSnapshotFromPoem,
@@ -48,6 +51,8 @@ export async function POST(request: Request): Promise<Response> {
     return failure(400, "INVALID_BACKFILL_REQUEST");
   }
   const catalog = CatalogRepository.fromD1(env.DB);
+  const projectedCatalog =
+    input.action === "audit" ? CatalogRepository.fromD1(env.DB, true) : null;
   const backfill = new PublicationBackfillRepository(env.DB);
   try {
     const candidates = await backfill.listCandidates(
@@ -69,8 +74,8 @@ export async function POST(request: Request): Promise<Response> {
       // Each result depends on the current catalog row and must be checked
       // before advancing this bounded migration cursor.
       // eslint-disable-next-line no-await-in-loop -- Each migration row must be read before its conditional write.
-      const publication = await projectionForCandidate(catalog, candidate);
-      if (!publication) {
+      const projected = await projectionForCandidate(catalog, candidate);
+      if (!projected) {
         summary.skipped.push(candidate.id);
         continue;
       }
@@ -79,17 +84,28 @@ export async function POST(request: Request): Promise<Response> {
         const stored = PublicationSnapshotSchema.safeParse(
           JSON.parse(candidate.publicationJson ?? "null")
         );
-        if (!stored.success || JSON.stringify(stored.data) !== publication)
+        // This is the actual public reader behind the cutover flag, including
+        // Arabic/title/model-label rendering. Every eligible poem is compared.
+        // eslint-disable-next-line no-await-in-loop -- Shadow reads must follow the bounded candidate cursor.
+        const shadowPage = await projectedCatalog?.getPoemPage(
+          candidate.authorSlug,
+          candidate.id
+        );
+        if (
+          !stored.success ||
+          JSON.stringify(stored.data) !== projected.publication ||
+          JSON.stringify(shadowPage) !== JSON.stringify(projected.oldPage)
+        )
           summary.mismatched.push(candidate.id);
         continue;
       }
       if (!input.apply) continue;
       // eslint-disable-next-line no-await-in-loop -- Hash the exact serialized projection for this row.
-      const publicationHash = await sha256(publication);
+      const publicationHash = await sha256(projected.publication);
       // eslint-disable-next-line no-await-in-loop -- Preserve bounded, ordered compare-and-swap writes.
       summary.shadowed += await backfill.writeInactiveSnapshot(
         candidate,
-        publication,
+        projected.publication,
         publicationHash
       );
     }
@@ -165,12 +181,15 @@ class PublicationBackfillRepository {
 async function projectionForCandidate(
   catalog: CatalogRepository,
   candidate: z.infer<typeof CandidateSchema>
-): Promise<string | undefined> {
+): Promise<{ oldPage: PoemPage; publication: string } | undefined> {
   const page = await catalog.getPoemPage(candidate.authorSlug, candidate.id);
   if (!page) return undefined;
   if (poemTranslationTracks(page.poem).length === 0 && !page.poem.insights)
     return undefined;
-  return JSON.stringify(publicationSnapshotFromPoem(page.poem));
+  return {
+    oldPage: page,
+    publication: JSON.stringify(publicationSnapshotFromPoem(page.poem)),
+  };
 }
 
 function failure(status: number, code: string): Response {
