@@ -69,7 +69,7 @@ describe("production migration compatibility", () => {
   it("creates the current schema from a fresh bootstrap and replays as a no-op", () => {
     const database = open();
     const first = applyPending(database, migrationFiles());
-    expect(first.at(-1)).toBe("0068_drop_author_legacy_status_indexes.sql");
+    expect(first.at(-1)).toBe("0069_drop_unused_poem_indexes.sql");
     const authorColumns = (
       database.pragma("table_info(author)") as { name: string }[]
     ).map((column) => column.name);
@@ -84,6 +84,13 @@ describe("production migration compatibility", () => {
       database
         .prepare(
           "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND name LIKE 'public_poem_count_%'"
+        )
+        .all()
+    ).toEqual([]);
+    expect(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('idx_poem_hidden', 'idx_poem_verses')"
         )
         .all()
     ).toEqual([]);
@@ -202,6 +209,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     expect(
       database
@@ -308,6 +316,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
   });
 
@@ -504,6 +513,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     expect(
       database
@@ -602,6 +612,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     expectProductionDeploymentIdentity(database);
     expect(database.pragma("foreign_key_check")).toEqual([]);
@@ -687,6 +698,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     expect(
       database
@@ -749,6 +761,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     expect(
       database
@@ -947,6 +960,7 @@ describe("production migration compatibility", () => {
       "0066_inline_unsafe_publishability.sql",
       "0067_drop_author_counters.sql",
       "0068_drop_author_legacy_status_indexes.sql",
+      "0069_drop_unused_poem_indexes.sql",
     ]);
     for (const name of [
       "enrichment_artifact",
