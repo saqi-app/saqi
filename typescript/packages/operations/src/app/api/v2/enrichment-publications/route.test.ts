@@ -32,10 +32,10 @@ describe("bound enrichment publication v2 route", () => {
     getCloudflareEnv.mockReturnValue({
       DB: {
         prepare: () => ({
-          first: () =>
-            Promise.resolve({
-              databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5",
-            }),
+          bind: () => ({
+            first: () =>
+              Promise.resolve({ name: "0064_retire_collection_dashboard.sql" }),
+          }),
         }),
       },
     });
@@ -145,14 +145,13 @@ describe("bound enrichment publication v2 route", () => {
       DB: {
         prepare: (query: string) => ({
           bind: () => ({
-            first: () => Promise.resolve({ author_slug: "poet" }),
+            first: () =>
+              Promise.resolve(
+                query.includes("d1_migrations")
+                  ? { name: "0064_retire_collection_dashboard.sql" }
+                  : { author_slug: "poet" }
+              ),
           }),
-          first: () =>
-            Promise.resolve(
-              query.includes("database_id AS databaseId")
-                ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
-                : undefined
-            ),
         }),
       },
       SAQI_PUBLIC_ORIGIN: "https://www.saqi.app",
@@ -286,14 +285,13 @@ function cacheEnabledEnvironment() {
     DB: {
       prepare: (query: string) => ({
         bind: () => ({
-          first: () => Promise.resolve({ author_slug: "poet" }),
+          first: () =>
+            Promise.resolve(
+              query.includes("d1_migrations")
+                ? { name: "0064_retire_collection_dashboard.sql" }
+                : { author_slug: "poet" }
+            ),
         }),
-        first: () =>
-          Promise.resolve(
-            query.includes("database_id AS databaseId")
-              ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
-              : undefined
-          ),
       }),
     },
     SAQI_PUBLIC_ORIGIN: "https://www.saqi.app",
