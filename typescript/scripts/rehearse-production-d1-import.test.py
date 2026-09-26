@@ -55,7 +55,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
                 dump = "\n".join(connection.iterdump()).encode()
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(dump, mtime=0))
-            plan = MODULE.portable_import_plan([part], original, directory)
+            plan = MODULE.portable_import_plan(original, directory)
             oversized = [step for step in plan if isinstance(step, MODULE.BoundInsert)]
             self.assertEqual(len(oversized), 1)
             self.assertEqual(oversized[0].row_id, "poem-1")
@@ -76,19 +76,6 @@ class D1ImportRehearsalTest(unittest.TestCase):
                     connection.execute("SELECT name FROM sqlite_master WHERE name = '_cf_KV'").fetchone()
                 )
 
-    def test_identifies_an_export_insert_with_explicit_columns(self):
-        sql = 'INSERT INTO "poem" ("id","publication_json") VALUES(\'poem-1\',\'x\');'
-        self.assertEqual(MODULE.INSERT_ROW.match(sql).group("id"), "poem-1")
-
-    def test_disposable_import_repairs_exact_nul_policy_insert(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            part = pathlib.Path(temporary) / "part-0001"
-            part.write_bytes(gzip.compress(MODULE.RESTORE.NUL_POLICY_INSERT, mtime=0))
-            self.assertEqual(
-                list(MODULE.sql_statements([part])),
-                [MODULE.RESTORE.PORTABLE_NUL_POLICY_INSERT],
-            )
-
     def test_oversized_other_table_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = pathlib.Path(temporary)
@@ -101,7 +88,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(dump, mtime=0))
             with self.assertRaisesRegex(RuntimeError, "reviewed bound-import rule"):
-                MODULE.portable_import_plan([part], original, directory)
+                MODULE.portable_import_plan(original, directory)
 
     def test_oversized_artifact_stays_before_its_validation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -115,7 +102,7 @@ class D1ImportRehearsalTest(unittest.TestCase):
                 dump = "\n".join(connection.iterdump()).encode()
             part = directory / "part-0001"
             part.write_bytes(gzip.compress(dump, mtime=0))
-            plan = MODULE.portable_import_plan([part], original, directory)
+            plan = MODULE.portable_import_plan(original, directory)
             self.assertEqual([step.table for step in plan if isinstance(step, MODULE.BoundInsert)], ["model_enrichment_artifact"])
             target = directory / "target.sqlite3"
             with sqlite3.connect(target) as connection:
@@ -127,6 +114,37 @@ class D1ImportRehearsalTest(unittest.TestCase):
                         connection.execute(step.sql, step.params)
                 self.assertEqual(connection.execute("SELECT count(*) FROM model_enrichment_validation").fetchone()[0], 1)
                 self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_bounded_batches_restore_cycles_before_triggers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            original = directory / "original.sqlite3"
+            with sqlite3.connect(original) as source:
+                source.executescript("""
+                    CREATE TABLE poem(id TEXT PRIMARY KEY, active_source_revision_id TEXT REFERENCES revision(id));
+                    CREATE TABLE revision(id TEXT PRIMARY KEY, poem_id TEXT REFERENCES poem(id));
+                    INSERT INTO poem VALUES ('p', 'r');
+                    INSERT INTO revision VALUES ('r', 'p');
+                    CREATE TRIGGER immutable BEFORE UPDATE ON poem BEGIN SELECT RAISE(ABORT, 'immutable'); END;
+                """)
+            with patch.object(MODULE, "MAX_IMPORT_BYTES", 300):
+                plan = MODULE.portable_import_plan(original, directory)
+            with sqlite3.connect(directory / "copy.sqlite3") as target:
+                target.execute("PRAGMA foreign_keys=ON")
+                for step in plan:
+                    self.assertLessEqual(step.stat().st_size, 300)
+                    target.executescript("BEGIN;" + step.read_text() + "COMMIT;")
+                self.assertEqual(target.execute("PRAGMA foreign_key_check").fetchall(), [])
+                self.assertEqual(target.execute("SELECT id,active_source_revision_id FROM poem").fetchall(), [('p', 'r')])
+                with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
+                    target.execute("UPDATE poem SET active_source_revision_id=NULL")
+
+    def test_write_never_retries_ambiguous_response(self):
+        with patch.object(MODULE, "TOKEN", {"value": "test", "expires": time.monotonic() + 100}), \
+             patch.object(MODULE.urllib.request, "urlopen", side_effect=TimeoutError) as request:
+            with self.assertRaises(TimeoutError):
+                MODULE.d1_query("disposable", "INSERT INTO poem VALUES (?)", ["p"], retry=False)
+            request.assert_called_once()
 
     def test_compares_every_column_and_foreign_keys(self):
         with tempfile.TemporaryDirectory() as temporary:

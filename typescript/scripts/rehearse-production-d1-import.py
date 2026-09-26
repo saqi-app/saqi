@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Import a private corpus archive into a disposable D1 and compare every row.
 
-SQL statements above D1's text limit are inserted with bound parameters at
-their original position in the export. Production is never the destination.
+Restore uses bounded batches in foreign-key dependency order, with bound
+parameters for rows above D1's SQL text limit. Production is never the destination.
 All local files and the disposable D1 are removed.
 """
 
 import argparse
 import contextlib
-import gzip
 import importlib.util
 import json
 import pathlib
@@ -30,10 +29,6 @@ SPEC.loader.exec_module(RESTORE)
 
 ACCOUNT_ID = "58e48987bbd8d9c3f50510f0ab7766b6"
 PRODUCTION_DATABASE_ID = RESTORE.DATABASE_ID
-INSERT_ROW = re.compile(
-    r'^INSERT INTO "(?P<table>[a-z][a-z0-9_]*)"\s*(?:\([^)]*\))?\s*VALUES\s*\(\s*\'(?P<id>(?:\'\'|[^\'])*)\'',
-    re.IGNORECASE | re.DOTALL,
-)
 TOKEN: dict[str, object] = {"value": None, "expires": 0.0}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 MAX_QUERY_ATTEMPTS = 7
@@ -54,104 +49,150 @@ class TableLayout:
 
 
 def wrangler(*args: str) -> str:
-    return subprocess.run(
-        ["yarn", "wrangler", *args],
-        cwd=RESTORE.OPERATIONS,
-        check=True,
-        text=True,
-        capture_output=True,
-    ).stdout
+    try:
+        return subprocess.run(
+            ["yarn", "wrangler", *args],
+            cwd=RESTORE.OPERATIONS,
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        diagnostic = (error.stderr or "") + "\n" + (error.stdout or "")
+        # Never echo SQL, response payloads, credentials, or signed upload URLs.
+        known = [code for code in (
+            "D1_RESET_DO", "FOREIGN KEY constraint failed", "Statement too long",
+            "SQLITE_CONSTRAINT", "SQLITE_ERROR", "SQLITE_BUSY",
+        ) if code in diagnostic]
+        raise RuntimeError(
+            f"Wrangler {args[0]} failed ({error.returncode}); "
+            f"output_bytes={len(diagnostic)}; known_errors={known}"
+        ) from None
 
 
-def sql_statements(parts: list[pathlib.Path]):
-    pending = bytearray()
-    with tempfile.TemporaryFile() as joined:
-        for part in parts:
-            with part.open("rb") as source:
-                for block in iter(lambda: source.read(1_048_576), b""):
-                    joined.write(block)
-        joined.seek(0)
-        with gzip.GzipFile(fileobj=joined) as stream:
-            for line in stream:
-                pending.extend(RESTORE.portable_export_line(line))
-                if sqlite3.complete_statement(pending.decode("utf-8")):
-                    yield bytes(pending)
-                    pending.clear()
-    if pending.strip():
-        raise RuntimeError("Archive ends with incomplete SQL")
+MAX_IMPORT_BYTES = 8_000_000
+DEFERRED_COLUMNS = {
+    "poem": {"active_source_revision_id"},
+    "source_poem_identity": {"current_revision_id"},
+}
 
 
-def bind_oversized_insert(database: sqlite3.Connection, statement: bytes) -> BoundInsert:
-    match = INSERT_ROW.match(statement.decode("utf-8"))
-    if match is None or match.group("table") not in {"poem", "model_enrichment_artifact"}:
-        raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
-    table = match.group("table")
-    row_id = match.group("id").replace("''", "'")
-    columns = [row[1] for row in database.execute(f"PRAGMA table_info({table})")]
-    if not columns or columns[0] != "id" or any(
-        re.fullmatch(r"[a-z][a-z0-9_]*", column) is None for column in columns
-    ):
-        raise RuntimeError(f"Unexpected {table} column layout")
+def sql_literal(value: object) -> str:
+    if value is None:
+        return "NULL"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        if "\x00" in value:
+            return "CAST(X'" + value.encode("utf-8").hex() + "' AS TEXT)"
+        return "'" + value.replace("'", "''") + "'"
+    raise RuntimeError("Unsupported archived value type")
+
+
+def restore_table_order(database: sqlite3.Connection, tables: list[str]) -> list[str]:
+    dependencies = {
+        table: {
+            row[2] for row in database.execute(f'PRAGMA foreign_key_list("{table}")')
+            if row[3] not in DEFERRED_COLUMNS.get(table, set())
+        }
+        for table in tables
+    }
+    ordered: list[str] = []
+    while dependencies:
+        ready = sorted(table for table, parents in dependencies.items() if parents <= set(ordered))
+        if not ready:
+            raise RuntimeError("Archive has an unreviewed foreign-key cycle")
+        ordered.extend(ready)
+        dependencies = {table: parents for table, parents in dependencies.items() if table not in ready}
+    return ordered
+
+
+def table_inserts(database: sqlite3.Connection, table: str):
+    columns = table_layout(database, table).columns
     names = ",".join(f'"{column}"' for column in columns)
-    row = database.execute(f'SELECT {names} FROM "{table}" WHERE id = ?', (row_id,)).fetchone()
-    if row is None:
-        raise RuntimeError(f"Archived {table} row is missing")
-    params = [row[column] for column in columns]
-    if any(isinstance(value, bytes) for value in params):
-        raise RuntimeError(f"Archived {table} row has an unsupported BLOB")
-    placeholders = ",".join("?" for _ in columns)
-    return BoundInsert(table, row_id, f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', params)
+    deferred = DEFERRED_COLUMNS.get(table, set()) & set(columns)
+    for row in database.execute(f'SELECT {names} FROM "{table}"'):
+        values = [None if column in deferred else row[column] for column in columns]
+        sql = f'INSERT INTO "{table}" ({names}) VALUES (' + ",".join(map(sql_literal, values)) + ")"
+        if len(sql.encode("utf-8")) + 2 <= RESTORE.D1_MAX_STATEMENT_BYTES:
+            yield sql
+            continue
+        if table not in {"poem", "model_enrichment_artifact"} or columns[0] != "id":
+            raise RuntimeError("Oversized SQL statement needs a reviewed bound-import rule")
+        placeholders = ",".join("?" for _ in columns)
+        yield BoundInsert(table, row["id"], f'INSERT INTO "{table}" ({names}) VALUES ({placeholders})', values)
+
+
+def restore_cycle_updates(database: sqlite3.Connection, tables: list[str]):
+    for table in sorted(set(DEFERRED_COLUMNS) & set(tables)):
+        columns = DEFERRED_COLUMNS[table] & set(table_layout(database, table).columns)
+        for column in sorted(columns):
+            for row in database.execute(f'SELECT id,"{column}" FROM "{table}" WHERE "{column}" IS NOT NULL'):
+                yield f'UPDATE "{table}" SET "{column}"={sql_literal(row[column])} WHERE id={sql_literal(row["id"])}'
 
 
 def portable_import_plan(
-    parts: list[pathlib.Path], restored: pathlib.Path, directory: pathlib.Path
+    restored: pathlib.Path, directory: pathlib.Path
 ) -> list[pathlib.Path | BoundInsert]:
+    # The caller has already verified the raw archive and replayed it into SQLite.
+    # Generate bounded batches from that verified copy, with all parent rows first.
     steps: list[pathlib.Path | BoundInsert] = []
-    oversized_count = 0
-    with contextlib.closing(sqlite3.connect(f"file:{restored}?mode=ro", uri=True)) as database:
-        database.row_factory = sqlite3.Row
-        segment_number = 1
-        segment = directory / f"portable-{segment_number:04d}.sql"
-        output = segment.open("wb")
-        segment_bytes = 0
-        try:
-            for statement in sql_statements(parts):
-                if statement.strip().upper() in (b"BEGIN TRANSACTION;", b"COMMIT;"):
-                    # Wrangler wraps imports in its own transaction.
-                    continue
-                if re.match(rb'^\s*CREATE TABLE(?: IF NOT EXISTS)? "?_cf_KV"?\s*\(', statement, re.IGNORECASE):
-                    # D1 creates this reserved platform table itself. Cloudflare's
-                    # import guide requires removing its exported CREATE TABLE.
-                    continue
-                if b"_cf_KV" in statement:
-                    raise RuntimeError("Unexpected statement for D1's reserved _cf_KV table")
-                if len(statement) <= RESTORE.D1_MAX_STATEMENT_BYTES:
-                    output.write(statement)
-                    segment_bytes += len(statement)
-                    continue
-                output.close()
-                if segment_bytes:
-                    steps.append(segment)
-                else:
-                    segment.unlink()
-                steps.append(bind_oversized_insert(database, statement))
-                oversized_count += 1
-                segment_number += 1
-                segment = directory / f"portable-{segment_number:04d}.sql"
-                output = segment.open("wb")
-                segment_bytes = 0
-        finally:
+    output = None
+    size = 0
+    number = 0
+
+    def flush() -> None:
+        nonlocal output, size
+        if output is not None:
             output.close()
-        if segment_bytes:
-            steps.append(segment)
-        else:
-            segment.unlink()
-    if not oversized_count:
-        raise RuntimeError("Expected at least one oversized archived INSERT")
+            output = None
+        size = 0
+
+    def append(sql: str) -> None:
+        nonlocal output, size, number
+        data = (sql.rstrip(";\n") + ";\n").encode("utf-8")
+        if len(data) > RESTORE.D1_MAX_STATEMENT_BYTES:
+            raise RuntimeError("Generated restore statement exceeds D1 text limit")
+        if size + len(data) > MAX_IMPORT_BYTES:
+            flush()
+        if output is None:
+            number += 1
+            path = directory / f"portable-{number:04d}.sql"
+            steps.append(path)
+            output = path.open("wb")
+        output.write(data)
+        size += len(data)
+
+    try:
+        with contextlib.closing(sqlite3.connect(f"file:{restored}?mode=ro", uri=True)) as database:
+            database.row_factory = sqlite3.Row
+            tables = [row[0] for row in database.execute(TABLES_SQL)]
+            if any(re.fullmatch(r"[a-z][a-z0-9_]*", table) is None for table in tables):
+                raise RuntimeError("Unexpected archive table identifier")
+            ordered = restore_table_order(database, tables)
+            for table in ordered:
+                append(database.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()[0])
+            flush()
+            for table in ordered:
+                for statement in table_inserts(database, table):
+                    if isinstance(statement, BoundInsert):
+                        flush()
+                        steps.append(statement)
+                    else:
+                        append(statement)
+                flush()
+            # Restore the two nullable cycle edges before installing any triggers.
+            for statement in restore_cycle_updates(database, tables):
+                append(statement)
+            flush()
+            for row in database.execute("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name"):
+                append(row[0])
+    finally:
+        flush()
     return steps
 
 
-def d1_query(database_id: str, sql: str, params: list[object] | None = None):
+def d1_query(database_id: str, sql: str, params: list[object] | None = None, *, retry: bool = True):
     if database_id == PRODUCTION_DATABASE_ID:
         raise RuntimeError("Refusing to query production through the disposable restore client")
     if TOKEN["value"] is None or time.monotonic() >= TOKEN["expires"]:
@@ -171,13 +212,12 @@ def d1_query(database_id: str, sql: str, params: list[object] | None = None):
                 result = json.load(response)
             break
         except urllib.error.HTTPError as error:
-            if error.code not in TRANSIENT_HTTP_STATUSES or attempt == MAX_QUERY_ATTEMPTS - 1:
+            if not retry or error.code not in TRANSIENT_HTTP_STATUSES or attempt == MAX_QUERY_ATTEMPTS - 1:
                 raise
         except (urllib.error.URLError, TimeoutError):
-            if attempt == MAX_QUERY_ATTEMPTS - 1:
+            if not retry or attempt == MAX_QUERY_ATTEMPTS - 1:
                 raise
-        # The only write through this client sets one publication to a fixed
-        # value. Retrying it after an ambiguous response is idempotent.
+        # Read queries can retry; INSERT callers disable ambiguous retries.
         time.sleep(min(0.5 * 2**attempt, 4.0))
     if not result.get("success") or not all(item.get("success") for item in result.get("result", [])):
         raise RuntimeError("Disposable D1 query failed")
@@ -306,7 +346,7 @@ def main() -> None:
             if digest.size != manifest["sql_bytes"] or digest.sha256 != manifest["sql_sha256"]:
                 raise RuntimeError("Archive SQL digest mismatch")
             RESTORE.verify_restored(restored, manifest)
-            steps = portable_import_plan(parts, restored, directory)
+            steps = portable_import_plan(restored, directory)
             output = wrangler("d1", "create", name)
             created = True
             match = re.search(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}", output)
@@ -315,11 +355,12 @@ def main() -> None:
             database_id = match.group()
             bound_count = sum(isinstance(step, BoundInsert) for step in steps)
             print(json.dumps({"disposable_d1": name, "oversized_rows": bound_count}), flush=True)
-            for step in steps:
+            for index, step in enumerate(steps, 1):
+                print(json.dumps({"import_step": index, "total_steps": len(steps)}), flush=True)
                 if isinstance(step, pathlib.Path):
                     wrangler("d1", "execute", name, "--remote", "--file", str(step), "--yes")
                 else:
-                    d1_query(database_id, step.sql, step.params)
+                    d1_query(database_id, step.sql, step.params, retry=False)
             counts = compare_rows(restored, database_id)
             print(json.dumps({"disposable_d1": name, "counts": counts, "d1_import_rehearsal": "passed"}), flush=True)
     finally:
