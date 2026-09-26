@@ -47,8 +47,7 @@ function safeTextSql(column: string) {
 const SAFE_ROUTE_SEGMENT_SQL = (column: string) => `${SAFE_IDENTITY_SQL(column)}
   AND ${column} NOT IN ('.', '..')
   AND instr(${column}, '/') = 0`;
-const PUBLISHABLE_POEM = `p.hidden = 0
-  AND p.publishable = 1
+const PUBLISHABLE_POEM = `p.publishable = 1
   AND ${SAFE_ROUTE_SEGMENT_SQL("p.id")}
   AND ${SAFE_ROUTE_SEGMENT_SQL("p.slug")}
   AND ${SAFE_IDENTITY_SQL("p.name_arabic")}
@@ -61,10 +60,10 @@ const PUBLISHABLE_AUTHOR = `a.hidden = 0
   AND (a.name IS NULL OR trim(a.name) = '' OR ${SAFE_IDENTITY_SQL("a.name")})`;
 const PUBLIC_POEM_COUNT = `(SELECT count(*) FROM poem public_poem
   WHERE public_poem.author_id = a.id
-    AND public_poem.hidden = 0 AND public_poem.publishable = 1)`;
+    AND public_poem.publishable = 1)`;
 const HAS_PUBLIC_POEM = `EXISTS (SELECT 1 FROM poem public_poem
   WHERE public_poem.author_id = a.id
-    AND public_poem.hidden = 0 AND public_poem.publishable = 1)`;
+    AND public_poem.publishable = 1)`;
 const AuthorRowSchema = z.object({
   id: z.string(),
   slug: z.string(),
