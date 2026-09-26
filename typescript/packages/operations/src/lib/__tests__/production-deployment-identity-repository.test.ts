@@ -2,24 +2,25 @@ import type {
   D1Database,
   D1PreparedStatement,
 } from "@cloudflare/workers-types";
-import { SAQI_PRODUCTION_DATABASE_ID } from "@saqi/precedent-iso";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProductionDeploymentIdentityRepository } from "../production-deployment-identity-repository";
 
 function identityReader() {
   const first = vi.fn<D1PreparedStatement["first"]>();
+  const bind = vi.fn<D1PreparedStatement["bind"]>();
   function unexpected(): never {
     throw new Error("Unexpected database operation");
   }
   const statement: D1PreparedStatement = {
     all: unexpected,
-    bind: unexpected,
+    bind,
     first,
     raw: unexpected,
     run: unexpected,
   };
   const prepare = vi.fn<D1Database["prepare"]>().mockReturnValue(statement);
+  bind.mockReturnValue(statement);
   const database: D1Database = {
     batch: unexpected,
     dump: unexpected,
@@ -28,6 +29,7 @@ function identityReader() {
     withSession: unexpected,
   };
   return {
+    bind,
     first,
     prepare,
     repository: new ProductionDeploymentIdentityRepository(database),
@@ -37,10 +39,10 @@ function identityReader() {
 describe("production deployment identity", () => {
   it.each([
     ["missing row", null],
-    ["missing identity", {}],
-    ["malformed identity", { databaseId: 42 }],
-    ["wrong database", { databaseId: "another-database" }],
-    ["wrong alias", { database_id: SAQI_PRODUCTION_DATABASE_ID }],
+    ["missing migration", {}],
+    ["malformed migration", { name: 42 }],
+    ["wrong migration", { name: "another_migration.sql" }],
+    ["wrong alias", { migration_name: "0064_retire_collection_dashboard.sql" }],
   ])("fails closed for %s", async (_label, row) => {
     const { first, repository } = identityReader();
     first.mockResolvedValue(row);
@@ -53,12 +55,15 @@ describe("production deployment identity", () => {
     await expect(repository.matchesProduction()).resolves.toBe(false);
   });
 
-  it("accepts only the pinned production database from the scoped query", async () => {
-    const { first, prepare, repository } = identityReader();
-    first.mockResolvedValue({ databaseId: SAQI_PRODUCTION_DATABASE_ID });
+  it("accepts only the applied current schema migration", async () => {
+    const { bind, first, prepare, repository } = identityReader();
+    first.mockResolvedValue({ name: "0064_retire_collection_dashboard.sql" });
     await expect(repository.matchesProduction()).resolves.toBe(true);
     expect(prepare).toHaveBeenCalledExactlyOnceWith(
-      "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
+      "SELECT name FROM d1_migrations WHERE name = ?1"
+    );
+    expect(bind).toHaveBeenCalledExactlyOnceWith(
+      "0064_retire_collection_dashboard.sql"
     );
     expect(first).toHaveBeenCalledExactlyOnceWith();
   });

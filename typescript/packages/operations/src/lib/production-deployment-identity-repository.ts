@@ -1,15 +1,16 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import { PublicationIdentitySchema } from "@saqi/precedent-iso";
 import { z } from "zod";
 
 interface ProductionDeploymentIdentityReader {
   matchesProduction(): Promise<boolean>;
 }
 
-const ProductionDeploymentIdentityRowSchema = z.object({
-  databaseId: z.string(),
-});
+const ProductionSchemaRowSchema = z.object({ name: z.string() });
+const REQUIRED_MIGRATION = "0064_retire_collection_dashboard.sql";
 
+// Deployment verifies the remote D1 UUID through `wrangler d1 info`; this
+// runtime check only rejects an outdated schema without reading a source-writer
+// singleton. Remove it with the legacy Operations endpoints after cutover.
 export class ProductionDeploymentIdentityRepository implements ProductionDeploymentIdentityReader {
   readonly #database: D1Database;
 
@@ -20,17 +21,10 @@ export class ProductionDeploymentIdentityRepository implements ProductionDeploym
   async matchesProduction(): Promise<boolean> {
     try {
       const row = await this.#database
-        .prepare(
-          "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
-        )
+        .prepare("SELECT name FROM d1_migrations WHERE name = ?1")
+        .bind(REQUIRED_MIGRATION)
         .first<unknown>();
-      const identity = ProductionDeploymentIdentityRowSchema.parse(row);
-      return PublicationIdentitySchema.safeParse({
-        databaseId: identity.databaseId,
-        schemaId: "saqi.publication-identity",
-        schemaVersion: 1,
-        service: "saqi-production",
-      }).success;
+      return ProductionSchemaRowSchema.parse(row).name === REQUIRED_MIGRATION;
     } catch {
       return false;
     }

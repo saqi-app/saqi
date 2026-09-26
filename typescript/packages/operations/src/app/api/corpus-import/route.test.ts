@@ -55,14 +55,14 @@ describe("corpus import route", () => {
     getCloudflareEnv.mockReset();
     databaseFirst.mockReset();
     databaseFirst.mockResolvedValue({
-      databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5",
+      name: "0064_retire_collection_dashboard.sql",
     });
     getCloudflareEnv.mockReturnValue({
       PUBLIC_SITE: {
         fetch: (input: string, init: RequestInit) => fetch(input, init),
       },
       SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
-      DB: { prepare: () => ({ first: databaseFirst }) },
+      DB: { prepare: () => ({ bind: () => ({ first: databaseFirst }) }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
     vi.stubGlobal(
@@ -85,12 +85,12 @@ describe("corpus import route", () => {
     });
   });
 
-  it("fails the identity canary closed for a missing or wrong D1 sentinel", async () => {
+  it("fails the identity canary closed for a missing or wrong schema sentinel", async () => {
     databaseFirst.mockResolvedValueOnce(null);
     const missing = await GET();
     expect(missing.status).toBe(503);
 
-    databaseFirst.mockResolvedValueOnce({ databaseId: crypto.randomUUID() });
+    databaseFirst.mockResolvedValueOnce({ name: "wrong_migration.sql" });
     const wrong = await GET();
     expect(wrong.status).toBe(503);
   });
@@ -105,7 +105,7 @@ describe("corpus import route", () => {
 
   it.each([
     ["missing", null],
-    ["wrong", { databaseId: crypto.randomUUID() }],
+    ["wrong", { name: "wrong_migration.sql" }],
   ] as const)(
     "rejects every mutation before writes when the D1 sentinel is %s",
     async (_description, sentinel) => {
@@ -211,7 +211,7 @@ describe("corpus import route", () => {
     getCloudflareEnv.mockReturnValue({
       PUBLIC_SITE: undefined,
       SAQI_PUBLIC_CACHE_PURGE_SECRET: undefined,
-      DB: { prepare: () => ({ first: databaseFirst }) },
+      DB: { prepare: () => ({ bind: () => ({ first: databaseFirst }) }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
 
@@ -231,7 +231,7 @@ describe("corpus import route", () => {
     getCloudflareEnv.mockReturnValue({
       PUBLIC_SITE: undefined,
       SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
-      DB: { prepare: () => ({ first: databaseFirst }) },
+      DB: { prepare: () => ({ bind: () => ({ first: databaseFirst }) }) },
       SAQI_PUBLIC_ORIGIN: "https://saqi.app",
     });
 

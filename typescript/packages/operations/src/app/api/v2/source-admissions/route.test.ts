@@ -31,11 +31,13 @@ describe("source admission v2 route", () => {
     getCloudflareEnv.mockReturnValue({
       DB: {
         prepare: (statement: string) => ({
+          bind: () => ({
+            first: () =>
+              Promise.resolve({ name: "0064_retire_collection_dashboard.sql" }),
+          }),
           first: () =>
             Promise.resolve(
-              statement.includes("database_id AS databaseId")
-                ? { databaseId: "ffaae610-4dae-4d7e-bf86-8232f46ca2b5" }
-                : { writer_epoch: 7 }
+              statement.includes("writer_epoch") ? { writer_epoch: 7 } : null
             ),
         }),
       },

@@ -148,8 +148,7 @@ jobs:
       - name: Verify the production D1 identity
         if: steps.changes.outputs.deployment_required == 'true'
         run: >-
-          yarn workspace @saqi/operations db:execute --remote --json
-          --command "SELECT database_id AS databaseId FROM scraper_writer_control WHERE singleton = 1"
+          yarn workspace @saqi/operations wrangler d1 info saqi-db --json
           | node scripts/verify-production-d1-identity.mjs
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
