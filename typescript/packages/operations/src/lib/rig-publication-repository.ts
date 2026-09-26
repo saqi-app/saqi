@@ -151,6 +151,7 @@ export class RigPublicationRepository
               p.source_hash AS sourceHash, p.rig_version AS version
        FROM poem p JOIN author a ON a.id = p.author_id
        WHERE p.id = ?1 AND p.rig_status = 'claimed'
+         AND a.hidden = 0
          AND p.rig_lease_token = ?2 AND p.rig_lease_expires_at > ?3`
       )
       .bind(poemId, token, now)
