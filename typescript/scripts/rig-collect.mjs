@@ -87,8 +87,8 @@ async function main() {
       const detail = parsePoemDetail(projection);
       if (detail.canonicalId !== poem.canonicalId)
         throw new Error("SOURCE_POEM_ID_MISMATCH");
-      // eslint-disable-next-line no-await-in-loop -- A failed upsert must stop before advancing to another poem.
-      const response = await post({
+      // eslint-disable-next-line no-await-in-loop -- Visit each source poem serially; only an explicit identity-review conflict may be skipped.
+      const response = await postPoem({
         action: "upsert-poem",
         poem: {
           sourceAuthorId: canonical.slug,
@@ -103,8 +103,8 @@ async function main() {
         `${poem.numericId}: ${response.result.status}${response.cachePending ? " (cache purge pending)" : ""}\n`,
       );
     }
-    // Only a fully processed manifest advances the D1-derived queue. A crash
-    // before this point leaves the same author due for an idempotent retry.
+    // Advance only after visiting the whole manifest, including explicitly
+    // reported identity-review conflicts. A crash leaves this author due again.
     await post({ action: "complete-author", sourceAuthorId: canonical.slug });
   } catch (error) {
     if (error?.code === "SOURCE_RATE_LIMITED") {
@@ -119,9 +119,16 @@ async function main() {
   } finally {
     await collector.close();
   }
-  process.stdout.write(
-    `Author ${canonical.slug}: collection complete\n`,
-  );
+  process.stdout.write(`Author ${canonical.slug}: collection complete\n`);
+}
+
+async function postPoem(body) {
+  try {
+    return await post(body);
+  } catch (error) {
+    if (error?.code !== "UNMAPPED_POEM_COLLISION") throw error;
+    return { result: { status: "identity review required; not imported" } };
+  }
 }
 
 async function get(query) {
@@ -156,7 +163,18 @@ function accessHeaders() {
 async function readResponse(response) {
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Source API ${response.status}: ${body.slice(0, 300)}`);
+    let code;
+    try {
+      code = JSON.parse(body)?.code;
+    } catch {
+      code = undefined;
+    }
+    const error = new Error(
+      `Source API ${response.status}: ${body.slice(0, 300)}`,
+    );
+    if (response.status === 409 && code === "UNMAPPED_POEM_COLLISION")
+      error.code = code;
+    throw error;
   }
   const result = await response.json();
   if (!result?.ok) throw new Error("Source API returned an invalid response");
