@@ -10,8 +10,8 @@
   "workers_dev": false,
   "vars": {
     "SAQI_PUBLIC_ORIGIN": "https://saqi.app",
-    "SAQI_DIRECT_SOURCE_ACTIVE": "0",
-    "SAQI_RIG_ACTIVE": "0",
+    "SAQI_DIRECT_SOURCE_ACTIVE": "1",
+    "SAQI_RIG_ACTIVE": "1",
   },
   "secrets": {
     "required": [
