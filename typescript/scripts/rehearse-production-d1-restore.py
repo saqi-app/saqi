@@ -11,6 +11,7 @@ import gzip
 import hashlib
 import json
 import pathlib
+import os
 import sqlite3
 import subprocess
 import tempfile
@@ -46,9 +47,13 @@ def portable_export_line(line: bytes) -> bytes:
 
 
 def download(key: str, destination: pathlib.Path) -> None:
+    environment = dict(os.environ)
+    if environment.get("SAQI_ARCHIVE_READ_TOKEN"):
+        environment["CLOUDFLARE_API_TOKEN"] = environment.pop("SAQI_ARCHIVE_READ_TOKEN")
     subprocess.run(
         ["yarn", "wrangler", "r2", "object", "get", key, "--remote", "--file", str(destination)],
         cwd=OPERATIONS,
+        env=environment,
         check=True,
     )
 
