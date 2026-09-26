@@ -173,9 +173,9 @@ export class DirectSourceRepository
     await this.#database
       .prepare(
         `INSERT OR IGNORE INTO author
-       (id, slug, name_arabic, status, source_name, source_author_id,
+       (id, slug, name_arabic, source_name, source_author_id,
         source_url, collected_at)
-       VALUES (?1, ?2, ?3, 'init', ?4, ?5, ?6, NULL)`
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)`
       )
       .bind(
         id,

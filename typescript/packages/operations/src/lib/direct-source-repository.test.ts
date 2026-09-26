@@ -23,7 +23,7 @@ function fixture() {
   sqlite.exec(`
     CREATE TABLE author (
       id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL,
-      name_arabic TEXT NOT NULL, status TEXT NOT NULL,
+      name_arabic TEXT NOT NULL,
       source_name TEXT, source_author_id TEXT, source_url TEXT,
       collected_at INTEGER
     );
@@ -276,9 +276,7 @@ test("unmapped Arabic matches block duplicate poems even with unrelated slugs", 
 test("an unmapped author slug blocks duplicate canonical creation", async () => {
   const { author, repository, sqlite } = fixture();
   sqlite
-    .prepare(
-      "INSERT INTO author(id,slug,name_arabic,status) VALUES(?,?,?,'init')"
-    )
+    .prepare("INSERT INTO author(id,slug,name_arabic) VALUES(?,?,?)")
     .run("legacy-author", author.sourceAuthorId, author.nameArabic);
   await expect(repository.upsertAuthor(author)).rejects.toMatchObject({
     message: "UNMAPPED_AUTHOR_COLLISION",
@@ -291,9 +289,7 @@ test("an unmapped author slug blocks duplicate canonical creation", async () => 
 test("an unmapped Arabic author name blocks duplicate canonical creation", async () => {
   const { author, repository, sqlite } = fixture();
   sqlite
-    .prepare(
-      "INSERT INTO author(id,slug,name_arabic,status) VALUES(?,?,?,'init')"
-    )
+    .prepare("INSERT INTO author(id,slug,name_arabic) VALUES(?,?,?)")
     .run("legacy-author", "old-slug", author.nameArabic);
   await expect(repository.upsertAuthor(author)).rejects.toMatchObject({
     message: "UNMAPPED_AUTHOR_COLLISION",
