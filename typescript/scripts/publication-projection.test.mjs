@@ -58,6 +58,49 @@ test("an apply pass refuses to start without a D1 restore bookmark", async () =>
   assert.match(result.stderr, /Time Travel bookmark is required/u);
 });
 
+test("a bounded audit stops after crossing its cursor and rejects a write range", async () => {
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    const chunks = await Array.fromAsync(request);
+    requests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      ok: true,
+      afterId: requests.length === 1 ? "2" : "4",
+      complete: false,
+      scanned: 1,
+      eligible: 1,
+      shadowed: 0,
+      skipped: [],
+      mismatched: [],
+    }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const port = server.address()?.port;
+    const environment = {
+      SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
+      SAQI_PROJECTION_STOP_AFTER_ID: "3",
+    };
+    const result = await runScript(["--audit"], environment);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(requests, [
+      { action: "audit", afterId: "", limit: 10 },
+      { action: "audit", afterId: "2", limit: 10 },
+    ]);
+    assert.match(result.stdout, /"stopAfterId":"3"/u);
+    const rejected = await runScript(["--apply"], {
+      ...environment,
+      SAQI_D1_RESTORE_BOOKMARK: "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
+    });
+    assert.notEqual(rejected.code, 0);
+    assert.match(rejected.stderr, /only for a read-only audit/u);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("verify-empty rejects skipped publication candidates", async () => {
   const server = createServer((_request, response) => {
     response.setHeader("content-type", "application/json");

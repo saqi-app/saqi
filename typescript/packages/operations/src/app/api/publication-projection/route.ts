@@ -91,6 +91,7 @@ export async function POST(request: Request): Promise<Response> {
           candidate.authorSlug,
           candidate.id
         );
+        summary.shadowed += 1;
         if (
           !stored.success ||
           JSON.stringify(stored.data) !== projected.publication ||

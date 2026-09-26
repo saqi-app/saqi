@@ -11,6 +11,7 @@ const clientId = process.env.CF_ACCESS_CLIENT_ID;
 const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 const bookmark = process.env.SAQI_D1_RESTORE_BOOKMARK;
 const startAfterId = process.env.SAQI_PROJECTION_AFTER_ID ?? "";
+const stopAfterId = process.env.SAQI_PROJECTION_STOP_AFTER_ID ?? "";
 const batchLimit = Number(process.env.SAQI_PROJECTION_BATCH_LIMIT ?? 10);
 const action = process.argv.includes("--audit") ? "audit" : "backfill";
 const apply = process.argv.includes("--apply");
@@ -31,6 +32,10 @@ if (expectEmpty && (action === "audit" || apply))
 if (startAfterId && (apply || expectEmpty))
   throw new Error("A starting cursor is only for read-only inventory or audit");
 if (startAfterId.length > 200) throw new Error("Starting cursor is too long");
+if (stopAfterId && (action !== "audit" || apply || stopAfterId.length > 200))
+  throw new Error("A stopping cursor is only for a read-only audit");
+if (stopAfterId && stopAfterId <= startAfterId)
+  throw new Error("Stopping cursor must follow the starting cursor");
 if (!Number.isSafeInteger(batchLimit) || batchLimit < 1 || batchLimit > 10)
   throw new Error("Batch limit must be between 1 and 10");
 if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 20_000)
@@ -93,6 +98,10 @@ for (let batch = 1; batch <= maxBatches; batch += 1) {
   }
   if (result.afterId <= afterId)
     throw new Error("Projection cursor did not advance");
+  if (stopAfterId && result.afterId >= stopAfterId) {
+    complete = true;
+    break;
+  }
   afterId = result.afterId;
 }
 if (!complete)
@@ -110,6 +119,7 @@ process.stdout.write(
     action,
     apply,
     startAfterId,
+    stopAfterId,
     totalScanned,
     totalEligible,
     totalShadowed,
