@@ -346,9 +346,6 @@ void test("catalog SQL excludes hidden, empty, and malformed content", async (t)
         ('p-malformed-author', 'a-malformed', 'bad-author', 1, 'قصيدة', '{"content":["بيت"]}', NULL, 0),
         ('p-hidden-author', 'a-hidden', 'hidden-author', 1, 'خفية', '{"content":["بيت"]}', NULL, 0);
     `);
-    // Readers derive the live count even if the old write-maintained counter
-    // is stale during the eventual counter-column cutover.
-    sqlite.prepare("UPDATE author SET public_poem_count = 0").run();
     const database = catalogRepository(sqlite);
 
     const authors = await database.listAuthors();
@@ -1029,7 +1026,7 @@ for (const authorCount of [0, 1, 199, 200, 201]) {
   });
 }
 
-void test("publishability triggers maintain public counts idempotently", () => {
+void test("publishability triggers update indexed live counts", () => {
   const database = createDatabase();
   try {
     database.exec(`
@@ -1041,7 +1038,7 @@ void test("publishability triggers maintain public counts idempotently", () => {
     const count = () =>
       database
         .prepare(
-          "SELECT public_poem_count AS count FROM author WHERE id = 'a-trigger'",
+          "SELECT count(*) AS count FROM poem WHERE author_id = 'a-trigger' AND hidden = 0 AND publishable = 1",
         )
         .get() as { count: number };
     assert.equal(count().count, 0);
