@@ -34,9 +34,11 @@
     "0068_drop_author_legacy_status_indexes.sql",
     "0069_drop_unused_poem_indexes.sql",
     "0070_preserve_source_cooldown.sql",
-    "0071_detach_obsolete_corpus_graph.sql",
-    "0072_drop_obsolete_corpus_tables.sql",
-    "0073_drop_duplicate_poem_payloads.sql"
+    "0071_remove_obsolete_corpus_guards.sql",
+    "0072_detach_poem_revision.sql",
+    "0073_detach_source_revision.sql",
+    "0074_drop_obsolete_corpus_tables.sql",
+    "0075_drop_duplicate_poem_payloads.sql"
   ],
   "databases": [
     {
