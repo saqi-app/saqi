@@ -107,20 +107,22 @@ export function poemWordGlossTracks(
   });
 }
 
+type TranslationPoem = Pick<
+  Poem,
+  | "linesEnglish"
+  | "linesEnglishAttributionCertainty"
+  | "linesEnglishGemini"
+  | "linesEnglishGeminiModel"
+  | "linesEnglishModel"
+  | "linesEnglishModelVendor"
+  | "linesEnglishSol"
+  | "linesEnglishSolModel"
+  | "linesEnglishSolReasoningEffort"
+  | "modelEnrichments"
+>;
+
 export function poemTranslationTracks(
-  poem: Pick<
-    Poem,
-    | "linesEnglish"
-    | "linesEnglishAttributionCertainty"
-    | "linesEnglishGemini"
-    | "linesEnglishGeminiModel"
-    | "linesEnglishModel"
-    | "linesEnglishModelVendor"
-    | "linesEnglishSol"
-    | "linesEnglishSolModel"
-    | "linesEnglishSolReasoningEffort"
-    | "modelEnrichments"
-  >,
+  poem: TranslationPoem,
 ): TranslationTrack[] {
   const tracks: TranslationTrack[] = [];
   for (const enrichment of poem.modelEnrichments ?? []) {
@@ -148,26 +150,9 @@ export function poemTranslationTracks(
   }
 
   if (hasTranslation(poem.linesEnglish)) {
-    const inferred =
-      !poem.linesEnglishModel ||
-      poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
-    tracks.push({
-      ...(inferred
-        ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
-        : {}),
-      attributionCertainty:
-        poem.linesEnglishAttributionCertainty ??
-        (inferred ? "inferred_range" : undefined),
-      key: "legacy",
-      lines: poem.linesEnglish,
-      model: poem.linesEnglishModel ?? LEGACY_TRANSLATION_MODEL_ESTIMATE,
-      provider:
-        poem.linesEnglishModelVendor ??
-        (poem.linesEnglishModel
-          ? translationModelProvider(poem.linesEnglishModel)
-          : "anthropic"),
-    });
+    tracks.push(legacyTranslationTrack(poem, poem.linesEnglish));
   }
+
   if (hasTranslation(poem.linesEnglishGemini)) {
     tracks.push({
       ...(!poem.linesEnglishGeminiModel ||
@@ -183,6 +168,31 @@ export function poemTranslationTracks(
     });
   }
   return tracks;
+}
+
+function legacyTranslationTrack(
+  poem: TranslationPoem,
+  lines: string[],
+): TranslationTrack {
+  const inferred =
+    !poem.linesEnglishModel ||
+    poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
+  return {
+    ...(inferred
+      ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
+      : {}),
+    attributionCertainty:
+      poem.linesEnglishAttributionCertainty ??
+      (inferred ? "inferred_range" : undefined),
+    key: "legacy",
+    lines,
+    model: poem.linesEnglishModel ?? LEGACY_TRANSLATION_MODEL_ESTIMATE,
+    provider:
+      poem.linesEnglishModelVendor ??
+      (poem.linesEnglishModel
+        ? translationModelProvider(poem.linesEnglishModel)
+        : "anthropic"),
+  };
 }
 
 function hasTranslation(lines: string[] | undefined): lines is string[] {
