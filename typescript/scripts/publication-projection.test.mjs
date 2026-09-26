@@ -64,16 +64,18 @@ test("a bounded audit stops after crossing its cursor and rejects a write range"
     const chunks = await Array.fromAsync(request);
     requests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({
-      ok: true,
-      afterId: requests.length === 1 ? "2" : "4",
-      complete: false,
-      scanned: 1,
-      eligible: 1,
-      shadowed: 0,
-      skipped: [],
-      mismatched: [],
-    }));
+    response.end(
+      JSON.stringify({
+        ok: true,
+        afterId: requests.length === 1 ? "2" : "4",
+        complete: false,
+        scanned: 1,
+        eligible: 1,
+        shadowed: 0,
+        skipped: [],
+        mismatched: [],
+      }),
+    );
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -92,7 +94,8 @@ test("a bounded audit stops after crossing its cursor and rejects a write range"
     assert.match(result.stdout, /"stopAfterId":"3"/u);
     const rejected = await runScript(["--apply"], {
       ...environment,
-      SAQI_D1_RESTORE_BOOKMARK: "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
+      SAQI_D1_RESTORE_BOOKMARK:
+        "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
     });
     assert.notEqual(rejected.code, 0);
     assert.match(rejected.stderr, /only for a read-only audit/u);
@@ -203,6 +206,43 @@ test("read-only cursor resumes after a transient Worker failure", async () => {
     });
     assert.notEqual(rejected.code, 0);
     assert.match(rejected.stderr, /only for read-only/u);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("read-only audit survives a burst of four Worker 503 responses", async () => {
+  let calls = 0;
+  const server = createServer((_request, response) => {
+    calls += 1;
+    if (calls <= 4) {
+      response.writeHead(503).end();
+      return;
+    }
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        ok: true,
+        afterId: "poem-1",
+        complete: true,
+        scanned: 1,
+        eligible: 1,
+        shadowed: 0,
+        skipped: [],
+        mismatched: [],
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const port = server.address()?.port;
+    const result = await runScript(["--audit"], {
+      SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(calls, 5);
+    assert.match(result.stdout, /"totalEligible":1/u);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
