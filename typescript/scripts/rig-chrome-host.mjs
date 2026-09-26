@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
 import { configureSource } from "../packages/source-collector/dist/source-adapter/index.js";
 import { collectorSession } from "./rig-chrome-session.mjs";
 configureSource({ name: "aldiwan", origin: "https://www.aldiwan.net" });
@@ -38,13 +39,14 @@ const headers = {
   "Sec-Fetch-Mode": "cors",
   "Sec-Fetch-Site": "same-origin",
 };
-async function api(query = "", body) {
-  const r = await fetch("https://ops.saqi.app/api/rig/source" + query, {
+async function api(query, body) {
+  const options = {
     headers,
     method: body ? "POST" : "GET",
-    ...(body ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(60000),
-  });
+  };
+  if (body) options.body = JSON.stringify(body);
+  const r = await fetch(`https://ops.saqi.app/api/rig/source${query}`, options);
   const data = await r.json();
   if (!r.ok || !data.ok) throw new Error(data.code || `Source API ${r.status}`);
   return data;
@@ -71,7 +73,10 @@ for await (const chunk of process.stdin) {
         phase = "attention";
         message = String(input.message).slice(0, 500);
         status();
-      } else result = await handle(input);
+      } else {
+        // eslint-disable-next-line no-await-in-loop -- Native requests mutate one sequential author session; concurrent handling would break pre-fetch hashes.
+        result = await handle(input);
+      }
       reply = { id: input.id, ok: true, ...result };
     } catch (error) {
       phase = "attention";
@@ -88,6 +93,7 @@ for await (const chunk of process.stdin) {
 }
 if (phase === "running") {
   phase = "attention";
-  message = "Personal Chrome disconnected before collection completed; the author remains due in D1";
+  message =
+    "Personal Chrome disconnected before collection completed; the author remains due in D1";
   status();
 }

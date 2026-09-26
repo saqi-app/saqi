@@ -7,8 +7,8 @@ import pathlib
 import shlex
 import subprocess
 
-root = pathlib.Path(__file__).resolve().parents[2]
-manifest = json.loads((root / "chrome/saqi-collector/manifest.json").read_text())
+root = pathlib.Path(__file__).resolve().parents[3]
+manifest = json.loads((root / "typescript/chrome/saqi-collector/manifest.json").read_text())
 digest = hashlib.sha256(base64.b64decode(manifest["key"])).hexdigest()[:32]
 identifier = "".join(chr(97 + int(char, 16)) for char in digest)
 node = subprocess.check_output(["node", "-p", "process.execPath"], cwd=root / "typescript", text=True).strip()
@@ -28,4 +28,4 @@ subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/app.saqi.rig.collect
 (pathlib.Path.home() / "Library/LaunchAgents/app.saqi.rig.collect.plist").unlink(missing_ok=True)
 (state / "collect.log").write_text("PERSONAL_CHROME attention\nAwaiting extension installation in personal Chrome\n")
 print(f"Native bridge installed for extension {identifier}")
-print(f"Load unpacked in personal Chrome: {root / 'chrome/saqi-collector'}")
+print(f"Load unpacked in personal Chrome: {root / 'typescript/chrome/saqi-collector'}")

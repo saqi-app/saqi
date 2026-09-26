@@ -54,36 +54,7 @@ export function collectorSession(api, report) {
         return {};
       }
       case "poem": {
-        const poem = parsePoemDetail(input.projection);
-        if (
-          !prepared ||
-          poem.numericId !== prepared.id ||
-          poem.author.slug !== author.sourceAuthorId
-        )
-          throw new Error("SOURCE_POEM_ID_MISMATCH");
-        let result;
-        try {
-          ({ result } = await api("", {
-            action: "upsert-poem",
-            poem: {
-              sourceAuthorId: author.sourceAuthorId,
-              sourcePoemId: poem.numericId,
-              sourceUrl: poem.href,
-              titleArabic: poem.title,
-              linesArabic: poem.lines,
-              expectedHash: prepared.expectedHash,
-            },
-          }));
-        } catch (error) {
-          if (error.message !== "UNMAPPED_POEM_COLLISION") throw error;
-          result = { status: "identity review required; not imported" };
-        }
-        completed.add(prepared.id);
-        prepared = null;
-        report(
-          `${author.nameArabic}: ${completed.size}/${manifest.poems.length} poems · ${poem.numericId}: ${result.status}`,
-        );
-        return { result };
+        return ingestPoem(input.projection);
       }
       case "complete":
         if (!manifest || prepared || completed.size !== manifest.poems.length)
@@ -100,6 +71,38 @@ export function collectorSession(api, report) {
       default:
         throw new Error("Unknown collector action");
     }
+  }
+  async function ingestPoem(projection) {
+    const poem = parsePoemDetail(projection);
+    if (
+      !prepared ||
+      poem.numericId !== prepared.id ||
+      poem.author.slug !== author.sourceAuthorId
+    )
+      throw new Error("SOURCE_POEM_ID_MISMATCH");
+    let result;
+    try {
+      ({ result } = await api("", {
+        action: "upsert-poem",
+        poem: {
+          sourceAuthorId: author.sourceAuthorId,
+          sourcePoemId: poem.numericId,
+          sourceUrl: poem.href,
+          titleArabic: poem.title,
+          linesArabic: poem.lines,
+          expectedHash: prepared.expectedHash,
+        },
+      }));
+    } catch (error) {
+      if (error.message !== "UNMAPPED_POEM_COLLISION") throw error;
+      result = { status: "identity review required; not imported" };
+    }
+    completed.add(prepared.id);
+    prepared = null;
+    report(
+      `${author.nameArabic}: ${completed.size}/${manifest.poems.length} poems · ${poem.numericId}: ${result.status}`,
+    );
+    return { result };
   }
   return handle;
 }

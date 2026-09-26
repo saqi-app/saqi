@@ -108,8 +108,8 @@ async function main() {
     expectedVersion: dispatched.state.version,
     output,
   });
-  await publish(acknowledged.state);
   await unlink(outputPath(attemptId));
+  await publish(acknowledged.state);
 }
 
 function outputPath(attemptId) {
@@ -179,10 +179,10 @@ async function recover(state) {
       expectedVersion: state.version,
       output,
     });
-    await publish(acknowledged.state);
     await unlink(outputPath(attemptId)).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
     });
+    await publish(acknowledged.state);
     return true;
   }
   if (

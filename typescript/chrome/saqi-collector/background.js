@@ -1,6 +1,25 @@
 importScripts("project.js");
+function sendNative(port, message) {
+  // eslint-disable-next-line unicorn/require-post-message-target-origin -- Chrome Native Port uses an allowlisted host, not a window origin.
+  port.postMessage(message);
+}
 let busy = false;
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Browser service workers do not provide node:timers/promises.
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new Error("Collector disconnected"));
+    };
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
+  });
+}
 chrome.runtime.onInstalled.addListener(() =>
   chrome.alarms.create("collect", { periodInMinutes: 1 }),
 );
@@ -20,17 +39,19 @@ async function collect() {
   let heartbeat;
   const pending = new Map();
   let serial = 0;
+  const controller = new AbortController();
+  // eslint-disable-next-line @sarj/no-fat-try-blocks -- The entire author session shares one error report and native-port cleanup boundary.
   try {
     port = chrome.runtime.connectNative("app.saqi.collector");
     port.onMessage.addListener((reply) => {
       const promise = pending.get(reply.id);
       if (!promise) return;
       pending.delete(reply.id);
-      reply.ok
-        ? promise.resolve(reply)
-        : promise.reject(new Error(reply.error));
+      if (reply.ok) promise.resolve(reply);
+      else promise.reject(new Error(reply.error));
     });
     port.onDisconnect.addListener(() => {
+      controller.abort();
       for (const p of pending.values())
         p.reject(
           new Error(
@@ -43,16 +64,22 @@ async function collect() {
       new Promise((resolve, reject) => {
         const id = ++serial;
         pending.set(id, { resolve, reject });
-        port.postMessage({ id, action, ...data });
+        sendNative(port, { id, action, ...data });
       });
     heartbeat = setInterval(() => {
-      void call("heartbeat").catch(() => {});
+      void call("heartbeat").catch((error) => {
+        console.error(error);
+        controller.abort();
+      });
     }, 30000);
     const { author } = await call("begin");
     if (!author) return;
     let { collectorTab } = await chrome.storage.session.get("collectorTab");
     let tab = collectorTab
-      ? await chrome.tabs.get(collectorTab).catch(() => null)
+      ? await chrome.tabs.get(collectorTab).catch((error) => {
+          console.warn("Collector tab closed", error);
+          return null;
+        })
       : null;
     if (!tab) {
       tab = await chrome.tabs.create({ url: "about:blank", active: false });
@@ -61,12 +88,15 @@ async function collect() {
     }
     const visit = async (url) => {
       await call("origin");
-      await sleep(13000);
+      await sleep(13000, controller.signal);
       await chrome.tabs.update(collectorTab, { url });
       for (let i = 0; i < 60; i++) {
-        await sleep(1000);
+        // eslint-disable-next-line no-await-in-loop -- Sequential source pacing and native session state must not overlap.
+        await sleep(1000, controller.signal);
+        // eslint-disable-next-line no-await-in-loop -- Sequential source pacing and native session state must not overlap.
         const current = await chrome.tabs.get(collectorTab);
         if (current.status !== "complete" || current.url !== url) continue;
+        // eslint-disable-next-line no-await-in-loop -- Sequential source pacing and native session state must not overlap.
         const [{ result }] = await chrome.scripting.executeScript({
           target: { tabId: collectorTab },
           func: projectSaqiPage,
@@ -86,7 +116,9 @@ async function collect() {
       projection: await visit(author.sourceUrl),
     });
     for (const poem of poems) {
+      // eslint-disable-next-line no-await-in-loop -- Sequential source pacing and native session state must not overlap.
       await call("prepare", { poemId: poem.numericId });
+      // eslint-disable-next-line no-await-in-loop -- Sequential source pacing and native session state must not overlap.
       await call("poem", { projection: await visit(poem.href) });
     }
     await call("complete");
@@ -96,13 +128,18 @@ async function collect() {
     await chrome.action.setTitle({ title: `Saqi: ${error.message}` });
     if (port) {
       try {
-        port.postMessage({
+        sendNative(port, {
           id: ++serial,
           action: "error",
           message: error.message,
         });
         await sleep(250);
-      } catch {}
+      } catch (reportError) {
+        console.error("Native error reporting failed", reportError);
+        await chrome.action.setTitle({
+          title: "Saqi native bridge disconnected; check the monitor",
+        });
+      }
     }
   } finally {
     clearInterval(heartbeat);

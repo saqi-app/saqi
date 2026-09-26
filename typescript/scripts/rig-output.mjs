@@ -25,6 +25,7 @@ export function generationSchema(template, lines) {
 
 export function normalizeWordMeanings(output) {
   if (Array.isArray(output.wordMeanings)) return output;
+  // eslint-disable-next-line no-restricted-syntax -- Raw Codex JSON is an untrusted boundary; reject non-object word maps before recovery.
   if (!output.wordMeanings || typeof output.wordMeanings !== "object")
     throw new Error("Missing word meanings");
   const keys = Object.keys(output.wordMeanings);

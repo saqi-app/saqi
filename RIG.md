@@ -21,10 +21,10 @@ Credentials remain in this Mac's Keychain under account `saqi-publication-access
 The separate automation profile can remain blocked by Cloudflare. Use the site-scoped extension in the normal signed-in Chrome profile instead:
 
 ```sh
-python3 chrome/saqi-collector/install.py
+python3 typescript/chrome/saqi-collector/install.py
 ```
 
-This installs the native bridge and retires the separate-profile launchd collector. In `chrome://extensions`, enable Developer mode and Load unpacked: `chrome/saqi-collector` from this repository. This installation grants source-page access and must be explicitly approved by the browser owner. The extension can read only `https://www.aldiwan.net/*`, manage its dedicated collector tab, and talk to its native bridge. No cookies are copied and no credentials are stored in Chrome.
+This installs the native bridge and retires the separate-profile launchd collector. In `chrome://extensions`, enable Developer mode and Load unpacked: `typescript/chrome/saqi-collector` from this repository. This installation grants source-page access and must be explicitly approved by the browser owner. The extension can read only `https://www.aldiwan.net/*`, manage its dedicated collector tab, and talk to its native bridge. No cookies are copied and no credentials are stored in Chrome.
 
 Once enabled, it checks for the next D1 author every minute and visits poems serially, at least 13 seconds apart. Clicking its toolbar icon starts a check immediately. Disable the extension to stop collection. Closing personal Chrome stops collection; reopening it resumes. Incomplete manifests, challenges and identity conflicts are surfaced explicitly; source keys and pre-fetch hashes prevent duplicate admission and stale updates. A full author is marked collected only after all listed poems are handled.
 

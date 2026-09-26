@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
 test("each source line constrains its own word count including empty lines", () => {
   const template = JSON.parse(
     readFileSync(
-      new URL("./rig-publication-output.schema.json", import.meta.url),
+      new URL("rig-publication-output.schema.json", import.meta.url),
     ),
   );
   const schema = generationSchema(template, ["يا قلب", "", "حب"]);

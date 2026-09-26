@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { configureSource } from "../packages/source-collector/dist/source-adapter/index.js";
 import { collectorSession } from "./rig-chrome-session.mjs";
 configureSource({ name: "aldiwan", origin: "https://www.aldiwan.net" });
@@ -42,7 +43,9 @@ function fixture() {
         ? { author }
         : { poem: { sourceHash: "before-fetch" } };
     },
-    (...args) => reports.push(args),
+    (...args) => {
+      reports.push(args);
+    },
   );
   return { session, writes, reports };
 }
