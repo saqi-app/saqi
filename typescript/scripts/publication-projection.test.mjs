@@ -4,6 +4,8 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { test } from "node:test";
 
+import { assertKnownSkippedCandidates } from "./known-publication-skips.mjs";
+
 const script = new URL("publication-projection.mjs", import.meta.url);
 
 test("remote projection resumes by cursor and sends no poem payload", async () => {
@@ -80,10 +82,27 @@ test("verify-empty rejects skipped publication candidates", async () => {
       SAQI_PROJECTION_ENDPOINT: `http://127.0.0.1:${port}/projection`,
     });
     assert.notEqual(result.code, 0);
-    assert.match(result.stderr, /1 candidate skipped/u);
+    assert.match(result.stderr, /Skipped publication candidates changed/u);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("the reviewed skip gate accepts only the exact ID set", () => {
+  const digest =
+    "59a2230df75ce83ab2c2ed288c3eeb8ea770f746790fa930496c7f71fcaca48a";
+  assert.equal(
+    assertKnownSkippedCandidates(["poem-b", "poem-a"], 2, digest),
+    digest,
+  );
+  assert.throws(
+    () => assertKnownSkippedCandidates(["poem-a", "poem-c"], 2, digest),
+    /Skipped publication candidates changed/u,
+  );
+  assert.throws(
+    () => assertKnownSkippedCandidates(["poem-a"], 2, digest),
+    /Skipped publication candidates changed/u,
+  );
 });
 
 test("read-only cursor resumes after a transient Worker failure", async () => {
@@ -121,7 +140,8 @@ test("read-only cursor resumes after a transient Worker failure", async () => {
     assert.match(result.stdout, /"startAfterId":"poem-1"/u);
     const rejected = await runScript(["--apply"], {
       SAQI_PROJECTION_AFTER_ID: "poem-1",
-      SAQI_D1_RESTORE_BOOKMARK: "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
+      SAQI_D1_RESTORE_BOOKMARK:
+        "00002985-00000012-000050f1-cca58d46ad469dbc234dba8ef3ada66e",
     });
     assert.notEqual(rejected.code, 0);
     assert.match(rejected.stderr, /only for read-only/u);
