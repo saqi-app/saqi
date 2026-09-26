@@ -106,7 +106,7 @@ try {
       authorPages += 1;
     }
   }
-  for (let shard = 0; shard < 16; shard += 1) {
+  for (let shard = 1; shard <= 16; shard += 1) {
     if (
       !isDeepStrictEqual(
         await legacy.listSitemapPoems(shard),
