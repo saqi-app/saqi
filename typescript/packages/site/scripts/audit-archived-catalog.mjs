@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
+
 import Database from "better-sqlite3";
 
 import { CatalogRepository } from "../src/lib/catalog.ts";
@@ -13,11 +15,11 @@ if (!path || process.argv.length !== 3)
     "Usage: node --import tsx scripts/audit-archived-catalog.mjs VERIFIED_ARCHIVE_SQLITE",
   );
 const manifest = JSON.parse(
-  readFileSync(join(dirname(path), "manifest.json"), "utf8"),
+  await readFile(join(dirname(path), "manifest.json"), "utf8"),
 );
 if (
   manifest.format !== "saqi.d1-sql-gzip-parts.v1" ||
-  manifest.database_id !== "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
+  manifest["database_id"] !== "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
 )
   throw new Error(
     "Expected a verified production archive replay and its manifest",
@@ -63,22 +65,24 @@ try {
   `,
     )
     .iterate()) {
+    // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
     const before = await legacy.getPoemPage(row.authorSlug, row.id);
+    // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
     const after = await projected.getPoemPage(row.authorSlug, row.id);
     if (!isDeepStrictEqual(before, after)) mismatches.push(row.id);
     if (before) publicPages += 1;
     if (row.hasSnapshot) snapshots += 1;
-    digest.update(JSON.stringify([row.id, before]) + "\n");
+    digest.update(`${JSON.stringify([row.id, before])}\n`);
     checked += 1;
     if (checked % 10000 === 0)
       process.stdout.write(
-        JSON.stringify({
+        `${JSON.stringify({
           checked,
           publicPages,
           snapshots,
           mismatchCount: mismatches.length,
           elapsedSeconds: Math.round((Date.now() - started) / 1000),
-        }) + "\n",
+        })}\n`,
       );
     if (mismatches.length >= 20)
       throw new Error(`Catalog parity mismatch: ${mismatches.join(",")}`);
@@ -98,7 +102,9 @@ try {
   for (const { author } of authors) {
     let pageCount = 1;
     for (let page = 1; page <= pageCount; page += 1) {
+      // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
       const before = await legacy.getAuthorPage(author.slug, page);
+      // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
       const after = await projected.getAuthorPage(author.slug, page);
       pageCount = before?.pageCount ?? 1;
       if (!isDeepStrictEqual(before, after))
@@ -109,14 +115,16 @@ try {
   for (let shard = 1; shard <= 16; shard += 1) {
     if (
       !isDeepStrictEqual(
+        // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
         await legacy.listSitemapPoems(shard),
+        // eslint-disable-next-line no-await-in-loop -- Bound memory and retain deterministic cursor/hash ordering on one SQLite connection.
         await projected.listSitemapPoems(shard),
       )
     )
       mismatches.push(`sitemap/${shard}`);
   }
   process.stdout.write(
-    JSON.stringify({
+    `${JSON.stringify({
       checked,
       publicPages,
       snapshots,
@@ -126,10 +134,10 @@ try {
       sitemapShards: 16,
       mismatchCount: mismatches.length,
       mismatches: mismatches.slice(0, 20),
-      archiveSqlSha256: manifest.sql_sha256,
+      archiveSqlSha256: manifest["sql_sha256"],
       publicOutputSha256: digest.digest("hex"),
       elapsedSeconds: Math.round((Date.now() - started) / 1000),
-    }) + "\n",
+    })}\n`,
   );
   if (mismatches.length) process.exitCode = 1;
 } finally {
