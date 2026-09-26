@@ -17,6 +17,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ INSERT_POEM = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 TOKEN: dict[str, object] = {"value": None, "expires": 0.0}
+TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+MAX_QUERY_ATTEMPTS = 7
 
 
 @dataclass(frozen=True)
@@ -141,8 +144,20 @@ def d1_query(database_id: str, sql: str, params: list[str] | None = None):
         data=json.dumps(body).encode("utf-8"),
         headers={"Authorization": f"Bearer {TOKEN['value']}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=45) as response:
-        result = json.load(response)
+    for attempt in range(MAX_QUERY_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                result = json.load(response)
+            break
+        except urllib.error.HTTPError as error:
+            if error.code not in TRANSIENT_HTTP_STATUSES or attempt == MAX_QUERY_ATTEMPTS - 1:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == MAX_QUERY_ATTEMPTS - 1:
+                raise
+        # The only write through this client sets one publication to a fixed
+        # value. Retrying it after an ambiguous response is idempotent.
+        time.sleep(min(0.5 * 2**attempt, 4.0))
     if not result.get("success") or not all(item.get("success") for item in result.get("result", [])):
         raise RuntimeError("Disposable D1 query failed")
     return result["result"][0].get("results", [])
