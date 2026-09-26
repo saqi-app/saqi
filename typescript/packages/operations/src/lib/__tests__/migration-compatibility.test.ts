@@ -108,10 +108,10 @@ describe("canonical migration compatibility", () => {
     "keeps deployment binding %s on the approved production database",
     (path) => {
       const source = readFileSync(new URL(path, import.meta.url), "utf8");
-      const ids = source
-        .matchAll(/"database_id"\s*:\s*"([^"]+)"/gu)
-        .map((match) => match[1])
-        .toArray();
+      const ids = Array.from(
+        source.matchAll(/"database_id"\s*:\s*"([^"]+)"/gu),
+        (match) => match[1]
+      );
       expect(ids).toEqual([SAQI_PRODUCTION_DATABASE_ID]);
     }
   );
