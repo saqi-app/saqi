@@ -43,6 +43,12 @@ def bookmark() -> str:
     return result
 
 
+def verify_database_identity() -> None:
+    info = json.loads(wrangler("d1", "info", "saqi-db", "--json", capture=True))
+    if info.get("uuid") != DATABASE_ID or info.get("name") != "saqi-db":
+        raise RuntimeError("Wrangler is not pointing at the approved production D1")
+
+
 def counts() -> dict[str, int]:
     query = "SELECT (SELECT COUNT(*) FROM author) AS authors, (SELECT COUNT(*) FROM poem) AS poems, (SELECT COUNT(*) FROM poem WHERE publication_json IS NOT NULL) AS snapshots, (SELECT COUNT(*) FROM pragma_foreign_key_check) AS fk_errors"
     value = json.loads(wrangler("d1", "execute", "saqi-db", "--remote", "--command", query, "--json", capture=True))
@@ -88,6 +94,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="saqi-d1-archive-") as temporary:
         directory = pathlib.Path(temporary)
         sql = directory / "corpus.sql"
+        verify_database_identity()
         before_bookmark = bookmark()
         before_counts = counts()
         if before_counts["fk_errors"]:
