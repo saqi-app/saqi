@@ -17,6 +17,7 @@ const SourceIdSchema = z
   .regex(/^[\p{L}\p{N}_.~-]+(?: [\p{L}\p{N}_.~-]+)*$/u);
 const PoemIdSchema = z.string().regex(/^[1-9]\d{0,127}$/u);
 const SourceUrlSchema = z.url({ protocol: /^https$/u }).max(4_096);
+const RetryAfterSchema = z.number().int().nonnegative();
 const HashSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 
 export const DirectAuthorSchema = z.strictObject({
@@ -58,10 +59,12 @@ const AuthorBySourceSql = `SELECT id FROM author WHERE source_name = ?1 AND sour
 interface DirectSourceReadPort {
   currentPoem(sourcePoemId: string): Promise<unknown>;
   nextAuthor(): Promise<unknown>;
+  sourceRetryAfter(): Promise<number>;
 }
 
 interface DirectSourceWritePort {
   completeAuthor(sourceAuthorId: string): Promise<void>;
+  deferSource(sourceAuthorId: string, retryAfter: number): Promise<void>;
   upsertAuthor(raw: DirectAuthorInput): Promise<AuthorUpsertResult>;
   upsertPoem(raw: DirectPoemInput): Promise<PoemUpsertResult>;
 }
@@ -96,6 +99,32 @@ export class DirectSourceRepository
     this.#database = database;
     this.#sourceName = sourceName;
     this.#sourceOrigin = sourceOrigin;
+  }
+
+  async sourceRetryAfter(): Promise<number> {
+    const row = await this.#database
+      .prepare(
+        `SELECT coalesce(max(source_retry_after), 0) AS retryAfter
+                FROM author WHERE source_name = ?1`
+      )
+      .bind(this.#sourceName)
+      .first<{ retryAfter: number }>();
+    return row?.retryAfter ?? 0;
+  }
+
+  async deferSource(sourceAuthorId: string, retryAfter: number): Promise<void> {
+    SourceIdSchema.parse(sourceAuthorId);
+    RetryAfterSchema.parse(retryAfter);
+    const result = await this.#database
+      .prepare(
+        `UPDATE author
+                SET source_retry_after = max(coalesce(source_retry_after, 0), ?1)
+                WHERE source_name = ?2 AND source_author_id = ?3`
+      )
+      .bind(retryAfter, this.#sourceName, sourceAuthorId)
+      .run();
+    if (result.meta.changes !== 1)
+      throw new DirectSourceConflictError("SOURCE_AUTHOR_MISSING");
   }
 
   async nextAuthor(): Promise<unknown> {
