@@ -1,8 +1,8 @@
 # Final two-table schema
 
-Production migrations through 0075 are applied. D1 now has only `author` and `poem` application tables and reports 440,123,392 bytes. All 1,392 authors and 104,960 poems passed canonical parity; the full output comparison preserved every currently visible translation and poem insight.
+Production migrations through 0079 are applied: `author` has 11 columns and `poem` has 24. All retained values match across 1,392 authors, 104,961 poems and 77,742 publication snapshots. D1 reports 440,877,056 bytes; dropped columns do not imply immediate page-file compaction. The rig uses no local SQLite. See [final-column-audit.md](final-column-audit.md) for the column decisions and live translation/word-gloss proof.
 
-These are the concrete columns and indexes installed by migrations through 0075, rather than a separate schema to execute. The six poem validation/sort triggers are defined in migration 0073; author triggers remain in the migration history. Current release evidence and rollback steps are in [schema-reduction.md](schema-reduction.md). D1's own migration ledger is platform metadata. The local runner has no SQLite schema; only an exact in-flight Codex result file may exist until acknowledgement.
+These are the concrete columns and indexes installed by migrations through 0079, rather than a separate schema to execute. The six poem validation/sort triggers are defined in migrations 0073 and 0076; author triggers remain in the migration history. Current release evidence and rollback steps are in [schema-reduction.md](schema-reduction.md). D1's own migration ledger is platform metadata. The local runner has no SQLite schema; only an exact in-flight Codex result file may exist until acknowledgement.
 
 ```sql
 CREATE TABLE author (
@@ -25,15 +25,12 @@ CREATE TABLE poem (
   name_english TEXT CHECK (length(name_english) <= 10000),
   content_arabic TEXT NOT NULL,
   poem_title_first_line TEXT,
-  hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
   publishable INTEGER NOT NULL DEFAULT 0 CHECK (publishable IN (0, 1)),
   sort_name_arabic TEXT NOT NULL DEFAULT '',
   sitemap_shard INTEGER NOT NULL DEFAULT 0 CHECK (sitemap_shard BETWEEN 0 AND 15),
   source_name TEXT,
   source_poem_id TEXT,
-  source_url TEXT,
   source_hash TEXT,
-  collected_at INTEGER,
   publication_json TEXT CHECK (publication_json IS NULL OR json_valid(publication_json)),
   publication_source_hash TEXT,
   publication_hash TEXT,
@@ -43,19 +40,18 @@ CREATE TABLE poem (
   rig_lease_token TEXT,
   rig_lease_expires_at INTEGER,
   rig_checkpoint_json TEXT CHECK (rig_checkpoint_json IS NULL OR (json_valid(rig_checkpoint_json) AND length(CAST(rig_checkpoint_json AS BLOB)) <= 1048576)),
-  rig_last_error TEXT,
   rig_updated_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_poem_author_id ON poem(author_id);
 CREATE INDEX IF NOT EXISTS idx_poem_public_author_title
   ON poem(author_id, sort_name_arabic, id)
-  WHERE hidden = 0 AND publishable = 1;
+  WHERE publishable = 1;
 CREATE INDEX IF NOT EXISTS idx_poem_public_sitemap
 ON poem(sitemap_shard, id, author_id)
-WHERE hidden = 0 AND publishable = 1;
+WHERE publishable = 1;
 CREATE INDEX IF NOT EXISTS poem_needs_enrichment
   ON poem(id)
-  WHERE hidden = 0 AND publishable = 1
+  WHERE publishable = 1
     AND (publication_json IS NULL
       OR publication_source_hash IS NULL
       OR publication_source_hash <> source_hash);

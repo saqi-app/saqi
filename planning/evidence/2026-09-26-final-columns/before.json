@@ -1,0 +1,68 @@
+{
+  "author": {
+    "columns": [
+      "id",
+      "slug",
+      "name_arabic",
+      "name",
+      "hidden",
+      "sort_name_arabic",
+      "source_name",
+      "source_author_id",
+      "source_url",
+      "collected_at",
+      "source_retry_after"
+    ],
+    "rows": 1392,
+    "sha256": "84915174bf6aa41b166e79fdde0c4f7e4a535ee6e7030e1b23d2e1dbb43eb571"
+  },
+  "poem": {
+    "columns": [
+      "id",
+      "author_id",
+      "slug",
+      "verses",
+      "name_arabic",
+      "name_english",
+      "content_arabic",
+      "poem_title_first_line",
+      "publishable",
+      "sort_name_arabic",
+      "sitemap_shard",
+      "source_name",
+      "source_poem_id",
+      "source_hash",
+      "publication_json",
+      "publication_source_hash",
+      "publication_hash",
+      "publication_cache_dirty",
+      "rig_status",
+      "rig_version",
+      "rig_lease_token",
+      "rig_lease_expires_at",
+      "rig_checkpoint_json",
+      "rig_updated_at"
+    ],
+    "rows": 104961,
+    "sha256": "2ef2cef0b461710d1b1279e09648c9b784248b4e6ac955c338fb5abcfd22522d"
+  },
+  "visibility": [
+    {
+      "publishable": 0,
+      "count": 66
+    },
+    {
+      "publishable": 1,
+      "count": 104895
+    }
+  ],
+  "counts": [
+    {
+      "authors": 1392,
+      "poems": 104961,
+      "publications": 77742,
+      "fk_errors": 0
+    }
+  ],
+  "integrity": "ok"
+}

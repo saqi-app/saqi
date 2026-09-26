@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 OPERATIONS = pathlib.Path(__file__).resolve().parents[1] / "packages/operations"
 BUCKET = "saqi-corpus-archive"
-PART_BYTES = 200_000_000
+PART_BYTES = 25_000_000
 DATABASE_ID = "ffaae610-4dae-4d7e-bf86-8232f46ca2b5"
 
 
