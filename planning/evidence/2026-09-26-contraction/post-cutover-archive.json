@@ -1,0 +1,20 @@
+{
+  "format": "saqi.d1-sql-gzip-parts.v1",
+  "database_id": "ffaae610-4dae-4d7e-bf86-8232f46ca2b5",
+  "bookmark": "0000298d-00000311-000050f2-ab2bbad720b18a8fb084cc1c9c9da1b1",
+  "counts": {
+    "authors": 1392,
+    "poems": 104961,
+    "snapshots": 77741,
+    "fk_errors": 0
+  },
+  "sql_bytes": 404634046,
+  "sql_sha256": "0dda45d8d0db9239388a0f3da9927beb968b34942a06bd0b922824576f42e15f",
+  "parts": [
+    {
+      "key": "saqi-corpus-archive/d1/2026-09-26T21-04-42Z-4849865c46ef4e28ba601583564e3664/corpus.sql.gz.part-0001",
+      "bytes": 125379866,
+      "sha256": "96542fb01f71f13b9df147f9a63a843d71d5a751d5c848e407949a7025ca6cf3"
+    }
+  ]
+}
