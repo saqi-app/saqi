@@ -243,7 +243,7 @@ test("an unmapped poem slug blocks duplicate canonical creation", async () => {
   });
 });
 
-test("unmapped Arabic matches block duplicate poems even with unrelated slugs", async () => {
+test("unmapped poems block ambiguous admission after both title and text change", async () => {
   const { author, poem, repository, sqlite } = fixture();
   const createdAuthor = await repository.upsertAuthor(author);
   sqlite
@@ -268,8 +268,38 @@ test("unmapped Arabic matches block duplicate poems even with unrelated slugs", 
   await expect(repository.upsertPoem(poem)).rejects.toMatchObject({
     message: "UNMAPPED_POEM_COLLISION",
   });
+  sqlite
+    .prepare("UPDATE poem SET name_arabic = ?, content_arabic = ?")
+    .run("عنوان مختلف", '{"content":["نص مختلف"]}');
+  await expect(repository.upsertPoem(poem)).rejects.toMatchObject({
+    message: "UNMAPPED_POEM_COLLISION",
+  });
   expect(sqlite.prepare("SELECT count(*) AS total FROM poem").get()).toEqual({
     total: 1,
+  });
+});
+
+test("mapped Arabic updates remain available beside unresolved legacy poems", async () => {
+  const { author, poem, repository, sqlite } = fixture();
+  await repository.upsertAuthor(author);
+  const created = await repository.upsertPoem(poem);
+  sqlite
+    .prepare(
+      `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,sitemap_shard)
+    SELECT 'legacy',author_id,'legacy',1,'قديم','{"content":["قديم"]}',1
+    FROM poem WHERE id = ?`
+    )
+    .run(created.id);
+  await expect(
+    repository.upsertPoem({
+      ...poem,
+      titleArabic: "عنوان معدل",
+      linesArabic: ["نص معدل"],
+      expectedHash: created.sourceHash,
+    })
+  ).resolves.toMatchObject({ id: created.id, status: "updated" });
+  expect(sqlite.prepare("SELECT count(*) AS total FROM poem").get()).toEqual({
+    total: 2,
   });
 });
 
