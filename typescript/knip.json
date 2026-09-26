@@ -22,7 +22,12 @@
         ]
       }
     },
-    "packages/crawler-local": {
+    "packages/source-collector": {
+      "entry": [
+        "src/collection/collection-source-browser.ts",
+        "src/source-adapter/index.ts",
+        "src/**/__tests__/**/*.test.ts"
+      ],
       "project": [
         "src/**/*.ts"
       ]
@@ -54,10 +59,6 @@
     "react-doctor",
     "tailwindcss",
     "typescript-eslint"
-  ],
-  "ignoreBinaries": [
-    "mkfifo",
-    "plutil"
   ],
   "ignore": [
     "eslint.strict.mjs"

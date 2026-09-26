@@ -11,9 +11,10 @@ export default [
   ...createConfig({
     projectService: {
       allowDefaultProject: [
-        "packages/crawler-local/vitest.config.ts",
-        "packages/crawler-local/src/source-adapter/__tests__/author-inventory.test.ts",
-        "packages/crawler-local/src/source-adapter/__tests__/source-adapter.test.ts",
+        "packages/source-collector/vitest.config.ts",
+        "packages/source-collector/src/__tests__/collection-source-browser-cdp.test.ts",
+        "packages/source-collector/src/source-adapter/__tests__/author-inventory.test.ts",
+        "packages/source-collector/src/source-adapter/__tests__/source-adapter.test.ts",
         "packages/precedent-node/src/services/__tests__/author-store.test.ts",
         "packages/precedent-node/src/services/__tests__/corpus-import-coordinator.test.ts",
         "packages/precedent-node/src/services/__tests__/corpus-revision-store.test.ts",
@@ -24,7 +25,7 @@ export default [
         "packages/precedent-node/src/services/__tests__/task-integrity.test.ts",
         "packages/precedent-node/vitest.config.ts",
       ],
-      maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 12,
+      maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 13,
     },
   }),
   {
