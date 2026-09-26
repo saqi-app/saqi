@@ -38,7 +38,6 @@ jobs:
         working-directory: .
         run: |
           node typescript/scripts/configure-ops-secrets.test.mjs
-          node --test typescript/scripts/rig-lite.test.mjs typescript/scripts/rig-collect.test.mjs
           python3 typescript/scripts/rehearse-production-d1-restore.test.py
           python3 typescript/scripts/rehearse-production-d1-import.test.py
           python3 typescript/scripts/prepare-corpus-contraction.test.py
@@ -90,6 +89,9 @@ jobs:
       - name: Build libraries
         if: steps.changes.outputs.crawler_only != 'true'
         run: yarn build:api
+
+      - name: Test local rig commands
+        run: node --test scripts/rig-lite.test.mjs scripts/rig-collect.test.mjs
 
       - name: Format and type-check local runtime
         if: steps.changes.outputs.crawler_only == 'true'

@@ -2,18 +2,26 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["translation", "insights"],
+  "required": [
+    "translation",
+    "insights",
+    "wordMeanings"
+  ],
   "properties": {
     "translation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lines"],
+      "required": [
+        "lines"
+      ],
       "properties": {
         "lines": {
           "type": "array",
           "minItems": 1,
           "maxItems": 2000,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -29,31 +37,59 @@
         "notableLines"
       ],
       "properties": {
-        "summary": { "type": "string" },
+        "summary": {
+          "type": "string"
+        },
         "themes": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "historicalContext": { "type": "string" },
+        "historicalContext": {
+          "type": "string"
+        },
         "literaryDevices": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "culturalSignificance": { "type": "string" },
+        "culturalSignificance": {
+          "type": "string"
+        },
         "notableLines": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["line", "explanation"],
+            "required": [
+              "line",
+              "explanation"
+            ],
             "properties": {
-              "line": { "type": "string" },
-              "explanation": { "type": "string" }
+              "line": {
+                "type": "string"
+              },
+              "explanation": {
+                "type": "string"
+              }
             }
           }
+        }
+      }
+    },
+    "wordMeanings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
         }
       }
     }
