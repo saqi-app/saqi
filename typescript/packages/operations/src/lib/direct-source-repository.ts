@@ -61,6 +61,7 @@ interface DirectSourceReadPort {
 }
 
 interface DirectSourceWritePort {
+  completeAuthor(sourceAuthorId: string): Promise<void>;
   upsertAuthor(raw: DirectAuthorInput): Promise<AuthorUpsertResult>;
   upsertPoem(raw: DirectPoemInput): Promise<PoemUpsertResult>;
 }
@@ -132,8 +133,7 @@ export class DirectSourceRepository
       const id = AuthorRowSchema.parse(existing).id;
       const result = await this.#database
         .prepare(
-          `UPDATE author SET name_arabic = ?1, source_url = ?2,
-                collected_at = unixepoch()
+          `UPDATE author SET name_arabic = ?1, source_url = ?2
          WHERE id = ?3 AND source_name = ?4 AND source_author_id = ?5`
         )
         .bind(
@@ -175,7 +175,7 @@ export class DirectSourceRepository
         `INSERT OR IGNORE INTO author
        (id, slug, name_arabic, status, source_name, source_author_id,
         source_url, collected_at)
-       VALUES (?1, ?2, ?3, 'init', ?4, ?5, ?6, unixepoch())`
+       VALUES (?1, ?2, ?3, 'init', ?4, ?5, ?6, NULL)`
       )
       .bind(
         id,
@@ -193,6 +193,19 @@ export class DirectSourceRepository
     if (!created)
       throw new DirectSourceConflictError("AUTHOR_IDENTITY_COLLISION");
     return { id: AuthorRowSchema.parse(created).id, status: "created" };
+  }
+
+  async completeAuthor(sourceAuthorId: string): Promise<void> {
+    SourceIdSchema.parse(sourceAuthorId);
+    const result = await this.#database
+      .prepare(
+        `UPDATE author SET collected_at = unixepoch()
+         WHERE source_name = ?1 AND source_author_id = ?2`
+      )
+      .bind(this.#sourceName, sourceAuthorId)
+      .run();
+    if (result.meta.changes !== 1)
+      throw new DirectSourceConflictError("AUTHOR_NOT_FOUND");
   }
 
   async upsertPoem(raw: DirectPoemInput): Promise<PoemUpsertResult> {

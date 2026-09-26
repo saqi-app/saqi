@@ -23,6 +23,10 @@ const RequestSchema = z.discriminatedUnion("action", [
     author: DirectAuthorSchema,
   }),
   z.strictObject({ action: z.literal("upsert-poem"), poem: DirectPoemSchema }),
+  z.strictObject({
+    action: z.literal("complete-author"),
+    sourceAuthorId: DirectAuthorSchema.shape.sourceAuthorId,
+  }),
 ]);
 
 function failure(status: number, code: string): Response {
@@ -95,6 +99,10 @@ export async function POST(request: Request): Promise<Response> {
     env.SAQI_SOURCE_BASE_URL
   );
   try {
+    if (input.action === "complete-author") {
+      await repository.completeAuthor(input.sourceAuthorId);
+      return Response.json({ ok: true }, { headers: NO_STORE_HEADERS });
+    }
     const result =
       input.action === "upsert-author"
         ? await repository.upsertAuthor(input.author)
