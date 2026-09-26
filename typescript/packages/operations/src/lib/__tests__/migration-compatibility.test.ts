@@ -103,7 +103,7 @@ function canonicalPoem(database: Database.Database) {
       `SELECT id,author_id,slug,verses,name_arabic,content_arabic,
     source_name,source_poem_id,source_hash,publication_json,publication_hash,
     publication_source_hash,rig_status,rig_version,rig_checkpoint_json,
-    hidden,publishable,sitemap_shard FROM poem WHERE id=?`
+    publishable,sitemap_shard FROM poem WHERE id=?`
     )
     .get(POEM_ID);
 }
@@ -125,10 +125,32 @@ describe("canonical migration compatibility", () => {
     }
   );
 
+  it("refuses to remove a used poem visibility flag", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0076_")
+    );
+    insertPoem(database);
+    database.prepare("UPDATE poem SET hidden=1 WHERE id=?").run(POEM_ID);
+    expect(() => applyPending(database)).toThrow();
+    expect(
+      database
+        .prepare("SELECT hidden FROM poem WHERE id=?")
+        .pluck()
+        .get(POEM_ID)
+    ).toBe(1);
+    expect(
+      database
+        .prepare("SELECT 1 FROM d1_migrations WHERE name LIKE '0076_%'")
+        .get()
+    ).toBeUndefined();
+  });
+
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0075_drop_obsolete_corpus_tables.sql"
+      "0079_drop_unused_poem_rig_last_error.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     const before = database
@@ -174,7 +196,7 @@ describe("canonical migration compatibility", () => {
         .prepare("SELECT name FROM pragma_table_info('poem')")
         .pluck()
         .all();
-      expect(columns).toHaveLength(28);
+      expect(columns).toHaveLength(24);
       expect(columns).not.toContain("translation");
       expect(columns).not.toContain("active_source_revision_id");
     }
@@ -216,6 +238,10 @@ describe("canonical migration compatibility", () => {
       "0073_install_verified_slim_poem.sql",
       "0074_detach_source_revision.sql",
       "0075_drop_obsolete_corpus_tables.sql",
+      "0076_drop_unused_poem_hidden.sql",
+      "0077_drop_unused_poem_source_url.sql",
+      "0078_drop_unused_poem_collected_at.sql",
+      "0079_drop_unused_poem_rig_last_error.sql",
     ]);
   });
 

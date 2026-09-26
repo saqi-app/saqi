@@ -38,7 +38,11 @@
     "0072_prepare_slim_poem.sql",
     "0073_install_verified_slim_poem.sql",
     "0074_detach_source_revision.sql",
-    "0075_drop_obsolete_corpus_tables.sql"
+    "0075_drop_obsolete_corpus_tables.sql",
+    "0076_drop_unused_poem_hidden.sql",
+    "0077_drop_unused_poem_source_url.sql",
+    "0078_drop_unused_poem_collected_at.sql",
+    "0079_drop_unused_poem_rig_last_error.sql"
   ],
   "databases": [
     {
@@ -169,12 +173,6 @@
               "primaryKey": false
             },
             {
-              "name": "hidden",
-              "type": "INTEGER",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
               "name": "publishable",
               "type": "INTEGER",
               "nullable": false,
@@ -205,20 +203,8 @@
               "primaryKey": false
             },
             {
-              "name": "source_url",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
               "name": "source_hash",
               "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "collected_at",
-              "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
             },
@@ -272,12 +258,6 @@
             },
             {
               "name": "rig_checkpoint_json",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "rig_last_error",
               "type": "TEXT",
               "nullable": true,
               "primaryKey": false
