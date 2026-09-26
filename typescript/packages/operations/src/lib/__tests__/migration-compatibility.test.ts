@@ -119,7 +119,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0072_drop_duplicate_poem_payloads.sql"
+      "0073_drop_duplicate_poem_payloads.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     const before = database
@@ -182,7 +182,7 @@ describe("canonical migration compatibility", () => {
     expect(
       database
         .prepare(
-          "SELECT 1 FROM d1_migrations WHERE name='0071_drop_noncore_corpus_tables.sql'"
+          "SELECT 1 FROM d1_migrations WHERE name='0071_detach_obsolete_corpus_graph.sql'"
         )
         .get()
     ).toBeUndefined();
@@ -194,8 +194,9 @@ describe("canonical migration compatibility", () => {
     ).toBe("unknown");
     database.exec("DROP VIEW external_legacy_reader");
     expect(applyPending(database)).toEqual([
-      "0071_drop_noncore_corpus_tables.sql",
-      "0072_drop_duplicate_poem_payloads.sql",
+      "0071_detach_obsolete_corpus_graph.sql",
+      "0072_drop_obsolete_corpus_tables.sql",
+      "0073_drop_duplicate_poem_payloads.sql",
     ]);
   });
 
