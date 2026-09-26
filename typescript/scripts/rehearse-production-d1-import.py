@@ -101,11 +101,11 @@ def wrangler(*args: str) -> str:
 def import_batch(name: str, path: pathlib.Path) -> None:
     if re.fullmatch(r"saqi-restore-rehearsal-[0-9a-f]{12}", name) is None:
         raise RuntimeError("Refusing to import into a non-disposable database")
-    # Only generated data batches are repeatable. Triggers are installed last,
+    # Generated creates and data batches are repeatable. Triggers are installed last,
     # after every data batch finishes. Conflict handling preserves the first
     # inserted row; the final exhaustive comparison rejects any wrong value.
     prefix = path.read_bytes()[:32]
-    repeatable = prefix.startswith((b'INSERT INTO ', b'UPDATE '))
+    repeatable = prefix.startswith((b'INSERT INTO ', b'UPDATE ', b'CREATE '))
     for attempt in range(4):
         try:
             wrangler("d1", "execute", name, "--remote", "--file", str(path), "--yes")
@@ -117,7 +117,7 @@ def import_batch(name: str, path: pathlib.Path) -> None:
             ))
             if not repeatable or not transient or attempt == 3:
                 raise
-            print(json.dumps({"retrying_disposable_data_batch": path.name, "attempt": attempt + 2}), flush=True)
+            print(json.dumps({"retrying_disposable_batch": path.name, "attempt": attempt + 2}), flush=True)
             time.sleep(min(2 ** attempt, 4))
 
 
@@ -182,6 +182,16 @@ def restore_cycle_updates(database: sqlite3.Connection, tables: list[str]):
                 yield f'UPDATE "{table}" SET "{column}"={sql_literal(row[column])} WHERE id={sql_literal(row["id"])}'
 
 
+def repeatable_schema(sql: str) -> str:
+    result, count = re.subn(
+        r"^(CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER))\s+",
+        r"\1 IF NOT EXISTS ", sql, count=1, flags=re.IGNORECASE,
+    )
+    if count != 1 or "IF NOT EXISTS IF NOT EXISTS" in result.upper():
+        raise RuntimeError("Unexpected archived schema statement")
+    return result
+
+
 def portable_import_plan(
     restored: pathlib.Path, directory: pathlib.Path
 ) -> list[pathlib.Path | BoundInsert]:
@@ -222,7 +232,7 @@ def portable_import_plan(
                 raise RuntimeError("Unexpected archive table identifier")
             ordered = restore_table_order(database, tables)
             for table in ordered:
-                append(database.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()[0])
+                append(repeatable_schema(database.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()[0]))
             flush()
             for table in ordered:
                 for statement in table_inserts(database, table):
@@ -237,7 +247,7 @@ def portable_import_plan(
                 append(statement)
             flush()
             for row in database.execute("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name"):
-                append(row[0])
+                append(repeatable_schema(row[0]))
     finally:
         flush()
     return steps
@@ -341,13 +351,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest-key", required=True)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--database-name", help="Optional disposable name for CI cleanup")
     args = parser.parse_args()
     key = args.manifest_key
     if not args.execute:
         parser.error("Pass --execute to create and remove a disposable D1")
     if not key.startswith(f"{RESTORE.BUCKET}/d1/") or not key.endswith("/manifest.json"):
         parser.error("Expected a private saqi-corpus-archive/d1/.../manifest.json key")
-    name = f"saqi-restore-rehearsal-{uuid.uuid4().hex[:12]}"
+    name = args.database_name or f"saqi-restore-rehearsal-{uuid.uuid4().hex[:12]}"
+    if re.fullmatch(r"saqi-restore-rehearsal-[0-9a-f]{12}", name) is None:
+        parser.error("Expected a disposable restore database name")
     created = False
     try:
         with tempfile.TemporaryDirectory(prefix="saqi-d1-import-rehearsal-") as temporary:
