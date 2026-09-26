@@ -109,13 +109,9 @@ void test("canonical publication preserves visible alternatives and attribution"
     assert.equal(changedSource?.poem.publicationOutdated, true);
     assert.deepEqual(changedSource.poem.linesEnglish, ["Legacy English"]);
     assert.equal(await reader.getPoemPage("wrong-poet", "p"), undefined);
-    sqlite.exec("UPDATE poem SET hidden=1 WHERE id='p'");
+    sqlite.exec("UPDATE author SET hidden=1 WHERE id='a'");
     assert.equal(await reader.getPoemPage("poet", "p"), undefined);
     assert.deepEqual(await reader.listAuthors(), []);
-    sqlite.exec(
-      "UPDATE poem SET hidden=0 WHERE id='p'; UPDATE author SET hidden=1 WHERE id='a'",
-    );
-    assert.equal(await reader.getPoemPage("poet", "p"), undefined);
   } finally {
     sqlite.close();
   }
@@ -152,8 +148,8 @@ void test("word-gloss publications keep the author-page insights badge", async (
     sqlite.exec(`
       INSERT INTO author(id, slug, name_arabic, hidden)
       VALUES ('a-gloss', 'gloss-poet', 'شاعر', 0);
-      INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic, hidden)
-      VALUES ('p-gloss', 'a-gloss', 'gloss', 1, 'قصيدة', '{"content":["بيت"]}', 0);
+      INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic)
+      VALUES ('p-gloss', 'a-gloss', 'gloss', 1, 'قصيدة', '{"content":["بيت"]}');
     `);
     const publication = publicationSnapshotFromPoem({
       id: "p-gloss",
@@ -380,13 +376,13 @@ void test("publishability triggers update indexed live counts", () => {
     database.exec(`
       INSERT INTO author (id, slug, name_arabic, hidden)
       VALUES ('a-trigger', 'trigger', 'اختبار', 0);
-      INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic, hidden)
-      VALUES ('p-trigger', 'a-trigger', 'trigger-poem', 1, 'اختبار', '{"content":[]}', 0);
+      INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
+      VALUES ('p-trigger', 'a-trigger', 'trigger-poem', 1, 'اختبار', '{"content":[]}');
     `);
     const count = () =>
       database
         .prepare(
-          "SELECT count(*) AS count FROM poem WHERE author_id = 'a-trigger' AND hidden = 0 AND publishable = 1",
+          "SELECT count(*) AS count FROM poem WHERE author_id = 'a-trigger' AND publishable = 1",
         )
         .get() as { count: number };
     assert.equal(count().count, 0);
@@ -401,10 +397,6 @@ void test("publishability triggers update indexed live counts", () => {
     database
       .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-trigger'")
       .run(JSON.stringify({ content: ["بيت"] }));
-    assert.equal(count().count, 1);
-    database.prepare("UPDATE poem SET hidden = 1 WHERE id = 'p-trigger'").run();
-    assert.equal(count().count, 0);
-    database.prepare("UPDATE poem SET hidden = 0 WHERE id = 'p-trigger'").run();
     assert.equal(count().count, 1);
     database.prepare("DELETE FROM poem WHERE id = 'p-trigger'").run();
     assert.equal(count().count, 0);
