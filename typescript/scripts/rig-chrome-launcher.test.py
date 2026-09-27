@@ -1,4 +1,4 @@
-"""Exercise the real exec/fcntl boundary without Chrome, credentials, or D1."""
+# Exercise the real exec/fcntl boundary without Chrome, credentials, or D1.
 import json
 import os
 from pathlib import Path

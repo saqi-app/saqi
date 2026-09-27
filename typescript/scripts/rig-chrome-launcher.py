@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chrome's one-host-per-user guard. The kernel releases it on process exit."""
+# The kernel releases this per-user native-host lock on process exit.
 import fcntl
 import json
 import os
