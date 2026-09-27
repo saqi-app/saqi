@@ -110,20 +110,19 @@ test("a durable Codex result is acknowledged and published after restart without
   }
 });
 
-test("an unknown Codex outcome without a result blocks instead of replaying", async () => {
+test("an unknown Codex outcome without a result leaves that poem unresolved and checks other work", async () => {
   const attemptId = randomUUID();
   const run = await exerciseUnknown(attemptId);
-  assert.notEqual(run.code, 0);
-  assert.match(run.stderr, /no durable result/u);
-  assert.deepEqual(run.actions, ["purge-cache"]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stdout, /remains unresolved/u);
+  assert.deepEqual(run.actions, ["purge-cache", "claim-poem"]);
   assert.equal(run.codexCalled, false);
 });
 
-test("the Keychain-backed entrypoint preserves unknown-outcome blocking", async () => {
+test("the Keychain-backed entrypoint leaves the unknown poem untouched", async () => {
   const run = await exerciseUnknown(randomUUID(), localScript, ["translate"]);
-  assert.notEqual(run.code, 0);
-  assert.match(run.stderr, /no durable result/u);
-  assert.deepEqual(run.actions, ["purge-cache"]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.deepEqual(run.actions, ["purge-cache", "claim-poem"]);
   assert.equal(run.codexCalled, false);
 });
 

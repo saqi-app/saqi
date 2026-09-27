@@ -59,7 +59,7 @@ The native menu-bar app starts at login and shows translation/collection status,
 
 ## Crash recovery
 
-The invocation marker in D1 prevents unknown Codex outcomes from being silently replayed. Restarting recovers a completed local result or publishes an already acknowledged D1 result. If neither exists, inspect the attempt before explicitly allowing a duplicate call:
+The invocation marker in D1 prevents unknown Codex outcomes from being silently replayed. Restarting recovers a completed local result or publishes an already acknowledged D1 result. An unresolved poem stays marked `unknown` with its attempt ID while other poems continue. Inspect that attempt before explicitly allowing a duplicate call:
 
 ```sh
 node typescript/scripts/rig-local.mjs translate retry-unknown POEM_ID ATTEMPT_ID
