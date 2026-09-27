@@ -34,7 +34,13 @@ def main():
         target = f"{DOMAIN}/{label}"
         plist = AGENTS / f"{label}.plist"
         if action == "status":
-            subprocess.run(["launchctl", "print", target], check=False)
+            result = subprocess.run(
+                ["launchctl", "print", target], capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                print(result.stdout, end="")
+            else:
+                print(f"{label} is stopped")
             continue
         if action == "stop":
             # launchd terminates the process group. Unknown Codex outcomes stay
@@ -58,7 +64,6 @@ def main():
             "EnvironmentVariables": {
                 "PATH": f"{pathlib.Path(node).parent}:{pathlib.Path(codex).parent}:/usr/bin:/bin:/usr/sbin:/sbin",
                 "SAQI_RIG_ACTIVE": "1",
-                "SAQI_BROWSER_PROFILE": str(STATE / "source-browser"),
             },
         }
         plist.write_bytes(plistlib.dumps(value))
