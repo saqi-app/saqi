@@ -2,18 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "translation",
-    "insights",
-    "wordMeanings"
-  ],
+  "required": ["translation", "insights", "wordMeanings"],
   "properties": {
     "translation": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "lines"
-      ],
+      "required": ["lines"],
       "properties": {
         "lines": {
           "type": "array",
@@ -66,10 +60,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "line",
-              "explanation"
-            ],
+            "required": ["line", "explanation"],
             "properties": {
               "line": {
                 "type": "string"
@@ -89,7 +80,10 @@
       "items": {
         "type": "array",
         "items": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
         }
       }
     }

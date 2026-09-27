@@ -13,7 +13,7 @@ export function generationSchema(template, lines) {
         `line_${i + 1}`,
         {
           type: "array",
-          items: { type: "string" },
+          items: { ...template.properties.wordMeanings.items.items },
           minItems: arabicWords(line).length,
           maxItems: arabicWords(line).length,
         },
