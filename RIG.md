@@ -23,8 +23,8 @@ The personal Chrome extension uses one dedicated source tab, one native bridge a
 After the build commands above, run from the repository root:
 
 ```sh
-python3 typescript/chrome/saqi-collector/install.py install
-python3 typescript/chrome/saqi-collector/install.py doctor
+python3 typescript/scripts/rig-chrome-install.py install
+python3 typescript/scripts/rig-chrome-install.py doctor
 ```
 
 Installation verifies Node 24+, the built parser, native protocol, Keychain credentials and read-only Operations access before replacing the registration. It preserves translation and existing collection status. If the checkout moves or the Node runtime changes, rerun installation. After updating extension source, reload it in Chrome.
@@ -42,7 +42,7 @@ Identity conflicts are never auto-merged. They count as checked but **need revie
 To remove only the bridge:
 
 ```sh
-python3 typescript/chrome/saqi-collector/install.py uninstall
+python3 typescript/scripts/rig-chrome-install.py uninstall
 ```
 
 Then remove the extension manually in Chrome. This preserves Keychain credentials, translation startup, unfinished translation results and corpus data. The old separate-profile collection CLI remains a temporary fallback until the new extension passes a live complete-author, new-author/new-poem and interrupted-run rehearsal; it is not running in the background.
