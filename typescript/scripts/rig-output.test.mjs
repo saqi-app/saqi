@@ -30,6 +30,15 @@ test("each source line constrains its own word count including empty lines", () 
     ],
   );
   assert.equal(template.properties.wordMeanings.type, "array");
+  for (const line of Object.values(schema.properties.wordMeanings.properties)) {
+    // The wire schema must reject blank meanings before a Codex invocation
+    // produces a result that the publication validator cannot accept.
+    assert.equal(line.items.minLength, 1);
+    assert.equal(line.items.maxLength, 2000);
+    const nonblank = new RegExp(line.items.pattern, "u");
+    assert.equal(nonblank.test(" \n\t"), false);
+    assert.equal(nonblank.test("heart"), true);
+  }
 });
 test("recovery normalizes keyed output in source order and rejects missing lines", () => {
   assert.deepEqual(
