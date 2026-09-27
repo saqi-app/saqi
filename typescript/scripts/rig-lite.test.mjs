@@ -126,6 +126,65 @@ test("the Keychain-backed entrypoint leaves the unknown poem untouched", async (
   assert.equal(run.codexCalled, false);
 });
 
+test("manual retry reads the exact unknown poem when another unknown is older", async () => {
+  const attemptId = randomUUID();
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (request.method === "GET") {
+      const poemId = new URL(request.url, "http://localhost").searchParams.get(
+        "poemId",
+      );
+      requests.push({ method: "GET", poemId });
+      response.end(
+        JSON.stringify({
+          ok: true,
+          state:
+            poemId === "target-poem"
+              ? {
+                  poemId,
+                  status: "unknown",
+                  version: 4,
+                  checkpointJson: JSON.stringify({ invocation: { attemptId } }),
+                }
+              : { poemId: "older-poem", status: "unknown", version: 2 },
+        }),
+      );
+      return;
+    }
+    const body = JSON.parse(
+      Buffer.concat(await Array.fromAsync(request)).toString("utf8"),
+    );
+    requests.push(body);
+    response.end(JSON.stringify({ ok: true, state: null }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const run = await runScript(
+      {
+        CF_ACCESS_CLIENT_ID: "test-id",
+        CF_ACCESS_CLIENT_SECRET: "test-secret",
+        SAQI_RIG_ENDPOINT: `http://127.0.0.1:${server.address().port}/rig`,
+      },
+      script,
+      ["retry-unknown", "target-poem", attemptId],
+    );
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(requests, [
+      { method: "GET", poemId: "target-poem" },
+      {
+        action: "retry-unknown",
+        poemId: "target-poem",
+        attemptId,
+        expectedVersion: 4,
+      },
+    ]);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("a targeted smoke run sends only the requested poem ID to the D1 claim", async () => {
   const actions = [];
   const server = createServer(async (request, response) => {
