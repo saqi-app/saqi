@@ -27,7 +27,7 @@ async function main() {
     const [poemId, attemptId] = process.argv.slice(3);
     if (!poemId || !attemptId || process.argv.length !== 5)
       throw new Error("Usage: rig-lite.mjs retry-unknown POEM_ID ATTEMPT_ID");
-    const state = await current();
+    const state = await current(poemId);
     const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
     if (
       state?.poemId !== poemId ||
@@ -141,8 +141,10 @@ async function request(body) {
   return result;
 }
 
-async function current() {
-  const response = await fetch(endpoint, {
+async function current(poemId) {
+  const url = new URL(endpoint);
+  if (poemId) url.searchParams.set("poemId", poemId);
+  const response = await fetch(url, {
     headers: {
       "CF-Access-Client-Id": clientId,
       "CF-Access-Client-Secret": clientSecret,
