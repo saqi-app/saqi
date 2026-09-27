@@ -2509,7 +2509,6 @@ __metadata:
   dependencies:
     "@saqi/precedent-iso": "workspace:^"
     "@types/node": "npm:26.6.2"
-    playwright-core: "npm:1.63.0"
     prettier: "npm:^3.9.9"
     typescript: "npm:6.0.3"
     vite: "npm:8.3.0"
@@ -7516,7 +7515,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"playwright-core@npm:1.63.0, playwright-core@npm:^1.62.1":
+"playwright-core@npm:^1.62.1":
   version: 1.63.0
   resolution: "playwright-core@npm:1.63.0"
   bin:

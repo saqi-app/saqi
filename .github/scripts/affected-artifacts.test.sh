@@ -43,8 +43,6 @@ assert_case() {
   trap - RETURN
 }
 
-assert_case ci typescript/packages/source-collector/src/collection/collection-source-browser.ts \
-  'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false'
 assert_case ci typescript/packages/source-collector/src/source-adapter/index.ts \
   'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false'
 assert_case ci typescript/packages/precedent-node/src/index.ts \
@@ -103,8 +101,6 @@ assert_dispatch_case typescript/packages/operations/src/index.ts \
   'app=true migrate=false site=false www=false crawler_only=false dependency_audit=false deployment_required=true'
 assert_dispatch_case typescript/yarn.lock \
   'app=true migrate=false site=true www=true crawler_only=false dependency_audit=true deployment_required=true'
-assert_dispatch_case typescript/packages/source-collector/src/collection/collection-source-browser.ts \
-  'app=false migrate=false site=false www=false crawler_only=true dependency_audit=false deployment_required=false'
 assert_dispatch_case typescript/packages/source-collector/package.json \
   'app=false migrate=false site=false www=false crawler_only=true dependency_audit=true deployment_required=false'
 assert_dispatch_case README.md \
