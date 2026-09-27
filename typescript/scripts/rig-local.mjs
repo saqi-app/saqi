@@ -5,15 +5,11 @@ import { promisify } from "node:util";
 
 const executeFile = promisify(execFile);
 const account = "saqi-publication-access-v2";
-const scripts = {
-  collect: "rig-collect.mjs",
-  translate: "rig-lite.mjs",
-};
 
 const [operation, ...args] = process.argv.slice(2);
-if (!Object.hasOwn(scripts, operation))
+if (operation !== "translate")
   throw new Error(
-    "Usage: rig-local.mjs collect [next-author | author URL NAME] | translate [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
+    "Usage: rig-local.mjs translate [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
   );
 
 const environment = { ...process.env };
@@ -31,12 +27,7 @@ if (!environment.CF_ACCESS_CLIENT_ID && !environment.CF_ACCESS_CLIENT_SECRET) {
 }
 if (!environment.CF_ACCESS_CLIENT_ID || !environment.CF_ACCESS_CLIENT_SECRET)
   throw new Error("LOCAL_ACCESS_CREDENTIALS_INCOMPLETE");
-if (operation === "collect") {
-  environment.SAQI_SOURCE_ORIGIN ??= "https://www.aldiwan.net";
-  if (args.length === 0) args.push("next-author");
-}
-
-const script = fileURLToPath(new URL(scripts[operation], import.meta.url));
+const script = fileURLToPath(new URL("rig-lite.mjs", import.meta.url));
 process.stdout.write(`${new Date().toISOString()} Starting ${operation}\n`);
 const child = spawn(process.execPath, [script, ...args], {
   env: environment,
