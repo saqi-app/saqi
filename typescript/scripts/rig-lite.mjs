@@ -64,16 +64,7 @@ async function main() {
     return;
   }
   if (active?.status === "unknown") {
-    const attemptId = JSON.parse(active.checkpointJson ?? "{}").invocation
-      ?.attemptId;
-    if (!attemptId) throw new Error("Unknown invocation has no attempt ID");
-    if (await readOutput(attemptId)) {
-      await recover(active);
-      return;
-    }
-    process.stdout.write(
-      `Codex attempt ${attemptId} remains unresolved; continuing with another poem.\n`,
-    );
+    if (await recoverIfResultExists(active)) return;
   }
   if (active?.status === "claimed") {
     const checkpoint = JSON.parse(active.checkpointJson ?? "{}");
@@ -207,6 +198,20 @@ async function recover(state) {
   throw new Error(
     `Codex attempt ${attemptId} has no durable result; inspect it before an explicit retry`,
   );
+}
+
+async function recoverIfResultExists(state) {
+  const attemptId = JSON.parse(state.checkpointJson ?? "{}").invocation
+    ?.attemptId;
+  if (!attemptId) throw new Error("Unknown invocation has no attempt ID");
+  if (await readOutput(attemptId)) {
+    await recover(state);
+    return true;
+  }
+  process.stdout.write(
+    `Codex attempt ${attemptId} remains unresolved; continuing with another poem.\n`,
+  );
+  return false;
 }
 
 async function publish(state) {
