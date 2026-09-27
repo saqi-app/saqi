@@ -18,17 +18,34 @@ Credentials remain in this Mac's Keychain under account `saqi-publication-access
 
 ## Collection in personal Chrome
 
-The separate automation profile can remain blocked by Cloudflare. Use the site-scoped extension in the normal signed-in Chrome profile instead:
+The personal Chrome extension uses one dedicated source tab, one native bridge and D1's existing author/poem rows. There is no browser queue, local SQLite, copied cookie profile or separate collection daemon. This release supports one collector Mac and standard Google Chrome 120 or newer. A kernel lock prevents two Chrome profiles from collecting simultaneously.
+
+After the build commands above, run from the repository root:
 
 ```sh
-python3 typescript/chrome/saqi-collector/install.py
+python3 typescript/chrome/saqi-collector/install.py install
+python3 typescript/chrome/saqi-collector/install.py doctor
 ```
 
-This installs the native bridge and retires the separate-profile launchd collector. In `chrome://extensions`, enable Developer mode and Load unpacked: `typescript/chrome/saqi-collector` from this repository. This installation grants source-page access and must be explicitly approved by the browser owner. The extension can read only `https://www.aldiwan.net/*`, manage its dedicated collector tab, and talk to its native bridge. No cookies are copied and no credentials are stored in Chrome.
+Installation verifies Node 24+, the built parser, native protocol, Keychain credentials and read-only Operations access before replacing the registration. It preserves translation and existing collection status. If the checkout moves or the Node runtime changes, rerun installation. After updating extension source, reload it in Chrome.
 
-Once enabled, it checks for the next D1 author every minute and visits poems serially, at least 13 seconds apart. Clicking its toolbar icon starts a check immediately. Disable the extension to stop collection. Closing personal Chrome stops collection; reopening it resumes. Incomplete manifests, challenges and identity conflicts are surfaced explicitly; source keys and pre-fetch hashes prevent duplicate admission and stale updates. A full author is marked collected only after all listed poems are handled.
+In your personal Chrome, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `typescript/chrome/saqi-collector` from this repository. This browser permission step is manual. Open the Saqi popup and choose **Start collection**. Installation alone does not prove Chrome is connected: the popup must show recent bridge contact. No credentials are stored in Chrome, and source access remains limited to `https://www.aldiwan.net/*`.
 
-Collection cycles through source-linked authors already admitted to D1 and updates their metadata and poems. It does not discover the entire author directory. The one-shot manual fallback remains `SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs collect author AUTHOR_URL ARABIC_NAME`; it uses a separate browser profile and may require human verification.
+The popup shows the current author, checked/added/updated/unchanged/review counts, connection time, actual progress time and recovery action. **Pause** prevents further source navigation; an already submitted write may finish. Pause survives Chrome restart. **Open collector tab** reveals the source page. On verification, the collector stops navigating until you finish the check and choose **Retry**. Source cooldowns cannot be overridden by Retry. Network failures retry after 1, 2 and 5 minutes, then require action.
+
+Collection checks for D1 work every minute and visits source pages at least 13 seconds apart. Closing Chrome stops it; reopening resumes the saved setting. A crash refetches the unfinished author from its beginning: up to 13 seconds per previously visited page plus load/API time. Canonical keys and pre-fetch hashes make those replays safe, and they do not invoke Codex. Incomplete content or missing independent counts stop collection rather than replacing a poem with partial text.
+
+On a source author page, **Collect this author** previews the actual Arabic name and URL, validates the complete manifest and admits the author directly to D1. It preserves the current collection setting and never interrupts another author. Existing source-linked authors are revisited automatically; discovering the entire author directory is outside this release.
+
+Identity conflicts are never auto-merged. They count as checked but **need review**, not imported. The popup preserves the latest affected author's warning and up to 20 example poem IDs until dismissed. This is bounded current diagnostic evidence, not an exhaustive historical issue list.
+
+To remove only the bridge:
+
+```sh
+python3 typescript/chrome/saqi-collector/install.py uninstall
+```
+
+Then remove the extension manually in Chrome. This preserves Keychain credentials, translation startup, unfinished translation results and corpus data. The old separate-profile collection CLI remains a temporary fallback until the new extension passes a live complete-author, new-author/new-poem and interrupted-run rehearsal; it is not running in the background.
 
 ## macOS monitor
 
@@ -36,9 +53,9 @@ Collection cycles through source-linked authors already admitted to D1 and updat
 python3 macos/SaqiActivityMonitor/install.py
 ```
 
-The native menu-bar app starts at login and shows translation/collection status, current progress, errors and source verification alerts. It reads launchd and two current-state logs, not a database. Translation controls manage the translator; Chrome's extension switch controls collection. Quit monitor closes the UI while workers continue.
+The native menu-bar app starts at login and shows translation/collection status, current progress, errors and source verification alerts. It reads launchd, the translation log and a bounded collector status snapshot. Translation controls manage the translator; the Chrome popup controls collection. Quit monitor closes the UI while workers continue. Monitor upgrades compile and sign the replacement before stopping the working app.
 
-`~/Library/Application Support/Saqi/translate.log` contains the current/last translation task. `collect.log` contains the current personal-Chrome status and heartbeat; an expired active heartbeat is an attention state, not reported as healthy. Source API errors and unknown Codex outcomes remain visible. There are no lifetime counters or append-only diagnostic logs.
+`~/Library/Application Support/Saqi/translate.log` contains the current/last translation task. `collector-status.json` contains the current personal-Chrome state, connection/progress times and latest review warning. It is atomically replaced and capped at 64 KiB. Contact older than 150 seconds means disconnected, even when the last state was idle or paused. Heartbeats never advance progress time. `collector.lock` holds a kernel lock, not work state; a leftover file after a crash does not block restart. Source API errors and unknown Codex outcomes remain visible. There are no lifetime counters or append-only diagnostic logs.
 
 ## Crash recovery
 

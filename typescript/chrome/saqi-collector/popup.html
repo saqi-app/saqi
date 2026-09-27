@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Saqi collector</title>
+    <link rel="stylesheet" href="popup.css" />
+    <script src="project.js" defer></script>
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">PERSONAL CHROME</p>
+        <h1>Saqi collector</h1>
+      </div>
+      <button
+        id="refresh"
+        class="quiet"
+        type="button"
+        aria-label="Refresh collector status"
+      >
+        Refresh
+      </button>
+    </header>
+    <main>
+      <section aria-labelledby="state" class="card">
+        <div class="state-line">
+          <span id="indicator" aria-hidden="true"></span>
+          <h2 id="state">Checking connection…</h2>
+        </div>
+        <p id="guidance">Reading collector status.</p>
+        <p id="author" class="author" dir="auto" hidden></p>
+        <p id="progress" hidden></p>
+        <dl id="counts" class="counts" hidden>
+          <div>
+            <dt>Added</dt>
+            <dd id="added">0</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd id="updated">0</dd>
+          </div>
+          <div>
+            <dt>Unchanged</dt>
+            <dd id="unchanged">0</dd>
+          </div>
+          <div>
+            <dt>Needs review</dt>
+            <dd id="reviewRequired">0</dd>
+          </div>
+        </dl>
+        <div class="timestamps">
+          <p id="connection"></p>
+          <p id="last-progress"></p>
+          <p id="retry-time" hidden></p>
+        </div>
+        <p id="status-error" role="alert" hidden></p>
+        <div class="controls">
+          <button type="button" data-command="start" hidden>
+            Start collection
+          </button>
+          <button type="button" data-command="pause" hidden>
+            Pause collection
+          </button>
+          <button type="button" data-command="resume" hidden>
+            Resume collection
+          </button>
+          <button type="button" data-command="retry" hidden>Retry now</button>
+          <button type="button" data-command="open-collector" class="secondary">
+            Open collector tab
+          </button>
+        </div>
+      </section>
+      <p id="feedback" role="status" aria-live="polite" hidden></p>
+      <section
+        id="review"
+        class="card warning"
+        aria-labelledby="review-title"
+        hidden
+      >
+        <h2 id="review-title">Some poems need identity review</h2>
+        <p id="review-detail" dir="ltr"></p>
+        <p id="review-poems" dir="ltr" hidden></p>
+        <p class="small">
+          These poems were not imported. This is the latest affected author, not
+          a history of all conflicts.
+        </p>
+        <button type="button" data-command="ack-review" class="secondary">
+          Dismiss review notice
+        </button>
+      </section>
+      <section
+        id="last-completed"
+        class="card"
+        aria-labelledby="completed-title"
+        hidden
+      >
+        <h2 id="completed-title">Last completed author</h2>
+        <p id="completed-detail" dir="auto"></p>
+      </section>
+      <section class="card" aria-labelledby="admit-title">
+        <h2 id="admit-title">Collect an author</h2>
+        <p id="preview-help" class="small">
+          Open an author page on aldiwan.net, then reopen this popup to add them
+          to the corpus.
+        </p>
+        <form id="admit-form" hidden>
+          <label for="author-name">Arabic author name</label>
+          <input
+            id="author-name"
+            name="nameArabic"
+            dir="auto"
+            required
+            maxlength="200"
+            autocomplete="off"
+          />
+          <p id="author-url" class="source-url" dir="ltr"></p>
+          <button type="submit">Collect this author</button>
+          <p class="small">
+            Adds this author to the shared corpus. Collection keeps your current
+            running or paused setting.
+          </p>
+        </form>
+      </section>
+    </main>
+    <footer>
+      Translation and word insights run separately in the Mac rig. Collection
+      runs while Chrome is open and your Mac is awake.
+    </footer>
+  </body>
+</html>

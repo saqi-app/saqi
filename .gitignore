@@ -51,3 +51,5 @@ typescript/.yarn/*
 !typescript/.yarn/releases/**
 !typescript/.yarn/patches/
 !typescript/.yarn/patches/**
+
+**/__pycache__/

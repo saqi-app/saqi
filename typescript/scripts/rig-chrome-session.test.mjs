@@ -30,21 +30,26 @@ const poem = {
   title: "قصيدة",
   lines: ["قلب المحب", "نور القمر"],
 };
-function fixture() {
+function fixture(statuses = []) {
   const writes = [],
     reports = [];
   const session = collectorSession(
     async (query, body) => {
       if (body) {
         writes.push(body);
-        return { result: { status: "unchanged" } };
+        if (body.action === "upsert-poem") {
+          const status = statuses.shift() || "unchanged";
+          if (status === "review") throw new Error("UNMAPPED_POEM_COLLISION");
+          return { result: { status } };
+        }
+        return { result: { status: "updated" } };
       }
       return query === "?action=next-author"
         ? { author }
         : { poem: { sourceHash: "before-fetch" } };
     },
     (...args) => {
-      reports.push(args);
+      reports.push(args[0]);
     },
   );
   return { session, writes, reports };
@@ -77,7 +82,7 @@ test("preserves pre-fetch source hash and completes only after every poem", asyn
   await session({ action: "complete" });
   assert.equal(writes[1].poem.expectedHash, "before-fetch");
   assert.equal(writes.at(-1).action, "complete-author");
-  assert.equal(reports.at(-1)[1], "scheduled");
+  assert.equal(reports.at(-1).state, "idle");
 });
 test("challenge and unknown commands cannot mutate corpus", async () => {
   const { session, writes } = fixture();
@@ -108,5 +113,137 @@ test("a mismatched empty author manifest cannot complete the selected author", a
     }),
   );
   await assert.rejects(session({ action: "complete" }));
+  assert.deepEqual(writes, []);
+});
+
+test("mixed imports retain accurate review evidence in the completed summary", async () => {
+  const { session, writes, reports } = fixture([
+    "created",
+    "updated",
+    "unchanged",
+    "review",
+  ]);
+  await session({ action: "begin" });
+  await session({
+    action: "manifest",
+    projection: {
+      ...manifest,
+      declaredPoemCountText: "4",
+      poems: [1, 2, 3, 4].map((id) => ({
+        ...manifest.poems[0],
+        href: `/poem${id}.html`,
+      })),
+    },
+  });
+  for (const id of [1, 2, 3, 4]) {
+    await session({ action: "prepare", poemId: String(id) });
+    await session({
+      action: "poem",
+      projection: {
+        ...poem,
+        sourceUrl: `https://www.aldiwan.net/poem${id}.html`,
+      },
+    });
+  }
+  await session({ action: "complete" });
+  const final = reports.at(-1);
+  assert.equal(final.lastCompleted.processed, 4);
+  assert.equal(final.lastCompleted.added, 1);
+  assert.equal(final.lastCompleted.updated, 1);
+  assert.equal(final.lastCompleted.unchanged, 1);
+  assert.equal(final.lastCompleted.reviewRequired, 1);
+  assert.deepEqual(final.reviewWarning.poemIds, ["4"]);
+  assert.equal(final.reviewWarning.total, 1);
+  assert.equal(writes.at(-1).action, "complete-author");
+});
+
+test("all collisions remain visible and review identifiers are bounded", async () => {
+  const ids = Array.from({ length: 22 }, (_, index) => String(index + 1));
+  const { session, reports } = fixture(ids.map(() => "review"));
+  await session({ action: "begin" });
+  await session({
+    action: "manifest",
+    projection: {
+      ...manifest,
+      declaredPoemCountText: "22",
+      poems: ids.map((id) => ({
+        ...manifest.poems[0],
+        href: `/poem${id}.html`,
+      })),
+    },
+  });
+  for (const id of ids) {
+    await session({ action: "prepare", poemId: id });
+    await session({
+      action: "poem",
+      projection: {
+        ...poem,
+        sourceUrl: `https://www.aldiwan.net/poem${id}.html`,
+      },
+    });
+  }
+  await session({ action: "complete" });
+  assert.equal(reports.at(-1).lastCompleted.added, 0);
+  assert.equal(reports.at(-1).reviewWarning.total, 22);
+  assert.deepEqual(reports.at(-1).reviewWarning.poemIds, ids.slice(0, 20));
+});
+
+test("successful completion omits reviewWarning so host preserves prior warning", async () => {
+  const { session, reports } = fixture();
+  await session({ action: "begin" });
+  await session({ action: "manifest", projection: manifest });
+  await session({ action: "prepare", poemId: "1" });
+  await session({ action: "poem", projection: poem });
+  await assert.rejects(session({ action: "prepare", poemId: "1" }));
+  await session({ action: "complete" });
+  assert.equal(Object.hasOwn(reports.at(-1), "reviewWarning"), false);
+});
+
+test("admission validates full manifest and name without changing active author", async () => {
+  const { session, writes, reports } = fixture();
+  await session({ action: "begin" });
+  const otherUrl = "https://www.aldiwan.net/cat-poet-New";
+  const other = { ...manifest, authorHref: otherUrl, sourceUrl: otherUrl };
+  const reportCount = reports.length;
+  const admitted = await session({
+    action: "admit-author",
+    projection: other,
+    nameArabic: " شاعر جديد ",
+  });
+  assert.equal(admitted.author.sourceAuthorId, "poet-New");
+  assert.equal(admitted.author.nameArabic, "شاعر جديد");
+  assert.equal(admitted.poemCount, 1);
+  assert.equal(reports.length, reportCount);
+  await assert.rejects(
+    session({
+      action: "admit-author",
+      projection: { ...other, terminal: false },
+      nameArabic: "شاعر",
+    }),
+  );
+  await assert.rejects(
+    session({
+      action: "admit-author",
+      projection: other,
+      nameArabic: "\u{202e}شاعر",
+    }),
+  );
+  assert.equal(writes.length, 1);
+  await session({ action: "manifest", projection: manifest });
+  assert.equal(reports.at(-1).current.authorName, author.nameArabic);
+});
+
+test("admission and collection reject an asserted-complete manifest without independent count", async () => {
+  const { session, writes } = fixture();
+  const projection = { ...manifest, declaredPoemCountText: null };
+  await assert.rejects(
+    session({ action: "admit-author", projection, nameArabic: "شاعر" }),
+    /SOURCE_MANIFEST_COUNT_MISSING/u,
+  );
+  await session({ action: "begin" });
+  await assert.rejects(
+    session({ action: "manifest", projection }),
+    /SOURCE_MANIFEST_COUNT_MISSING/u,
+  );
   assert.deepEqual(writes, []);
 });

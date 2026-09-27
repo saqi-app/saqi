@@ -1,5 +1,6 @@
-/* exported projectSaqiPage -- Chrome serializes this function into the source tab. */
+/* exported projectSaqiPage, projectSaqiAuthorPreview -- Chrome serializes this function into the source tab. */
 // Runs in an isolated extension world, only on the configured poetry source.
+// eslint-disable-next-line no-redeclare -- This script defines the serialized entrypoint declared globally for its extension consumers.
 function projectSaqiPage(expectedAuthor) {
   const challenge =
     /just a moment|verify you are human|attention required/i.test(
@@ -59,7 +60,8 @@ function projectSaqiPage(expectedAuthor) {
       ...base,
       kind: "author_poem_manifest",
       declaredPoemCountText: count,
-      poems: found.values().toArray(),
+      // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Chrome 120 predates Iterator Helpers.
+      poems: [...found.values()],
       terminal: count !== null,
     };
   }
@@ -82,11 +84,25 @@ function projectSaqiPage(expectedAuthor) {
         ? "classical"
         : "unknown";
     const lines = readLines(rows, legacyRows, content, free);
-    const author = [...document.querySelectorAll('a[href*="cat-"]')].some(
-      (a) =>
-        new URL(a.href).pathname.replaceAll(/(?:%20|\s)+$/gu, "") ===
-        new URL(expectedAuthor).pathname.replaceAll(/(?:%20|\s)+$/gu, ""),
-    );
+    // The breadcrumb's final link is the poem's author, not a recommendation.
+    const bylines = [...document.querySelectorAll(".poem-breadcrumb")];
+    const byline =
+      bylines.length === 1
+        ? [...bylines[0].querySelectorAll(":scope > a")].at(-1)
+        : null;
+    if (!byline) return { error: "SOURCE_POEM_AUTHOR_MISSING" };
+    const actualAuthor = new URL(byline.href, location.href);
+    const expected = new URL(expectedAuthor);
+    if (
+      actualAuthor.origin !== "https://www.aldiwan.net" ||
+      actualAuthor.username ||
+      actualAuthor.password ||
+      actualAuthor.search ||
+      actualAuthor.hash ||
+      actualAuthor.pathname.replaceAll(/(?:%20|\s)+$/gu, "") !==
+        expected.pathname.replaceAll(/(?:%20|\s)+$/gu, "")
+    )
+      return { error: "SOURCE_POEM_AUTHOR_MISMATCH" };
     const title = (
       document.querySelector('meta[property="og:title"]')?.content ||
       document.title
@@ -94,22 +110,20 @@ function projectSaqiPage(expectedAuthor) {
       .split(/\s+-\s+/u, 1)[0]
       .trim();
     const verseCount =
-      /[٠-٩۰-۹\d][٠-٩۰-۹\d,٬\s]*(?:بيت|أبيات)/u.exec(
-        text(reader.querySelector(".poem-meta-inline")),
-      )?.[0] || null;
+      [...reader.querySelectorAll(".poem-meta-inline > span")]
+        .map(text)
+        .find((value) =>
+          /(?:عدد\s+)?(?:الأبيات|الابيات|أبيات|بيت)/u.test(value),
+        ) || null;
+    if (!free && !verseCount) return { error: "SOURCE_POEM_COUNT_MISSING" };
     return {
       ...base,
-      authorHref: author ? expectedAuthor : "",
+      authorHref: actualAuthor.href,
       kind: "poem_detail",
       title,
       lines,
       structure,
-      declaredVerseCountText: free
-        ? null
-        : verseCount ||
-          (structure === "classical" && lines.length % 2 === 0
-            ? String(lines.length / 2)
-            : null),
+      declaredVerseCountText: free ? null : verseCount,
     };
   }
   function readLines(rows, legacyRows, content, free) {
@@ -139,4 +153,23 @@ function projectSaqiPage(expectedAuthor) {
     }
     return lines;
   }
+}
+
+// Independently serializable for the popup's read-only active-page preview.
+function projectSaqiAuthorPreview() {
+  const url = new URL(location.href);
+  if (
+    url.origin !== "https://www.aldiwan.net" ||
+    !/^\/cat-poet-[^/]+$/u.test(url.pathname) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    return { error: "SOURCE_AUTHOR_PAGE_REQUIRED" };
+  const heading = document.querySelector("#poet-page-title");
+  const nameArabic = (heading?.innerText || heading?.textContent || "").trim();
+  if (!nameArabic) return { error: "SOURCE_AUTHOR_NAME_MISSING" };
+  url.pathname = url.pathname.replaceAll(/(?:%20|\s)+$/gu, "");
+  return { nameArabic, sourceUrl: url.href };
 }
