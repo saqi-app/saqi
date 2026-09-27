@@ -265,12 +265,13 @@ export class DirectSourceRepository {
       content: input.linesArabic,
       titleArabic: input.titleArabic,
     });
-    const result = await this.#database
+    const updated = await this.#database
       .prepare(
         `UPDATE poem SET name_arabic = ?1, content_arabic = ?2,
                 verses = ?3, source_hash = ?4,
                 publication_cache_dirty = 1
-         WHERE id = ?5 AND author_id = ?6 AND source_hash = ?7`
+         WHERE id = ?5 AND author_id = ?6 AND source_hash = ?7
+         RETURNING id`
       )
       .bind(
         input.titleArabic,
@@ -281,8 +282,8 @@ export class DirectSourceRepository {
         authorId,
         input.expectedHash
       )
-      .run();
-    if (result.meta.changes !== 1)
+      .first<{ id: string }>();
+    if (updated?.id !== stored.id)
       throw new DirectSourceConflictError("SOURCE_CHANGED");
     return { id: stored.id, sourceHash, status: "updated" };
   }

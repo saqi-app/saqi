@@ -117,12 +117,21 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
       created.sourceHash,
       created.id
     );
+  sqlite.exec(`CREATE TRIGGER extra_source_write AFTER UPDATE OF content_arabic ON poem
+    BEGIN UPDATE poem SET publication_cache_dirty = 1 WHERE id = NEW.id; END`);
+  const changesBefore = sqlite.prepare("SELECT total_changes() AS total").get() as {
+    total: number;
+  };
   const changed = await repository.upsertPoem({
     ...poem,
     linesArabic: ["نص عربي معدل", "سطر عربي ثان"],
     expectedHash: created.sourceHash,
   });
   expect(changed).toMatchObject({ id: created.id, status: "updated" });
+  const changesAfter = sqlite.prepare("SELECT total_changes() AS total").get() as {
+    total: number;
+  };
+  expect(changesAfter.total - changesBefore.total).toBeGreaterThan(1);
   expect(changed.sourceHash).not.toBe(created.sourceHash);
   await expect(
     repository.upsertPoem({
