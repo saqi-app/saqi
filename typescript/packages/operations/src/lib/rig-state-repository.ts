@@ -70,7 +70,8 @@ export class RigStateRepository {
                 rig_lease_expires_at AS leaseExpiresAt,
                 rig_checkpoint_json AS checkpointJson
          FROM poem WHERE rig_status IN ('claimed', 'dispatching', 'unknown')
-         ORDER BY rig_updated_at, id LIMIT 1`
+         ORDER BY CASE WHEN rig_status = 'unknown' THEN 1 ELSE 0 END,
+                  rig_updated_at, id LIMIT 1`
       )
       .first<unknown>();
     return raw === null ? null : StateRowSchema.parse(raw);
@@ -82,7 +83,10 @@ export class RigStateRepository {
     preferredPoemId?: string
   ): Promise<null | RigStateRow> {
     TokenSchema.parse(token);
-    const active = await this.currentEnrichment();
+    const current = await this.currentEnrichment();
+    // An unknown result stays on its own poem for exact recovery or review.
+    // It cannot be claimed again, but it must not freeze unrelated poems.
+    const active = current?.status === "unknown" ? null : current;
     if (preferredPoemId) {
       if (active && active.poemId !== preferredPoemId) return null;
       return this.#claimPoem(preferredPoemId, token, now);
@@ -297,7 +301,7 @@ export class RigStateRepository {
                (rig_lease_expires_at IS NULL OR rig_lease_expires_at <= ?2)))
            AND NOT EXISTS (
              SELECT 1 FROM poem active
-             WHERE active.rig_status IN ('dispatching', 'unknown')
+             WHERE active.rig_status = 'dispatching'
                OR (active.rig_status = 'claimed' AND active.id <> poem.id
                  AND active.rig_lease_expires_at > ?2)
            )

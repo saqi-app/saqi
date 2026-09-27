@@ -59,9 +59,21 @@ async function main() {
     );
   await request({ action: "purge-cache" });
   const active = await current();
-  if (active?.status === "dispatching" || active?.status === "unknown") {
+  if (active?.status === "dispatching") {
     await recover(active);
     return;
+  }
+  if (active?.status === "unknown") {
+    const attemptId = JSON.parse(active.checkpointJson ?? "{}").invocation
+      ?.attemptId;
+    if (!attemptId) throw new Error("Unknown invocation has no attempt ID");
+    if (await readOutput(attemptId)) {
+      await recover(active);
+      return;
+    }
+    process.stdout.write(
+      `Codex attempt ${attemptId} remains unresolved; continuing with another poem.\n`,
+    );
   }
   if (active?.status === "claimed") {
     const checkpoint = JSON.parse(active.checkpointJson ?? "{}");

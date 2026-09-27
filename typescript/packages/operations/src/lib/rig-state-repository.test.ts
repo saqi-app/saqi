@@ -152,7 +152,9 @@ test("a lost dispatch response cannot cause a second Codex invocation", async ()
   await expect(repository.markExpiredUnknown("poem-1", 201)).resolves.toBe(
     true
   );
-  await expect(repository.claimNextPoem(secondOwner, 202)).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(secondOwner, 202, "poem-1")
+  ).resolves.toBeNull();
   const unknown = await repository.read("poem-1");
   await expect(
     repository.acknowledgeInvocation("poem-1", attempt, unknown!.version, {
@@ -232,7 +234,7 @@ test("source changes invalidate a claim before dispatch", async () => {
   ).resolves.toBe(false);
 });
 
-test("unknown work requires an exact manual retry decision", async () => {
+test("an unknown poem cannot replay, but another poem can be claimed", async () => {
   const { repository } = fixture();
   const token = "11111111-1111-4111-8111-111111111111";
   const attemptId = "22222222-2222-4222-8222-222222222222";
@@ -246,7 +248,19 @@ test("unknown work requires an exact manual retry decision", async () => {
   });
   await repository.markExpiredUnknown(claimed!.poemId, 201);
   const unknown = await repository.read(claimed!.poemId);
-  await expect(repository.claimNextPoem(token, 202)).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(token, 202, claimed!.poemId)
+  ).resolves.toBeNull();
+  const other = await repository.claimNextPoem(token, 202);
+  expect(other?.poemId).toBe("poem-2");
+  await expect(repository.currentEnrichment()).resolves.toMatchObject({
+    poemId: "poem-2",
+    status: "claimed",
+  });
+  await expect(repository.read(claimed!.poemId)).resolves.toMatchObject({
+    status: "unknown",
+    checkpointJson: expect.stringContaining(attemptId),
+  });
   await expect(
     repository.retryUnknown(
       claimed!.poemId,
@@ -257,9 +271,8 @@ test("unknown work requires an exact manual retry decision", async () => {
   await expect(
     repository.retryUnknown(claimed!.poemId, attemptId, unknown!.version)
   ).resolves.toBe(true);
-  await expect(repository.claimNextPoem(token, 203)).resolves.toMatchObject({
-    poemId: claimed!.poemId,
-    status: "claimed",
+  await expect(repository.read(claimed!.poemId)).resolves.toMatchObject({
+    status: "retry",
   });
 });
 
