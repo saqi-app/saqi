@@ -5,6 +5,8 @@ on:
     paths:
       - 'macos/**'
       - 'typescript/scripts/rig-background.py'
+      - 'typescript/chrome/**'
+      - 'typescript/scripts/rig-chrome*'
       - '.github/workflows/rig-monitor.yml'
 
 permissions:
@@ -19,6 +21,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Compile native monitor
-        run: xcrun swiftc -parse-as-library -warnings-as-errors macos/SaqiActivityMonitor/main.swift -o /tmp/SaqiActivityMonitor
+        run: xcrun swiftc -parse-as-library -warnings-as-errors macos/SaqiActivityMonitor/CollectorStatus.swift macos/SaqiActivityMonitor/main.swift -o /tmp/SaqiActivityMonitor
       - name: Validate installers
         run: python3 -m py_compile macos/SaqiActivityMonitor/install.py typescript/scripts/rig-background.py
+      - name: Test collector health decoding
+        run: |
+          xcrun swiftc -parse-as-library macos/SaqiActivityMonitor/CollectorStatus.swift macos/SaqiActivityMonitor/CollectorStatus.test.swift -o /tmp/SaqiCollectorStatusTests
+          /tmp/SaqiCollectorStatusTests
+      - name: Test collector installation
+        run: |
+          python3 typescript/chrome/saqi-collector/install.test.py
+          python3 typescript/scripts/rig-chrome-launcher.test.py

@@ -10,6 +10,7 @@ struct JobStatus: Identifiable {
     let waiting: Bool
     let detail: String
     let updated: Date?
+    var label: String? = nil
 }
 
 @MainActor final class RigMonitor: ObservableObject {
@@ -29,9 +30,20 @@ struct JobStatus: Identifiable {
         Task {
             let result = await Task.detached { () -> [JobStatus] in
                 ["translate", "collect"].map { name in
+                    if name == "collect" {
+                        let file = directory.appendingPathComponent("collector-status.json")
+                        guard let data = try? Data(contentsOf: file), let status = CollectorStatus.decode(data) else {
+                            return JobStatus(id: name, installed: false, running: false, failed: true, waiting: false,
+                                             detail: "Load the Saqi extension in personal Chrome, then open its popup. Run the collector doctor if setup needs repair.", updated: nil, label: "Setup needed")
+                        }
+                        return JobStatus(id: name, installed: true, running: status.connected() && status.state == "collecting",
+                                         failed: !status.connected() || status.state == "error" || status.reviewWarning != nil,
+                                         waiting: status.connected() && status.state == "human_required", detail: status.detail,
+                                         updated: CollectorStatus.date(status.progressAt), label: status.label)
+                    }
                     let (code, output) = run("/bin/launchctl", ["print", "gui/\(getuid())/app.saqi.rig.\(name)"])
-                    var running = output.contains("state = running")
-                    var failed = output.split(separator: "\n").contains { line in
+                    let running = output.contains("state = running")
+                    let failed = output.split(separator: "\n").contains { line in
                         let value = line.trimmingCharacters(in: .whitespaces)
                         return value.hasPrefix("last exit code = ") && value != "last exit code = 0"
                     }
@@ -43,15 +55,10 @@ struct JobStatus: Identifiable {
                         let data = (try? handle.readToEnd()) ?? Data()
                         try? handle.close()
                         let lines = String(decoding: data, as: UTF8.self).split(separator: "\n")
-                        detail = (name == "collect" && lines.first?.hasPrefix("PERSONAL_CHROME") == true ? lines : lines.suffix(2)).joined(separator: "\n")
+                        detail = lines.suffix(2).joined(separator: "\n")
                     }
                     let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    let personal = name == "collect" && detail.hasPrefix("PERSONAL_CHROME")
-                    if personal {
-                        running = detail.hasPrefix("PERSONAL_CHROME running") && -(date?.timeIntervalSinceNow ?? -1000) < 90
-                        failed = detail.hasPrefix("PERSONAL_CHROME attention") || (detail.hasPrefix("PERSONAL_CHROME running") && !running)
-                    }
-                    return JobStatus(id: name, installed: code == 0 || personal, running: running, failed: !running && failed,
+                    return JobStatus(id: name, installed: code == 0, running: running, failed: !running && failed,
                                      waiting: detail.split(separator: "\n").last?.contains("SOURCE_HUMAN_REQUIRED") == true,
                                      detail: detail, updated: date)
                 }
@@ -124,12 +131,12 @@ func run(_ executable: String, _ arguments: [String]) -> (Int32, String) {
                             Circle().fill((job.failed || job.waiting) ? .orange : job.running ? .green : .gray).frame(width: 8, height: 8)
                             Text(job.id == "translate" ? "Translation + insights" : "Authors + poems").bold()
                             Spacer()
-                            Text(!job.installed ? "Stopped" : job.waiting ? "Verify in Chrome" : job.running ? "Running" : job.failed ? "Needs attention" : "Scheduled")
+                            Text(job.label ?? (!job.installed ? "Stopped" : job.waiting ? "Verify in Chrome" : job.running ? "Running" : job.failed ? "Needs attention" : "Scheduled"))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Text(job.detail).font(.caption.monospaced()).textSelection(.enabled).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                         if let date = job.updated {
-                            Text("Last output \(date.formatted(date: .omitted, time: .standard))")
+                            Text("\(job.id == "collect" ? "Last collection progress" : "Last output") \(date.formatted(date: .omitted, time: .standard))")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
@@ -142,6 +149,7 @@ func run(_ executable: String, _ arguments: [String]) -> (Int32, String) {
                     Button("Start translation") { monitor.control("install") }.disabled(monitor.refreshing)
                     Button("Stop translation…") { monitor.stop() }.disabled(monitor.refreshing)
                     Button("Logs") { NSWorkspace.shared.open(monitor.state) }
+                    Button("Open Chrome") { _ = run("/usr/bin/open", ["-a", "Google Chrome"]) }
                 }
                 HStack {
                     Button("Open Saqi") { NSWorkspace.shared.open(URL(string: "https://saqi.app")!) }
