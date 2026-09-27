@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("collector_install", Path(__file__).with_name("install.py"))
+spec = importlib.util.spec_from_file_location("collector_install", Path(__file__).with_name("rig-chrome-install.py"))
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
