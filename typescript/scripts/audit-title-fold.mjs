@@ -32,7 +32,9 @@ const stats = {
   invalidLegacy: 0,
   fallbackParityFailures: 0,
   longestVisibleTitle: 0,
+  longestLegacyRaw: 0,
 };
+const invalidModernFallbackIds = [];
 async function scan(cursor = "") {
   const rows = await query(
     `SELECT id, name_english AS modern, poem_title_first_line AS legacy
@@ -49,13 +51,17 @@ async function scan(cursor = "") {
     const legacyVisible = usableTitle(legacy);
     stats.legacyRows++;
     if (!modernVisible && legacyVisible) {
-      if (modern) stats.invalidModernVisibleLegacy++;
+      if (modern) {
+        stats.invalidModernVisibleLegacy++;
+        invalidModernFallbackIds.push(row.id);
+      }
       else stats.legacyOnlyVisible++;
     }
     if (legacy && !legacyVisible) stats.invalidLegacy++;
     const folded = modernVisible ?? legacyVisible;
     if (visible !== folded) stats.fallbackParityFailures++;
     stats.longestVisibleTitle = Math.max(stats.longestVisibleTitle, visible?.length ?? 0);
+    stats.longestLegacyRaw = Math.max(stats.longestLegacyRaw, row.legacy?.length ?? 0);
   }
   if (rows.length === 500) await scan(rows.at(-1).id);
 }
@@ -67,4 +73,4 @@ const visibility = await query(`SELECT
   sum(source_poem_id IS NOT NULL) AS sourced,
   sum(author_id IS NULL) AS orphan
   FROM poem WHERE publishable <> 1`);
-process.stdout.write(`${JSON.stringify({ titles: stats, unpublishable: visibility[0] })}\n`);
+process.stdout.write(`${JSON.stringify({ titles: stats, invalidModernFallbackIds, unpublishable: visibility[0] })}\n`);
