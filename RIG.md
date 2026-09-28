@@ -1,6 +1,6 @@
 # Saqi rig
 
-Production D1 is the only queue: two application tables, author and poem. There is no local SQLite, scheduler database, event ledger, or model registry. Current translations, poem insights and word meanings publish atomically on the poem row.
+Production D1 is the only queue: two application tables, author and poem. There is no local SQLite, scheduler database, event ledger, or model registry. Current translations and word meanings publish atomically on the poem row.
 
 ## Background translation
 

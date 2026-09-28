@@ -57,19 +57,16 @@ test("recovery normalizes keyed output in source order and rejects missing lines
   );
 });
 
-test("missing-insight generation excludes existing translation and word meanings", () => {
+test("word-only generation excludes existing translation", () => {
   const template = JSON.parse(
     readFileSync(
       new URL("rig-publication-output.schema.json", import.meta.url),
     ),
   );
-  const schema = generationSchema(template, ["يا قلب"], ["insights"]);
-  assert.deepEqual(schema.required, ["insights"]);
-  assert.deepEqual(Object.keys(schema.properties), ["insights"]);
-  assert.deepEqual(
-    normalizeWordMeanings({ insights: { summary: "Meaning" } }),
-    { insights: { summary: "Meaning" } },
-  );
+  const schema = generationSchema(template, ["يا قلب"], ["wordMeanings"]);
+  assert.deepEqual(schema.required, ["wordMeanings"]);
+  assert.deepEqual(Object.keys(schema.properties), ["wordMeanings"]);
+  assert.throws(() => generationSchema(template, ["يا"], ["insights"]));
   assert.throws(() => generationSchema(template, ["يا"], []));
   assert.throws(() => generationSchema(template, ["يا"], ["unexpected"]));
 });

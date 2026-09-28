@@ -18,10 +18,6 @@ const PublicationFieldsSchema = z.object({
   linesEnglishSolReasoningEffort:
     SnapshotPoemSchema.shape.linesEnglishSolReasoningEffort,
   modelEnrichments: SnapshotPoemSchema.shape.modelEnrichments,
-  insights: SnapshotPoemSchema.shape.insights,
-  insightsModel: SnapshotPoemSchema.shape.insightsModel,
-  insightsReasoningEffort: SnapshotPoemSchema.shape.insightsReasoningEffort,
-  insightsTrack: SnapshotPoemSchema.shape.insightsTrack,
 });
 
 export const PublicationSnapshotSchema = z.strictObject({

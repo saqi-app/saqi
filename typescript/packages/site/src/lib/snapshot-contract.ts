@@ -11,7 +11,6 @@ const SafeStringSchema = z
     "Text contains unsafe control characters",
   );
 const NonBlankSchema = SafeStringSchema.trim().min(1).max(500);
-const InsightTextSchema = SafeStringSchema.trim().min(1).max(20_000);
 const ContentLineSchema = SafeStringSchema.max(5_000).transform((value) =>
   value.normalize("NFKC"),
 );
@@ -21,30 +20,12 @@ const RouteSegmentSchema = NonBlankSchema.refine(
 );
 const ProviderVendorSchema = z.enum(["anthropic", "google", "openai", "other"]);
 
-const InsightsTrackSchema = z.enum(["legacy", "sol", "model"]);
 
 export const SnapshotAuthorSchema = z.object({
   id: NonBlankSchema,
   slug: RouteSegmentSchema,
   nameArabic: NonBlankSchema,
   nameEnglish: NonBlankSchema.optional(),
-});
-
-const SnapshotPoemInsightsSchema = z.strictObject({
-  summary: InsightTextSchema,
-  themes: z.array(InsightTextSchema).min(1).max(100),
-  historicalContext: InsightTextSchema,
-  literaryDevices: z.array(InsightTextSchema).min(1).max(100),
-  culturalSignificance: InsightTextSchema,
-  notableLines: z
-    .array(
-      z.strictObject({
-        line: InsightTextSchema,
-        explanation: InsightTextSchema,
-      }),
-    )
-    .min(1)
-    .max(100),
 });
 
 export const SnapshotPoemSchema = z.object({
@@ -90,7 +71,6 @@ export const SnapshotPoemSchema = z.object({
         backendKey: SafeStringSchema.trim().min(1).max(100).optional(),
         backendName: SafeStringSchema.trim().min(1).max(100).optional(),
         displayName: SafeStringSchema.trim().min(1).max(100).optional(),
-        insights: SnapshotPoemInsightsSchema.optional(),
         lines: z.array(ContentLineSchema).min(1).max(2_000),
         model: SafeStringSchema.trim().min(1).max(100),
         modelKey: SafeStringSchema.trim().min(1).max(100),
@@ -102,10 +82,6 @@ export const SnapshotPoemSchema = z.object({
     )
     .max(20)
     .optional(),
-  insights: SnapshotPoemInsightsSchema.optional(),
-  insightsModel: SafeStringSchema.trim().min(1).max(100).optional(),
-  insightsReasoningEffort: SafeStringSchema.trim().min(1).max(100).optional(),
-  insightsTrack: InsightsTrackSchema.optional(),
 });
 
 export type Author = z.infer<typeof SnapshotAuthorSchema>;

@@ -24,31 +24,19 @@ const InsightTextSchema = z
   .max(20_000)
   .refine((value) => !UnsafeControl.test(value));
 const ModelLabelSchema = z.string().trim().min(1).max(100);
-const InsightsSchema = z.strictObject({
-  summary: InsightTextSchema,
-  themes: z.array(InsightTextSchema).min(1).max(100),
-  historicalContext: InsightTextSchema,
-  literaryDevices: z.array(InsightTextSchema).min(1).max(100),
-  culturalSignificance: InsightTextSchema,
-  notableLines: z
-    .array(
-      z.strictObject({
-        line: InsightTextSchema,
-        explanation: InsightTextSchema,
-      })
-    )
-    .min(1)
-    .max(100),
-});
-const ComponentSchema = z.enum(["translation", "insights", "wordMeanings"]);
-const RequiredSchema = z.array(ComponentSchema).min(1).max(3);
-const OutputSchema = z.strictObject({
+const ComponentSchema = z.enum(["translation", "wordMeanings"]);
+// An existing checkpoint may still record insights. It can be recovered without
+// replaying its Codex call; its broad insight output is intentionally discarded.
+const RequiredSchema = z
+  .array(z.enum(["translation", "insights", "wordMeanings"]))
+  .min(1)
+  .max(3);
+const OutputSchema = z.object({
   translation: z
     .strictObject({
       lines: z.array(TranslatedLineSchema).min(1).max(2_000),
     })
     .optional(),
-  insights: InsightsSchema.optional(),
   wordMeanings: z
     .array(z.array(InsightTextSchema.max(2_000)).max(5_000))
     .min(1)
@@ -171,7 +159,7 @@ export class RigPublicationRepository {
       const invalid =
         error instanceof z.ZodError ||
         (error instanceof Error &&
-          /^(GENERATION_COMPONENT_|GLOSS_|TRANSLATION_LINE_COUNT_MISMATCH$|TRANSLATION_HAS_BLANK_LINE$|INSIGHT_LINE_NOT_IN_SOURCE$)/u.test(
+          /^(GENERATION_COMPONENT_|GLOSS_|TRANSLATION_LINE_COUNT_MISMATCH$|TRANSLATION_HAS_BLANK_LINE$)/u.test(
             error.message
           ));
       if (!invalid) throw error;
@@ -254,14 +242,6 @@ export class RigPublicationRepository {
         model: checkpoint.model,
         meanings: wordGlossesFromMeanings(arabic.content, output.wordMeanings),
       };
-    if (output.insights) {
-      fields.insights = output.insights;
-      fields.insightsModel = checkpoint.model;
-      fields.insightsTrack = "model";
-      if (checkpoint.reasoningEffort)
-        fields.insightsReasoningEffort = checkpoint.reasoningEffort;
-      else delete fields.insightsReasoningEffort;
-    }
     const publication = JSON.stringify(
       PublicationSnapshotSchema.parse({
         schemaVersion: 2,
@@ -308,14 +288,9 @@ function validatedGeneration(
   contentArabic: string
 ) {
   const output = OutputSchema.parse(checkpoint.outputs.generation);
-  const required = checkpoint.required ?? [
-    "translation",
-    "insights",
-    "wordMeanings",
-  ];
+  const required = checkpoint.required ?? ["translation", "wordMeanings"];
   if (
     (required.includes("translation") && !output.translation) ||
-    (required.includes("insights") && !output.insights) ||
     (required.includes("wordMeanings") && !output.wordMeanings)
   )
     throw new Error("GENERATION_COMPONENT_MISSING");
@@ -336,12 +311,5 @@ function validatedGeneration(
     )
       throw new Error("TRANSLATION_HAS_BLANK_LINE");
   }
-  const sourceLines = new Set(arabic.content.map((line) => line.trim()));
-  if (
-    output.insights?.notableLines.some(
-      ({ line }) => !sourceLines.has(line.trim())
-    )
-  )
-    throw new Error("INSIGHT_LINE_NOT_IN_SOURCE");
   return { output, arabic };
 }

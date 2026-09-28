@@ -33,7 +33,9 @@ export async function handlePublicCachePurge(
   }
   try {
     const result = await purge(
-      publicationCacheTags(route.authorSlug, route.poemId),
+      "all" in route
+        ? ["saqi-corpus"]
+        : publicationCacheTags(route.authorSlug, route.poemId),
     );
     if (!result.success)
       return new Response(null, { status: 503, headers: NO_STORE });

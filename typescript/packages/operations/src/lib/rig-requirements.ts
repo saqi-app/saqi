@@ -10,14 +10,6 @@ const HasEnglishSql = `coalesce((
 const CurrentSql = `(publication_json IS NOT NULL
   AND publication_source_hash = source_hash
   AND json_extract(publication_json, '$.active') = 1)`;
-const InsightsSql = `coalesce((
-  length(trim(json_extract(publication_json, '$.fields.insights.summary'))) > 0
-  AND length(trim(json_extract(publication_json, '$.fields.insights.historicalContext'))) > 0
-  AND length(trim(json_extract(publication_json, '$.fields.insights.culturalSignificance'))) > 0
-  AND json_array_length(publication_json, '$.fields.insights.themes') > 0
-  AND json_array_length(publication_json, '$.fields.insights.literaryDevices') > 0
-  AND json_array_length(publication_json, '$.fields.insights.notableLines') > 0
-), 0)`;
 const GlossesSql = `coalesce((
   (json_extract(publication_json, '$.fields.wordGlosses.sourceHash') = source_hash
     AND json_array_length(publication_json, '$.fields.wordGlosses.meanings.lines') = json_array_length(content_arabic, '$.content'))
@@ -26,7 +18,6 @@ const GlossesSql = `coalesce((
 ), 0)`;
 export const RequiredSql = `(SELECT json_group_array(component) FROM (
   SELECT 'translation' AS component WHERE NOT coalesce(${CurrentSql} AND ${HasEnglishSql}, 0)
-  UNION ALL SELECT 'insights' WHERE NOT coalesce(${CurrentSql} AND ${InsightsSql}, 0)
   UNION ALL SELECT 'wordMeanings' WHERE NOT coalesce(${CurrentSql} AND ${GlossesSql}, 0)
 ))`;
 export const NeedsEnrichmentSql = `json_array_length(${RequiredSql}) > 0`;

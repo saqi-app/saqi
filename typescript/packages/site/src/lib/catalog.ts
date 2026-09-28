@@ -133,7 +133,6 @@ export interface AuthorIndexPage {
 interface PoemSummary {
   authorId: string;
   hasEnglish: boolean;
-  hasInsights: boolean;
   id: string;
   nameArabic: string;
   nameEnglish?: string;
@@ -452,17 +451,9 @@ export class CatalogRepository implements CatalogReader {
         .parse(pageResults.at(1)?.results ?? [])
         .map((row) => {
           const translationModels = summaryTranslationModels(row);
-          const publication = activePublicationSnapshot(row.publicationJson);
           return {
             authorId: row.authorId,
             hasEnglish: translationModels.length > 0,
-            hasInsights: publication
-              ? publication.fields.insights !== undefined ||
-                publication.fields.wordGlosses !== undefined ||
-                (publication.fields.modelEnrichments ?? []).some(
-                  (enrichment) => enrichment.wordGlosses !== undefined,
-                )
-              : false,
             id: row.id,
             nameArabic: row.nameArabic,
             ...englishTitleFields(row.nameEnglish),

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["translation", "insights", "wordMeanings"],
+  "required": ["translation", "wordMeanings"],
   "properties": {
     "translation": {
       "type": "object",
@@ -15,60 +15,6 @@
           "maxItems": 2000,
           "items": {
             "type": "string"
-          }
-        }
-      }
-    },
-    "insights": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "summary",
-        "themes",
-        "historicalContext",
-        "literaryDevices",
-        "culturalSignificance",
-        "notableLines"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string"
-        },
-        "themes": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          }
-        },
-        "historicalContext": {
-          "type": "string"
-        },
-        "literaryDevices": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          }
-        },
-        "culturalSignificance": {
-          "type": "string"
-        },
-        "notableLines": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["line", "explanation"],
-            "properties": {
-              "line": {
-                "type": "string"
-              },
-              "explanation": {
-                "type": "string"
-              }
-            }
           }
         }
       }

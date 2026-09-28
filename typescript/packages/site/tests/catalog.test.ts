@@ -149,7 +149,7 @@ void test("invalid publication cannot hide readable Arabic or advertise English"
   }
 });
 
-void test("word-gloss publications keep the author-page insights badge", async () => {
+void test("word-gloss publications keep per-word meanings", async () => {
   const sqlite = createDatabase();
   try {
     sqlite.exec(`
@@ -195,10 +195,7 @@ void test("word-gloss publications keep the author-page insights badge", async (
       .run(JSON.stringify(publication));
     const reader = catalogRepository(sqlite);
     const detail = await reader.getPoemPage("gloss-poet", "p-gloss");
-    assert.equal(detail?.poem.insights, undefined);
     assert.ok(detail?.poem.modelEnrichments?.[0]?.wordGlosses);
-    const summary = await reader.getAuthorPage("gloss-poet");
-    assert.equal(summary?.poems[0]?.hasInsights, true);
   } finally {
     sqlite.close();
   }
@@ -487,7 +484,7 @@ void test("catalogs use normalized Arabic alphabetical order", async () => {
   }
 });
 
-void test("standalone glosses keep their badge and stop aligning after source changes", async () => {
+void test("standalone glosses stop aligning after source changes", async () => {
   const sqlite = createDatabase();
   try {
     sqlite.exec(
@@ -534,8 +531,6 @@ void test("standalone glosses keep their badge and stop aligning after source ch
     const reader = catalogRepository(sqlite);
     const before = await reader.getPoemPage("standalone", "p-standalone");
     assert.equal(before?.poem.wordGlosses?.model, "gpt-6-sol");
-    const summary = await reader.getAuthorPage("standalone");
-    assert.equal(summary?.poems[0]?.hasInsights, true);
     sqlite
       .prepare("UPDATE poem SET source_hash=? WHERE id='p-standalone'")
       .run("b".repeat(64));

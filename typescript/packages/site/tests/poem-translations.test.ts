@@ -13,15 +13,6 @@ import {
   wordGlossMatchesTranslation,
 } from "../src/lib/poem-translations";
 
-const ModelInsights = {
-  culturalSignificance: "Culture",
-  historicalContext: "History",
-  literaryDevices: ["Metaphor"],
-  notableLines: [{ explanation: "Why", line: "بيت" }],
-  summary: "Summary",
-  themes: ["Theme"],
-};
-
 void test("translation tracks remain poem-wide and deterministic", () => {
   assert.deepEqual(
     poemTranslationTracks({
@@ -102,14 +93,12 @@ void test("legacy and normalized translations remain independently selectable", 
       linesEnglish: ["Legacy"],
       modelEnrichments: [
         {
-          insights: ModelInsights,
           lines: ["Sol"],
           model: "gpt-5.6-sol",
           modelKey: "sol-5.6",
           reasoningEffort: "high",
         },
         {
-          insights: ModelInsights,
           lines: ["Claude"],
           model: "claude-opus-5",
           modelKey: "claude-opus-5",
