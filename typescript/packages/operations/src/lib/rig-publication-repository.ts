@@ -182,8 +182,7 @@ export class RigPublicationRepository {
         .prepare(
           `UPDATE poem
         SET rig_status = 'blocked', rig_version = rig_version + 1,
-            rig_lease_token = NULL, rig_lease_expires_at = NULL,
-            rig_updated_at = unixepoch()
+            rig_lease_token = NULL, rig_lease_expires_at = NULL
         WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
           AND rig_checkpoint_json IS NOT NULL`
         )
@@ -220,7 +219,7 @@ export class RigPublicationRepository {
         .prepare(
           `UPDATE poem SET rig_status = 'retry',
         rig_version = rig_version + 1, rig_lease_token = NULL,
-        rig_lease_expires_at = NULL, rig_updated_at = unixepoch()
+        rig_lease_expires_at = NULL
         WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
           AND rig_checkpoint_json = ?3`
         )
@@ -286,7 +285,7 @@ export class RigPublicationRepository {
            rig_status = 'complete',
            rig_version = rig_version + 1,
            rig_checkpoint_json = NULL, rig_lease_token = NULL,
-           rig_lease_expires_at = NULL, rig_updated_at = unixepoch()
+           rig_lease_expires_at = NULL
        WHERE id = ?4 AND rig_status = 'claimed' AND rig_version = ?5
          AND source_hash = ?2 AND rig_checkpoint_json = ?6
          AND publication_hash IS ?7`

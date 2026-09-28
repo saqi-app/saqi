@@ -83,7 +83,7 @@ export class RigStateRepository {
                 rig_checkpoint_json AS checkpointJson
          FROM poem WHERE rig_status IN ('claimed', 'dispatching', 'unknown')
          ORDER BY CASE WHEN rig_status = 'unknown' THEN 1 ELSE 0 END,
-                  rig_updated_at, id LIMIT 1`
+                  id LIMIT 1`
       )
       .first<unknown>();
     return raw === null ? null : StateRowSchema.parse(raw);
@@ -152,7 +152,7 @@ export class RigStateRepository {
         `UPDATE poem
          SET rig_checkpoint_json = ?1, rig_status = 'dispatching',
              rig_version = rig_version + 1,
-             rig_lease_expires_at = ?2, rig_updated_at = ?3
+             rig_lease_expires_at = ?2
          WHERE id = ?4 AND rig_status = 'claimed'
            AND rig_lease_token = ?5 AND rig_version = ?6
            AND rig_lease_expires_at > ?3 AND source_hash = ?7`
@@ -175,8 +175,7 @@ export class RigStateRepository {
       .prepare(
         `UPDATE poem
          SET rig_status = 'unknown', rig_version = rig_version + 1,
-             rig_lease_token = NULL, rig_lease_expires_at = NULL,
-             rig_updated_at = ?2
+             rig_lease_token = NULL, rig_lease_expires_at = NULL
          WHERE id = ?1 AND rig_status = 'dispatching'
            AND rig_lease_expires_at <= ?2`
       )
@@ -214,8 +213,7 @@ export class RigStateRepository {
         `UPDATE poem
          SET rig_checkpoint_json = ?1, rig_status = 'claimed',
              rig_version = rig_version + 1,
-             rig_lease_token = NULL, rig_lease_expires_at = NULL,
-             rig_updated_at = unixepoch()
+             rig_lease_token = NULL, rig_lease_expires_at = NULL
          WHERE id = ?2 AND rig_version = ?3
            AND rig_status IN ('dispatching', 'unknown')
            AND json_extract(rig_checkpoint_json, '$.invocation.attemptId') = ?4`
@@ -235,8 +233,7 @@ export class RigStateRepository {
       .prepare(
         `UPDATE poem
          SET rig_status = 'retry', rig_version = rig_version + 1,
-             rig_checkpoint_json = NULL,
-             rig_updated_at = unixepoch()
+             rig_checkpoint_json = NULL
          WHERE id = ?1 AND rig_status = 'unknown' AND rig_version = ?2
            AND json_extract(rig_checkpoint_json, '$.invocation.attemptId') = ?3`
       )
@@ -296,8 +293,7 @@ export class RigStateRepository {
                  AND json_extract(rig_checkpoint_json, '$.sourceHash') = source_hash
                THEN rig_checkpoint_json
                ELSE json_object('phase', 'generation', 'sourceHash', source_hash, 'required', json(${RequiredSql}))
-             END,
-             rig_updated_at = ?2
+             END
          WHERE id = ?3 AND publishable = 1
            AND source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
