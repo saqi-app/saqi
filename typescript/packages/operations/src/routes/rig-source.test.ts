@@ -11,9 +11,9 @@ test("fresh requests honor a durable source deadline across authors until it exp
     CREATE TABLE d1_migrations(name TEXT PRIMARY KEY);
     INSERT INTO d1_migrations VALUES ('0064_retire_collection_dashboard.sql');
     CREATE TABLE author(id TEXT PRIMARY KEY, source_author_id TEXT,
-      source_url TEXT, name_arabic TEXT, collected_at INTEGER, source_retry_after INTEGER);
-    INSERT INTO author VALUES ('a', 'a', NULL, 'شاعر', 1, 2000000000);
-    INSERT INTO author VALUES ('b', 'b', 'https://www.aldiwan.net/cat-b', 'شاعر', NULL, NULL);
+      source_url TEXT, name_arabic TEXT, source_retry_after INTEGER);
+    INSERT INTO author VALUES ('a', 'a', NULL, 'شاعر', 2000000000);
+    INSERT INTO author VALUES ('b', 'b', 'https://www.aldiwan.net/cat-b', 'شاعر', NULL);
   `);
   const wrap = (sql: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(sql, parameters),

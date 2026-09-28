@@ -25,7 +25,7 @@ function fixture() {
       id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL,
       name_arabic TEXT NOT NULL,
       source_author_id TEXT, source_url TEXT,
-      collected_at INTEGER, source_retry_after INTEGER
+      source_retry_after INTEGER
     );
     CREATE UNIQUE INDEX author_source_identity
       ON author(source_author_id) WHERE source_author_id IS NOT NULL;
@@ -35,7 +35,6 @@ function fixture() {
       name_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL,
       sitemap_shard INTEGER NOT NULL,
       source_poem_id TEXT, source_url TEXT, source_hash TEXT,
-      collected_at INTEGER,
       publication_json TEXT, publication_source_hash TEXT, publication_hash TEXT,
       publication_cache_dirty INTEGER NOT NULL DEFAULT 0
     );
@@ -213,9 +212,9 @@ test("an interrupted author collection stays due until its manifest completes", 
   await repository.upsertAuthor(author);
   expect(
     sqlite
-      .prepare("SELECT collected_at AS collectedAt FROM author WHERE id = ?")
+      .prepare("SELECT source_url AS sourceUrl FROM author WHERE id = ?")
       .get(created.id)
-  ).toEqual({ collectedAt: null });
+  ).toEqual({ sourceUrl: author.sourceUrl });
   await expect(repository.nextAuthor()).resolves.toMatchObject({
     id: created.id,
   });
