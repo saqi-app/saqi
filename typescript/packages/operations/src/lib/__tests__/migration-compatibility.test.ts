@@ -157,9 +157,7 @@ describe("canonical migration compatibility", () => {
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
-    expect(applyPending(database).at(-1)).toBe(
-      "0085_backfill_legacy_titles.sql"
-    );
+    expect(applyPending(database).at(-1)).toBe("0086_reject_invalid_poems.sql");
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
       database
@@ -203,6 +201,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
+      "0086_reject_invalid_poems.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -253,7 +252,12 @@ describe("canonical migration compatibility", () => {
       .prepare("SELECT publication_json FROM poem WHERE id=?")
       .pluck()
       .get(POEM_ID);
-    expect(applyPending(database)).toEqual(["0085_backfill_legacy_titles.sql"]);
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0086_")
+      )
+    ).toEqual(["0085_backfill_legacy_titles.sql"]);
     expect(
       database
         .prepare("SELECT name_english FROM poem WHERE id=?")
@@ -273,6 +277,62 @@ describe("canonical migration compatibility", () => {
         .get(POEM_ID)
     ).toBe(publication);
     expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("deletes only unpublished invalid poems and rejects future invalid writes", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0086_")
+    );
+    insertPoem(database);
+    const insert = database.prepare(
+      `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic)
+       VALUES (?, ?, ?, 1, 'قصيدة', '{"content":[]}')`
+    );
+    for (let index = 0; index < 66; index++) {
+      const id = `invalid-${String(index)}`;
+      insert.run(id, AUTHOR_ID, id);
+    }
+    expect(
+      database
+        .prepare("SELECT count(*) FROM poem WHERE publishable<>1")
+        .pluck()
+        .get()
+    ).toBe(66);
+    expect(applyPending(database)).toEqual(["0086_reject_invalid_poems.sql"]);
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
+    expect(
+      database
+        .prepare("SELECT publication_json FROM poem WHERE id=?")
+        .pluck()
+        .get(POEM_ID)
+    ).toBe(PUBLICATION);
+    expect(() =>
+      insert.run("another-invalid", AUTHOR_ID, "another-invalid")
+    ).toThrow(/invalid poem/u);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("refuses to delete an invalid poem with a publication snapshot", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0086_")
+    );
+    insertPoem(database);
+    database
+      .prepare("UPDATE poem SET content_arabic=? WHERE id=?")
+      .run(JSON.stringify({ content: [] }), POEM_ID);
+    expect(() => applyPending(database)).toThrow();
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
+    expect(
+      database
+        .prepare(
+          "SELECT 1 FROM d1_migrations WHERE name='0086_reject_invalid_poems.sql'"
+        )
+        .get()
+    ).toBeUndefined();
   });
 
   it("removes only the audited hidden unpublished rows", () => {
@@ -313,6 +373,7 @@ describe("canonical migration compatibility", () => {
       "0083_index_source_ids.sql",
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
+      "0086_reject_invalid_poems.sql",
     ]);
   });
 
@@ -424,6 +485,7 @@ describe("canonical migration compatibility", () => {
       "0083_index_source_ids.sql",
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
+      "0086_reject_invalid_poems.sql",
     ]);
   });
 
@@ -481,15 +543,17 @@ describe("canonical migration compatibility", () => {
         )
         .run()
     ).toThrow(/UNIQUE/u);
-    database
-      .prepare("UPDATE poem SET slug=? WHERE id=?")
-      .run("poem\u{202a}", POEM_ID);
-    expect(visible()).toBe(0);
-    database.prepare("UPDATE poem SET slug='poem42' WHERE id=?").run(POEM_ID);
+    expect(() =>
+      database
+        .prepare("UPDATE poem SET slug=? WHERE id=?")
+        .run("poem\u{202a}", POEM_ID)
+    ).toThrow(/invalid poem/u);
     expect(visible()).toBe(1);
-    database
-      .prepare("UPDATE poem SET content_arabic=? WHERE id=?")
-      .run(JSON.stringify({ content: ["صدر\u{0000}عجز"] }), POEM_ID);
-    expect(visible()).toBe(0);
+    expect(() =>
+      database
+        .prepare("UPDATE poem SET content_arabic=? WHERE id=?")
+        .run(JSON.stringify({ content: ["صدر\u{0000}عجز"] }), POEM_ID)
+    ).toThrow(/invalid poem/u);
+    expect(visible()).toBe(1);
   });
 });
