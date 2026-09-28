@@ -36,6 +36,7 @@ jobs:
           SELECT COUNT(*) AS poems FROM poem;
           SELECT COUNT(*) AS public_poems FROM poem p JOIN author a ON a.id = p.author_id
             WHERE p.publishable = 1;
+          SELECT COUNT(*) AS canonical_public_poems FROM poem p JOIN author a ON a.id = p.author_id;
           SELECT COUNT(*) AS publication_snapshots FROM poem WHERE publication_json IS NOT NULL;
           SELECT COUNT(*) AS source_authors FROM author WHERE source_author_id IS NOT NULL;
           SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id

@@ -246,7 +246,7 @@ export class RigStateRepository {
     const candidate = await this.#database
       .prepare(
         `SELECT p.id FROM poem p INDEXED BY poem_rig_retry
-         WHERE p.rig_status = 'retry' AND p.publishable = 1
+         WHERE p.rig_status = 'retry'
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id)
@@ -261,8 +261,7 @@ export class RigStateRepository {
     const candidate = await this.#database
       .prepare(
         `SELECT p.id FROM poem p
-         WHERE p.publishable = 1
-           AND p.source_hash IS NOT NULL
+         WHERE p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id)
            AND ${NeedsEnrichmentSql}
@@ -294,8 +293,7 @@ export class RigStateRepository {
                THEN rig_checkpoint_json
                ELSE json_object('phase', 'generation', 'sourceHash', source_hash, 'required', json(${RequiredSql}))
              END
-         WHERE id = ?3 AND publishable = 1
-           AND source_hash IS NOT NULL
+         WHERE id = ?3 AND source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = poem.author_id)
            AND ${NeedsEnrichmentSql}

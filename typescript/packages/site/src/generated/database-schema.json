@@ -49,7 +49,8 @@
     "0083_index_source_ids.sql",
     "0084_drop_source_names.sql",
     "0085_backfill_legacy_titles.sql",
-    "0086_reject_invalid_poems.sql"
+    "0086_reject_invalid_poems.sql",
+    "0087_index_canonical_poems.sql"
   ],
   "databases": [
     {
