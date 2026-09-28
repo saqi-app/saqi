@@ -18,16 +18,13 @@ function createSaqiCollector(browser, project, clock = globalThis) {
     .then(async (stored) => {
       control = { ...control, ...stored.collectorControl };
       snapshot = stored.collectorStatus || snapshot;
-      // Recover the old false conflict once after upgrading the backend.
-      if (
-        control.blocked &&
-        control.error?.code === "SOURCE_CHANGED" &&
-        !control.sourceConflictRetried
-      )
+      // Older workers left source conflicts blocked. A fresh session re-reads
+      // the source and D1 hash; exhausted conflicts use a distinct code below.
+      if (control.blocked && control.error?.code === "SOURCE_CHANGED")
         await saveControl({
           blocked: false,
           retryAt: null,
-          sourceConflictRetried: true,
+          retryCount: 0,
           error: null,
         });
     });
@@ -237,6 +234,7 @@ function createSaqiCollector(browser, project, clock = globalThis) {
       retryAt = null;
     const network =
       /NETWORK|TIMEOUT|DISCONNECTED|UNAVAILABLE|fetch failed/iu.test(code);
+    const retryable = network || code === "SOURCE_CHANGED";
     if (code === "SOURCE_HUMAN_REQUIRED" || code === "SOURCE_CHALLENGE")
       state = "human_required";
     else if (code === "SOURCE_COOLDOWN" && failure.retryAfter) {
@@ -249,17 +247,23 @@ function createSaqiCollector(browser, project, clock = globalThis) {
         state = "cooldown";
         retryAt = new Date(time).toISOString();
       }
-    } else if (network && control.retryCount < 3) {
+    } else if (retryable && control.retryCount < 3) {
       state = "cooldown";
       retryAt = new Date(
         now() + [60000, 120000, 300000][control.retryCount],
       ).toISOString();
     }
-    const detail = { code, message: failure.message || code };
+    const detail =
+      code === "SOURCE_CHANGED" && state === "error"
+        ? {
+            code: "SOURCE_CONFLICT_RETRY_EXHAUSTED",
+            message: "The source changed during collection and three retries. Review the source, then retry.",
+          }
+        : { code, message: failure.message || code };
     await saveControl({
       blocked: state !== "cooldown",
       retryAt,
-      retryCount: control.retryCount + (network ? 1 : 0),
+      retryCount: control.retryCount + (retryable ? 1 : 0),
       error: detail,
     });
     await display({ ...snapshot, state, error: detail, retryAt });
@@ -380,7 +384,6 @@ function createSaqiCollector(browser, project, clock = globalThis) {
             blocked: false,
             retryAt: null,
             retryCount: 0,
-            sourceConflictRetried: false,
             error: null,
           });
           await display({

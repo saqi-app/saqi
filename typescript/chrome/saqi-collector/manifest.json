@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Saqi personal Chrome collector",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minimum_chrome_version": "120",
   "description": "Collect Arabic poetry using your normal Chrome session. Credentials stay in the native Saqi rig.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0GRsfxmQkOLY9akK/FvpaSVr5KRf2nO/oNBgAmqSeuIjKt6vk9jl5HB1rxLfE6Ky893ihg4VgjRiZdr8pvptd7tgiESLmVXzMAA8It9oQI7JC4eQ8dN0WluhiClplOaPaBGnX80iw0HzVSzWHW9LeafQZ2oLDTGk8w/jo7yEGJ/YIxQqYeU1vjPTvOUj3+aDP5SZRkm2YK1OWro0SyuFTv8zTsDZC+yViHfWkF2p9gH/bhcrsyqZXLmkqoXVT5BGkOA0cFxLSVoQQCxApytEXi506J21HFCNmShAWfsstxFMaVw6/CjNtKWruDJ+9nPsElNf/MmQv1tm93Osj6guQwIDAQAB",
