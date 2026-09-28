@@ -2,7 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": [],
+      "entry": [
+        "scripts/audit-title-fold.mjs"
+      ],
       "project": [
         "*.mjs"
       ]

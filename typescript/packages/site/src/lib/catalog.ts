@@ -274,7 +274,7 @@ function englishTitleFields(
   return nameEnglish ? { nameEnglish } : {};
 }
 
-function usableTitle(...values: (null | string)[]): string | undefined {
+export function usableTitle(...values: (null | string)[]): string | undefined {
   return values.find(
     (value): value is string => value !== null && isUsableGeneratedText(value),
   );
