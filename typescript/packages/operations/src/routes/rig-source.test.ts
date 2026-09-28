@@ -12,7 +12,7 @@ test("fresh requests honor a durable source deadline across authors until it exp
     INSERT INTO d1_migrations VALUES ('0064_retire_collection_dashboard.sql');
     CREATE TABLE author(id TEXT PRIMARY KEY, source_author_id TEXT,
       source_url TEXT, name_arabic TEXT, collected_at INTEGER, source_retry_after INTEGER);
-    INSERT INTO author VALUES ('a', 'a', 'https://www.aldiwan.net/cat-a', 'شاعر', 1, 2000000000);
+    INSERT INTO author VALUES ('a', 'a', NULL, 'شاعر', 1, 2000000000);
     INSERT INTO author VALUES ('b', 'b', 'https://www.aldiwan.net/cat-b', 'شاعر', NULL, NULL);
   `);
   const wrap = (sql: string, values: unknown[] = []) => ({

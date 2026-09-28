@@ -117,10 +117,9 @@ export class DirectSourceRepository {
     return this.#database
       .prepare(
         `SELECT id, source_author_id AS sourceAuthorId,
-              source_url AS sourceUrl, name_arabic AS nameArabic,
-              collected_at AS collectedAt
+              source_url AS sourceUrl, name_arabic AS nameArabic
        FROM author WHERE source_author_id IS NOT NULL
-         AND collected_at IS NULL
+         AND source_url IS NOT NULL
        ORDER BY id LIMIT 1`
       )
       .first();
@@ -196,8 +195,8 @@ export class DirectSourceRepository {
     await this.#database
       .prepare(
         `INSERT OR IGNORE INTO author
-       (id, slug, name_arabic, source_author_id, source_url, collected_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, NULL)`
+       (id, slug, name_arabic, source_author_id, source_url)
+       VALUES (?1, ?2, ?3, ?4, ?5)`
       )
       .bind(id, slug, input.nameArabic, input.sourceAuthorId, input.sourceUrl)
       .run();
@@ -214,7 +213,7 @@ export class DirectSourceRepository {
     SourceIdSchema.parse(sourceAuthorId);
     const result = await this.#database
       .prepare(
-        `UPDATE author SET collected_at = unixepoch(), source_url = NULL
+        `UPDATE author SET source_url = NULL
          WHERE source_author_id = ?1 RETURNING id`
       )
       .bind(sourceAuthorId)
