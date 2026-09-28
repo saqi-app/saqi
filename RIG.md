@@ -37,7 +37,7 @@ Collection checks for unfinished D1 authors every minute, then continues directl
 
 An author with `collected_at` is treated as finished and is never revisited automatically. Historical values copied from the old source identity sometimes mean “last observed” rather than “full manifest completed”; this one-time cutover deliberately treats those existing authors as complete, so previously unseen poems under them may be omitted. Use **Collect this author** to admit a new author; the rig does not scan the author directory after it finishes its current work.
 
-On a source author page, **Collect this author** previews the actual Arabic name and URL, validates the complete manifest and admits the author directly to D1. It preserves the current collection setting and never interrupts another author. Existing source-linked authors are revisited automatically; discovering the entire author directory is outside this release.
+On a source author page, **Collect this author** previews the actual Arabic name and URL, validates the complete manifest and admits the author directly to D1. It preserves the current collection setting and never interrupts another author. An author already marked complete is not revisited automatically; discovering the entire author directory is outside this release.
 
 Identity conflicts are never auto-merged. They count as checked but **need review**, not imported. The popup preserves the latest affected author's warning and up to 20 example poem IDs until dismissed. This is bounded current diagnostic evidence, not an exhaustive historical issue list.
 
@@ -75,14 +75,10 @@ A manual retry can duplicate one call if it completed without a recoverable resu
 
 Stop writers before database recovery and preserve any subsequent publications. The verified private pre-column-drop backup is `saqi-corpus-archive/d1/2026-09-26T22-01-42Z-5a40fbd75e02494b8d4e117d9e5f0c9e/manifest.json`. It has six checksum-verified compressed parts, 1,392 authors, 104,961 poems and 77,742 snapshots. Later background publications must be reconciled before restoring it. Create a fresh backup with `python3 typescript/scripts/archive-production-d1.py --execute` while writers are stopped.
 
-From `typescript/packages/operations`, the pre-drop-compatible rollback versions are:
+Each migration deployment records a fresh D1 Time Travel bookmark in the **Record the D1 rollback bookmark** job step. Stop the collector and translator and reconcile any later writes before restoring that bookmark. From `typescript/packages/operations`:
 
 ```sh
-yarn wrangler rollback 1de00fbf-5ea0-421a-9a54-6adcb2657bf1 --name saqi-ops --yes
-yarn wrangler rollback 39ad654f-da26-4b03-a615-1fe3fbd719a1 --name saqi-public --yes
-yarn wrangler rollback edf5dd91-8d7d-4117-8e56-96a2de2f8d1b --name saqi-www --yes
-# Only after preserving/reconciling later writes, within Time Travel retention:
-yarn wrangler d1 time-travel restore saqi-db --bookmark 0000298d-0000031b-000050f2-f9376334f5c147cda32075fa7afce5bd
+yarn wrangler d1 time-travel restore saqi-db --bookmark BOOKMARK_FROM_DEPLOY_LOG
 ```
 
-Prefer a forward fix. Do not roll back to code that reads removed columns. Inspect the migration ledger after any ambiguous timeout; never assume an error means rollback. Before restarting, verify author/poem/publication counts, retained source/publication hashes, FK checks and public poem URLs. For a durable archive restore, use the checked-in `rehearse-production-d1-restore.py` and `rehearse-production-d1-import.py` helpers; oversized payloads require bound imports.
+Prefer a forward fix. After restoring the D1 bookmark, redeploy the matching pre-migration Operations and public Worker versions from the previous successful deployment; do not run code against a mismatched schema. Inspect the migration ledger after any ambiguous timeout; never assume an error means rollback. Before restarting, verify author/poem/publication counts, retained source/publication hashes, FK checks and public poem URLs. For a durable archive restore, use the checked-in `rehearse-production-d1-restore.py` and `rehearse-production-d1-import.py` helpers; oversized payloads require bound imports.

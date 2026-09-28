@@ -109,7 +109,7 @@ void test("canonical publication preserves visible alternatives and attribution"
     assert.equal(changedSource?.poem.publicationOutdated, true);
     assert.deepEqual(changedSource.poem.linesEnglish, ["Legacy English"]);
     assert.equal(await reader.getPoemPage("wrong-poet", "p"), undefined);
-    sqlite.exec("UPDATE author SET hidden=1 WHERE id='a'");
+    sqlite.exec("DELETE FROM poem WHERE id='p'; DELETE FROM author WHERE id='a'");
     assert.equal(await reader.getPoemPage("poet", "p"), undefined);
     assert.deepEqual(await reader.listAuthors(), []);
   } finally {

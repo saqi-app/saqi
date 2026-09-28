@@ -39,6 +39,15 @@ function fixture() {
       "utf8"
     )
   );
+  sqlite.exec(
+    readFileSync(
+      new URL(
+        "../../migrations/0080_drop_unused_rig_updated_at.sql",
+        import.meta.url
+      ),
+      "utf8"
+    )
+  );
   sqlite
     .prepare("INSERT INTO author(id,name_arabic) VALUES(?,?)")
     .run("author-1", "شاعر");
@@ -75,20 +84,30 @@ function fixture() {
   return { publisher, repository, sqlite };
 }
 
-test("hidden authors do not enter the Codex queue or expose a claimed source", async () => {
+test("poems without a canonical author do not enter the queue or expose a claimed source", async () => {
   const { publisher, repository, sqlite } = fixture();
   const owner = "11111111-1111-4111-8111-111111111111";
-  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  sqlite
+    .prepare("UPDATE poem SET author_id = 'missing' WHERE id = 'poem-1'")
+    .run();
   sqlite
     .prepare("UPDATE poem SET rig_status = 'retry' WHERE id = 'poem-1'")
     .run();
-  await expect(repository.claimNextPoem(owner, 100)).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(owner, 100, "poem-1")
+  ).resolves.toBeNull();
 
-  sqlite.prepare("UPDATE author SET hidden = 0 WHERE id = 'author-1'").run();
-  await expect(repository.claimNextPoem(owner, 100)).resolves.toMatchObject({
+  sqlite
+    .prepare("UPDATE poem SET author_id = 'author-1' WHERE id = 'poem-1'")
+    .run();
+  await expect(
+    repository.claimNextPoem(owner, 100, "poem-1")
+  ).resolves.toMatchObject({
     poemId: "poem-1",
   });
-  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  sqlite
+    .prepare("UPDATE poem SET author_id = 'missing' WHERE id = 'poem-1'")
+    .run();
   await expect(
     publisher.readClaimedSource("poem-1", owner, 101)
   ).resolves.toBeNull();
@@ -111,7 +130,9 @@ test("a specific due poem can be claimed without bypassing the active-work fence
       "UPDATE poem SET rig_status = NULL, rig_lease_expires_at = NULL WHERE id = 'poem-2'"
     )
     .run();
-  sqlite.prepare("UPDATE author SET hidden = 1 WHERE id = 'author-1'").run();
+  sqlite
+    .prepare("UPDATE poem SET author_id = 'missing' WHERE id = 'poem-1'")
+    .run();
   await expect(
     repository.claimNextPoem(otherOwner, 102, "poem-1")
   ).resolves.toBeNull();
@@ -295,7 +316,7 @@ test("an expired claim is recovered before another poem", async () => {
   sqlite
     .prepare(
       `UPDATE poem SET rig_status = 'claimed', rig_version = 1,
-       rig_lease_expires_at = 90, rig_updated_at = 10,
+       rig_lease_expires_at = 90,
        rig_checkpoint_json = ? WHERE id = 'poem-2'`
     )
     .run(JSON.stringify({ phase: "generation", sourceHash: "b".repeat(64) }));
