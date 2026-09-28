@@ -42,7 +42,9 @@
     "0076_drop_unused_poem_hidden.sql",
     "0077_drop_unused_poem_source_url.sql",
     "0078_drop_unused_poem_collected_at.sql",
-    "0079_drop_unused_poem_rig_last_error.sql"
+    "0079_drop_unused_poem_rig_last_error.sql",
+    "0080_drop_unused_rig_updated_at.sql",
+    "0081_remove_hidden_unpublished_author.sql"
   ],
   "databases": [
     {
@@ -259,12 +261,6 @@
             {
               "name": "rig_checkpoint_json",
               "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "rig_updated_at",
-              "type": "INTEGER",
               "nullable": true,
               "primaryKey": false
             }

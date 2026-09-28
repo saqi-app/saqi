@@ -53,8 +53,7 @@ const PUBLISHABLE_POEM = `p.publishable = 1
   AND ${SAFE_ROUTE_SEGMENT_SQL("p.slug")}
   AND ${SAFE_IDENTITY_SQL("p.name_arabic")}
   AND p.verses BETWEEN 1 AND 1000`;
-const PUBLISHABLE_AUTHOR = `a.hidden = 0
-  AND ${SAFE_IDENTITY_SQL("a.id")}
+const PUBLISHABLE_AUTHOR = `${SAFE_IDENTITY_SQL("a.id")}
   AND ${SAFE_ROUTE_SEGMENT_SQL("a.slug")}
   AND instr(a.slug, '%') = 0
   AND ${SAFE_IDENTITY_SQL("a.name_arabic")}

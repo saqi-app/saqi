@@ -147,7 +147,6 @@ export class RigPublicationRepository {
               coalesce(json_extract(p.rig_checkpoint_json, '$.required'), ${RequiredSql}) AS requiredJson
        FROM poem p JOIN author a ON a.id = p.author_id
        WHERE p.id = ?1 AND p.rig_status = 'claimed'
-         AND a.hidden = 0
          AND p.rig_lease_token = ?2 AND p.rig_lease_expires_at > ?3`
       )
       .bind(poemId, token, now)

@@ -249,7 +249,7 @@ export class RigStateRepository {
          WHERE p.rig_status = 'retry' AND p.publishable = 1
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
-                       WHERE a.id = p.author_id AND a.hidden = 0)
+                       WHERE a.id = p.author_id)
            AND ${NeedsEnrichmentSql}
          ORDER BY ${EnrichmentPrioritySql}, p.id LIMIT 1`
       )
@@ -264,7 +264,7 @@ export class RigStateRepository {
          WHERE p.publishable = 1
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
-                       WHERE a.id = p.author_id AND a.hidden = 0)
+                       WHERE a.id = p.author_id)
            AND ${NeedsEnrichmentSql}
            AND (p.rig_status IS NULL
              OR p.rig_status IN ('retry', 'complete')
@@ -297,7 +297,7 @@ export class RigStateRepository {
          WHERE id = ?3 AND publishable = 1
            AND source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
-                       WHERE a.id = poem.author_id AND a.hidden = 0)
+                       WHERE a.id = poem.author_id)
            AND ${NeedsEnrichmentSql}
            AND (rig_status IS NULL OR rig_status IN ('retry', 'complete')
              OR (rig_status = 'claimed' AND

@@ -150,7 +150,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0079_drop_unused_poem_rig_last_error.sql"
+      "0081_remove_hidden_unpublished_author.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     const before = database
@@ -164,6 +164,63 @@ describe("canonical migration compatibility", () => {
     ).toEqual(before);
     expect(database.pragma("foreign_key_check")).toEqual([]);
     expect(database.pragma("integrity_check", { simple: true })).toBe("ok");
+  });
+
+  it("removes only the audited hidden unpublished rows", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0081_")
+    );
+    database
+      .prepare(
+        "INSERT INTO author(id,slug,name_arabic,hidden) VALUES ('hidden-author','hidden-author','شاعر',1)"
+      )
+      .run();
+    const insert = database.prepare(
+      `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,publishable)
+       VALUES (?, 'hidden-author', ?, 1, 'قصيدة', '{"content":["بيت"]}', 1)`
+    );
+    for (let index = 0; index < 137; index++) {
+      const id = `hidden-poem-${String(index)}`;
+      insert.run(id, id);
+    }
+    expect(applyPending(database)).toEqual([
+      "0081_remove_hidden_unpublished_author.sql",
+    ]);
+    expect(
+      database
+        .prepare("SELECT count(*) FROM author WHERE hidden <> 0")
+        .pluck()
+        .get()
+    ).toBe(0);
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(0);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("refuses to delete a hidden author with published content", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0081_")
+    );
+    database
+      .prepare(
+        "INSERT INTO author(id,slug,name_arabic,hidden) VALUES ('hidden-author','hidden-author','شاعر',1)"
+      )
+      .run();
+    const insert = database.prepare(
+      `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,publishable,publication_json)
+       VALUES (?, 'hidden-author', ?, 1, 'قصيدة', '{"content":["بيت"]}', 1, ?)`
+    );
+    for (let index = 0; index < 137; index++) {
+      const id = `hidden-poem-${String(index)}`;
+      insert.run(id, id, index === 0 ? PUBLICATION : null);
+    }
+    expect(() => applyPending(database)).toThrow();
+    expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(
+      137
+    );
   });
 
   it.each(["0065_", "0071_"])(
@@ -196,7 +253,8 @@ describe("canonical migration compatibility", () => {
         .prepare("SELECT name FROM pragma_table_info('poem')")
         .pluck()
         .all();
-      expect(columns).toHaveLength(24);
+      expect(columns).toHaveLength(23);
+      expect(columns).not.toContain("rig_updated_at");
       expect(columns).not.toContain("translation");
       expect(columns).not.toContain("active_source_revision_id");
     }
@@ -242,6 +300,8 @@ describe("canonical migration compatibility", () => {
       "0077_drop_unused_poem_source_url.sql",
       "0078_drop_unused_poem_collected_at.sql",
       "0079_drop_unused_poem_rig_last_error.sql",
+      "0080_drop_unused_rig_updated_at.sql",
+      "0081_remove_hidden_unpublished_author.sql",
     ]);
   });
 
