@@ -25,12 +25,7 @@ const InsightTextSchema = z
   .refine((value) => !UnsafeControl.test(value));
 const ModelLabelSchema = z.string().trim().min(1).max(100);
 const ComponentSchema = z.enum(["translation", "wordMeanings"]);
-// An existing checkpoint may still record insights. It can be recovered without
-// replaying its Codex call; its broad insight output is intentionally discarded.
-const RequiredSchema = z
-  .array(z.enum(["translation", "insights", "wordMeanings"]))
-  .min(1)
-  .max(3);
+const RequiredSchema = z.array(ComponentSchema).min(1).max(2);
 const OutputSchema = z.object({
   translation: z
     .strictObject({
