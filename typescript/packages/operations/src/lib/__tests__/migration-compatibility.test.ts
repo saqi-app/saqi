@@ -157,7 +157,9 @@ describe("canonical migration compatibility", () => {
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
-    expect(applyPending(database).at(-1)).toBe("0084_drop_source_names.sql");
+    expect(applyPending(database).at(-1)).toBe(
+      "0085_backfill_legacy_titles.sql"
+    );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
       database
@@ -198,7 +200,10 @@ describe("canonical migration compatibility", () => {
     );
     insertPoem(database);
     const before = canonicalPoem(database);
-    expect(applyPending(database)).toEqual(["0084_drop_source_names.sql"]);
+    expect(applyPending(database)).toEqual([
+      "0084_drop_source_names.sql",
+      "0085_backfill_legacy_titles.sql",
+    ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
       database
@@ -220,6 +225,53 @@ describe("canonical migration compatibility", () => {
         )
         .run(AUTHOR_ID)
     ).toThrow(/UNIQUE/u);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("copies legacy English titles while preserving the publication snapshot", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0085_")
+    );
+    insertPoem(database);
+    database
+      .prepare(
+        "UPDATE poem SET poem_title_first_line='A legacy title' WHERE id=?"
+      )
+      .run(POEM_ID);
+    const exceptionalId = "001877c3-bf36-4fa9-b653-55c438eb13b6";
+    database
+      .prepare(
+        `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,
+          name_english,poem_title_first_line)
+         VALUES (?,?,'exceptional-title',1,'قصيدة','{"content":["بيت"]}',
+          'Roses are red','A valid legacy title')`
+      )
+      .run(exceptionalId, AUTHOR_ID);
+    const publication = database
+      .prepare("SELECT publication_json FROM poem WHERE id=?")
+      .pluck()
+      .get(POEM_ID);
+    expect(applyPending(database)).toEqual(["0085_backfill_legacy_titles.sql"]);
+    expect(
+      database
+        .prepare("SELECT name_english FROM poem WHERE id=?")
+        .pluck()
+        .get(POEM_ID)
+    ).toBe("A legacy title");
+    expect(
+      database
+        .prepare("SELECT name_english FROM poem WHERE id=?")
+        .pluck()
+        .get(exceptionalId)
+    ).toBe("A valid legacy title");
+    expect(
+      database
+        .prepare("SELECT publication_json FROM poem WHERE id=?")
+        .pluck()
+        .get(POEM_ID)
+    ).toBe(publication);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -260,6 +312,7 @@ describe("canonical migration compatibility", () => {
       "0082_drop_unused_author_hidden.sql",
       "0083_index_source_ids.sql",
       "0084_drop_source_names.sql",
+      "0085_backfill_legacy_titles.sql",
     ]);
   });
 
@@ -370,6 +423,7 @@ describe("canonical migration compatibility", () => {
       "0082_drop_unused_author_hidden.sql",
       "0083_index_source_ids.sql",
       "0084_drop_source_names.sql",
+      "0085_backfill_legacy_titles.sql",
     ]);
   });
 
