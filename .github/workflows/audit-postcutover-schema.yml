@@ -76,6 +76,20 @@ jobs:
               AND EXISTS (SELECT 1 FROM json_each(p.rig_checkpoint_json, '$.required') component
                 WHERE component.value = 'insights')
             GROUP BY rig_status;
+          SELECT id AS blocked_poem_id,
+            json_extract(rig_checkpoint_json, '$.phase') AS checkpoint_phase,
+            json_extract(rig_checkpoint_json, '$.required') AS checkpoint_required,
+            json_type(rig_checkpoint_json, '$.invocation') AS invocation_type,
+            json_type(rig_checkpoint_json, '$.outputs.generation.insights') AS checkpoint_insights_type,
+            json_type(rig_checkpoint_json, '$.outputs.generation.translation.lines') AS translation_type,
+            json_array_length(rig_checkpoint_json, '$.outputs.generation.translation.lines') AS translation_lines,
+            json_type(rig_checkpoint_json, '$.outputs.generation.wordMeanings') AS meanings_type,
+            json_array_length(rig_checkpoint_json, '$.outputs.generation.wordMeanings') AS meaning_lines,
+            json_array_length(content_arabic, '$.content') AS source_lines,
+            json_type(publication_json, '$.fields.wordGlosses') AS published_glosses_type,
+            json_array_length(publication_json, '$.fields.modelEnrichments') AS published_translation_tracks,
+            publication_source_hash IS source_hash AS publication_source_current
+            FROM poem WHERE rig_status = 'blocked' ORDER BY id;
           SELECT p.id AS verified_poem_id, a.slug AS verified_author_slug,
             p.rig_status AS verified_rig_status,
             p.publication_source_hash = p.source_hash AS verified_source_current,
