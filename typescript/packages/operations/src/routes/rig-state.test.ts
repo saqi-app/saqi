@@ -8,7 +8,6 @@ test("inactive rig refuses mutation before reading D1", async () => {
   const env = parseCloudflareEnv({
     DB: { prepare },
     SAQI_RIG_ACTIVE: "0",
-    SAQI_SOURCE_NAME: "aldiwan",
     SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
   });
   const response = await post(

@@ -24,23 +24,23 @@ function fixture() {
     CREATE TABLE author (
       id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL,
       name_arabic TEXT NOT NULL,
-      source_name TEXT, source_author_id TEXT, source_url TEXT,
+      source_author_id TEXT, source_url TEXT,
       collected_at INTEGER, source_retry_after INTEGER
     );
     CREATE UNIQUE INDEX author_source_identity
-      ON author(source_name, source_author_id) WHERE source_name IS NOT NULL;
+      ON author(source_author_id) WHERE source_author_id IS NOT NULL;
     CREATE TABLE poem (
       id TEXT PRIMARY KEY, author_id TEXT REFERENCES author(id),
       slug TEXT UNIQUE NOT NULL, verses INTEGER NOT NULL,
       name_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL,
-      sitemap_shard INTEGER NOT NULL, source_name TEXT,
+      sitemap_shard INTEGER NOT NULL,
       source_poem_id TEXT, source_url TEXT, source_hash TEXT,
       collected_at INTEGER,
       publication_json TEXT, publication_source_hash TEXT, publication_hash TEXT,
       publication_cache_dirty INTEGER NOT NULL DEFAULT 0
     );
     CREATE UNIQUE INDEX poem_source_identity
-      ON poem(source_name, source_poem_id) WHERE source_name IS NOT NULL;
+      ON poem(source_poem_id) WHERE source_poem_id IS NOT NULL;
   `);
   const wrap = (query: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(query, parameters),
@@ -62,7 +62,6 @@ function fixture() {
   const database = { prepare: wrap } as unknown as D1Database;
   const repository = new DirectSourceRepository(
     database,
-    "aldiwan",
     "https://www.aldiwan.net"
   );
   const author = {
@@ -188,6 +187,23 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
   });
   expect(sqlite.prepare("SELECT count(*) AS total FROM poem").get()).toEqual({
     total: 1,
+  });
+});
+
+test("canonical IDs and author URLs preserve the original Al-Diwan namespace", async () => {
+  const { author, poem, repository, sqlite } = fixture();
+  const createdAuthor = await repository.upsertAuthor(author);
+  const createdPoem = await repository.upsertPoem(poem);
+  expect(createdAuthor.id).toBe(
+    "047d5842a24d6b138860112f6a07bff103eaf0293165d87d6a6cc00857559734"
+  );
+  expect(createdPoem.id).toBe(
+    "70fb5a129b3e0623f3335655adc64019540c6e4d7ae1f54353dba412f5096526"
+  );
+  expect(
+    sqlite.prepare("SELECT slug FROM author WHERE id = ?").get(createdAuthor.id)
+  ).toEqual({
+    slug: "source-8e14ec097fa1fd3a5dc2af11bac1884c9bbb22b6cf9c7b86cbaba13d240a2a28",
   });
 });
 
@@ -423,58 +439,61 @@ test("direct source rejects unsafe text and foreign origin", async () => {
   ).rejects.toThrow();
 });
 
-test("direct source insert passes the installed D1 schema and publishability triggers", async () => {
-  const sqlite = new Database(":memory:");
-  DATABASES.push(sqlite);
-  sqlite.pragma("foreign_keys = ON");
-  sqlite.exec(`CREATE TABLE d1_migrations (
+test.each([82, null])(
+  "direct source insert passes schema cutoff %s and publishability triggers",
+  async (cutoff) => {
+    const sqlite = new Database(":memory:");
+    DATABASES.push(sqlite);
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.exec(`CREATE TABLE d1_migrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   ) STRICT;`);
-  const directory = new URL("../../migrations/", import.meta.url);
-  for (const name of readdirSync(directory)
-    .filter((file) => /^\d{4}_.+\.sql$/u.test(file))
-    .toSorted()) {
-    sqlite.transaction(() => {
-      sqlite.exec(readFileSync(new URL(name, directory), "utf8"));
-      sqlite.prepare("INSERT INTO d1_migrations(name) VALUES (?)").run(name);
-    })();
+    const directory = new URL("../../migrations/", import.meta.url);
+    for (const name of readdirSync(directory)
+      .filter((file) => /^\d{4}_.+\.sql$/u.test(file))
+      .filter((file) => cutoff === null || Number(file.slice(0, 4)) <= cutoff)
+      .toSorted()) {
+      sqlite.transaction(() => {
+        sqlite.exec(readFileSync(new URL(name, directory), "utf8"));
+        sqlite.prepare("INSERT INTO d1_migrations(name) VALUES (?)").run(name);
+      })();
+    }
+    const wrap = (query: string, values: unknown[] = []) => ({
+      bind: (...parameters: unknown[]) => wrap(query, parameters),
+      first: async () => sqlite.prepare(query).get(numbered(values)) ?? null,
+      run: async () => {
+        const result = sqlite.prepare(query).run(numbered(values));
+        return { meta: { changes: result.changes } };
+      },
+    });
+    const repository = new DirectSourceRepository(
+      { prepare: wrap } as unknown as D1Database,
+      "https://www.aldiwan.net"
+    );
+    const author = await repository.upsertAuthor({
+      sourceAuthorId: "new-poet",
+      sourceUrl: "https://www.aldiwan.net/cat-new-poet",
+      nameArabic: "شاعر جديد",
+    });
+    const poem = await repository.upsertPoem({
+      sourceAuthorId: "new-poet",
+      sourcePoemId: "900001",
+      sourceUrl: "https://www.aldiwan.net/poem900001.html",
+      titleArabic: "قصيدة جديدة",
+      linesArabic: ["سطر عربي أول", "سطر عربي ثان"],
+      expectedHash: null,
+    });
+    expect(
+      sqlite.prepare("SELECT publishable FROM poem WHERE id = ?").get(poem.id)
+    ).toEqual({ publishable: 1 });
+    expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      sqlite.prepare("SELECT id FROM author WHERE id = ?").get(author.id)
+    ).toEqual({ id: author.id });
   }
-  const wrap = (query: string, values: unknown[] = []) => ({
-    bind: (...parameters: unknown[]) => wrap(query, parameters),
-    first: async () => sqlite.prepare(query).get(numbered(values)) ?? null,
-    run: async () => {
-      const result = sqlite.prepare(query).run(numbered(values));
-      return { meta: { changes: result.changes } };
-    },
-  });
-  const repository = new DirectSourceRepository(
-    { prepare: wrap } as unknown as D1Database,
-    "aldiwan",
-    "https://www.aldiwan.net"
-  );
-  const author = await repository.upsertAuthor({
-    sourceAuthorId: "new-poet",
-    sourceUrl: "https://www.aldiwan.net/cat-new-poet",
-    nameArabic: "شاعر جديد",
-  });
-  const poem = await repository.upsertPoem({
-    sourceAuthorId: "new-poet",
-    sourcePoemId: "900001",
-    sourceUrl: "https://www.aldiwan.net/poem900001.html",
-    titleArabic: "قصيدة جديدة",
-    linesArabic: ["سطر عربي أول", "سطر عربي ثان"],
-    expectedHash: null,
-  });
-  expect(
-    sqlite.prepare("SELECT publishable FROM poem WHERE id = ?").get(poem.id)
-  ).toEqual({ publishable: 1 });
-  expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-  expect(
-    sqlite.prepare("SELECT id FROM author WHERE id = ?").get(author.id)
-  ).toEqual({ id: author.id });
-});
+);
 
 test("source cooldown persists through completion and a shorter retry cannot erase it", async () => {
   const { author, repository, sqlite } = fixture();

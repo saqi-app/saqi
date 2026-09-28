@@ -58,7 +58,7 @@ const PoemRowSchema = z.object({
 });
 type StoredPoem = z.infer<typeof PoemRowSchema>;
 
-const AuthorBySourceSql = `SELECT id FROM author WHERE source_name = ?1 AND source_author_id = ?2`;
+const AuthorBySourceSql = `SELECT id FROM author WHERE source_author_id = ?1`;
 
 export interface AuthorUpsertResult {
   id: string;
@@ -82,12 +82,10 @@ export class DirectSourceConflictError extends Error {
 // eslint-disable-next-line @sarj/require-port-for-service, @sarj/require-interface-for-exported-class -- One concrete D1 implementation; callers and real-SQL tests need no interchangeable service contract.
 export class DirectSourceRepository {
   readonly #database: D1Database;
-  readonly #sourceName: string;
   readonly #sourceOrigin: string;
 
-  constructor(database: D1Database, sourceName: string, sourceOrigin: string) {
+  constructor(database: D1Database, sourceOrigin: string) {
     this.#database = database;
-    this.#sourceName = sourceName;
     this.#sourceOrigin = sourceOrigin;
   }
 
@@ -95,9 +93,8 @@ export class DirectSourceRepository {
     const row = await this.#database
       .prepare(
         `SELECT coalesce(max(source_retry_after), 0) AS retryAfter
-                FROM author WHERE source_name = ?1`
+                FROM author`
       )
-      .bind(this.#sourceName)
       .first<{ retryAfter: number }>();
     return row?.retryAfter ?? 0;
   }
@@ -109,9 +106,9 @@ export class DirectSourceRepository {
       .prepare(
         `UPDATE author
                 SET source_retry_after = max(coalesce(source_retry_after, 0), ?1)
-                WHERE source_name = ?2 AND source_author_id = ?3 RETURNING id`
+                WHERE source_author_id = ?2 RETURNING id`
       )
-      .bind(retryAfter, this.#sourceName, sourceAuthorId)
+      .bind(retryAfter, sourceAuthorId)
       .first<{ id: string }>();
     if (!result) throw new DirectSourceConflictError("SOURCE_AUTHOR_MISSING");
   }
@@ -122,11 +119,10 @@ export class DirectSourceRepository {
         `SELECT id, source_author_id AS sourceAuthorId,
               source_url AS sourceUrl, name_arabic AS nameArabic,
               collected_at AS collectedAt
-       FROM author WHERE source_name = ?1 AND source_author_id IS NOT NULL
+       FROM author WHERE source_author_id IS NOT NULL
          AND collected_at IS NULL
        ORDER BY id LIMIT 1`
       )
-      .bind(this.#sourceName)
       .first();
   }
 
@@ -135,9 +131,9 @@ export class DirectSourceRepository {
     return this.#database
       .prepare(
         `SELECT id, author_id AS authorId, source_hash AS sourceHash
-       FROM poem WHERE source_name = ?1 AND source_poem_id = ?2`
+       FROM poem WHERE source_poem_id = ?1`
       )
-      .bind(this.#sourceName, sourcePoemId)
+      .bind(sourcePoemId)
       .first();
   }
 
@@ -149,15 +145,10 @@ export class DirectSourceRepository {
       .prepare(
         `SELECT p.source_poem_id AS sourcePoemId
          FROM poem p JOIN author a ON a.id = p.author_id
-         WHERE p.source_name = ?1 AND a.source_name = ?1
-           AND a.source_author_id = ?2 AND p.source_hash IS NOT NULL
-           AND p.source_poem_id IN (SELECT value FROM json_each(?3))`
+         WHERE a.source_author_id = ?1 AND p.source_hash IS NOT NULL
+           AND p.source_poem_id IN (SELECT value FROM json_each(?2))`
       )
-      .bind(
-        this.#sourceName,
-        input.sourceAuthorId,
-        JSON.stringify(input.poemIds)
-      )
+      .bind(input.sourceAuthorId, JSON.stringify(input.poemIds))
       .all<{ sourcePoemId: string }>();
     return rows.results.map((row) => row.sourcePoemId);
   }
@@ -167,22 +158,16 @@ export class DirectSourceRepository {
     this.#assertOrigin(input.sourceUrl);
     const existing = await this.#database
       .prepare(AuthorBySourceSql)
-      .bind(this.#sourceName, input.sourceAuthorId)
+      .bind(input.sourceAuthorId)
       .first<unknown>();
     if (existing) {
       const id = AuthorRowSchema.parse(existing).id;
       const result = await this.#database
         .prepare(
           `UPDATE author SET name_arabic = ?1, source_url = ?2
-         WHERE id = ?3 AND source_name = ?4 AND source_author_id = ?5 RETURNING id`
+         WHERE id = ?3 AND source_author_id = ?4 RETURNING id`
         )
-        .bind(
-          input.nameArabic,
-          input.sourceUrl,
-          id,
-          this.#sourceName,
-          input.sourceAuthorId
-        )
+        .bind(input.nameArabic, input.sourceUrl, id, input.sourceAuthorId)
         .first<{ id: string }>();
       if (result?.id !== id)
         throw new DirectSourceConflictError("AUTHOR_CHANGED");
@@ -196,7 +181,7 @@ export class DirectSourceRepository {
       throw new DirectSourceConflictError("UNMAPPED_AUTHOR_COLLISION");
     const sameName = await this.#database
       .prepare(
-        `SELECT id FROM author WHERE source_name IS NULL AND name_arabic = ?1
+        `SELECT id FROM author WHERE source_author_id IS NULL AND name_arabic = ?1
          LIMIT 1`
       )
       .bind(input.nameArabic)
@@ -204,31 +189,21 @@ export class DirectSourceRepository {
     if (sameName)
       throw new DirectSourceConflictError("UNMAPPED_AUTHOR_COLLISION");
     const digest = await sha256(
-      canonicalJson([this.#sourceName, input.sourceAuthorId])
+      canonicalJson(["aldiwan", input.sourceAuthorId])
     );
-    const id = await sha256(
-      `author\u{1f}${this.#sourceName}\u{1f}${input.sourceAuthorId}`
-    );
+    const id = await sha256(`author\u{1f}aldiwan\u{1f}${input.sourceAuthorId}`);
     const slug = `source-${digest}`;
     await this.#database
       .prepare(
         `INSERT OR IGNORE INTO author
-       (id, slug, name_arabic, source_name, source_author_id,
-        source_url, collected_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)`
+       (id, slug, name_arabic, source_author_id, source_url, collected_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, NULL)`
       )
-      .bind(
-        id,
-        slug,
-        input.nameArabic,
-        this.#sourceName,
-        input.sourceAuthorId,
-        input.sourceUrl
-      )
+      .bind(id, slug, input.nameArabic, input.sourceAuthorId, input.sourceUrl)
       .run();
     const created = await this.#database
       .prepare(AuthorBySourceSql)
-      .bind(this.#sourceName, input.sourceAuthorId)
+      .bind(input.sourceAuthorId)
       .first<unknown>();
     if (!created)
       throw new DirectSourceConflictError("AUTHOR_IDENTITY_COLLISION");
@@ -240,9 +215,9 @@ export class DirectSourceRepository {
     const result = await this.#database
       .prepare(
         `UPDATE author SET collected_at = unixepoch()
-         WHERE source_name = ?1 AND source_author_id = ?2 RETURNING id`
+         WHERE source_author_id = ?1 RETURNING id`
       )
-      .bind(this.#sourceName, sourceAuthorId)
+      .bind(sourceAuthorId)
       .first<{ id: string }>();
     if (!result) throw new DirectSourceConflictError("AUTHOR_NOT_FOUND");
   }
@@ -258,7 +233,7 @@ export class DirectSourceRepository {
     );
     const author = await this.#database
       .prepare(AuthorBySourceSql)
-      .bind(this.#sourceName, input.sourceAuthorId)
+      .bind(input.sourceAuthorId)
       .first<unknown>();
     if (!author) throw new DirectSourceConflictError("AUTHOR_NOT_FOUND");
     const authorId = AuthorRowSchema.parse(author).id;
@@ -320,7 +295,7 @@ export class DirectSourceRepository {
     // an incoming poem is new. Resolve this author's legacy identities first.
     const unmapped = await this.#database
       .prepare(
-        `SELECT id FROM poem WHERE author_id = ?1 AND source_name IS NULL
+        `SELECT id FROM poem WHERE author_id = ?1 AND source_poem_id IS NULL
          LIMIT 1`
       )
       .bind(authorId)
@@ -334,9 +309,7 @@ export class DirectSourceRepository {
       .bind(`poem${input.sourcePoemId}`)
       .first();
     if (legacy) throw new DirectSourceConflictError("UNMAPPED_POEM_COLLISION");
-    const id = await sha256(
-      `poem\u{1f}${this.#sourceName}\u{1f}${input.sourcePoemId}`
-    );
+    const id = await sha256(`poem\u{1f}aldiwan\u{1f}${input.sourcePoemId}`);
     const contentArabic = JSON.stringify({
       content: input.linesArabic,
       titleArabic: input.titleArabic,
@@ -345,8 +318,8 @@ export class DirectSourceRepository {
       .prepare(
         `INSERT OR IGNORE INTO poem
        (id, author_id, slug, verses, name_arabic, content_arabic,
-        sitemap_shard, source_name, source_poem_id, source_hash)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+        sitemap_shard, source_poem_id, source_hash)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
       )
       .bind(
         id,
@@ -356,7 +329,6 @@ export class DirectSourceRepository {
         input.titleArabic,
         contentArabic,
         sitemapShardForId(id),
-        this.#sourceName,
         input.sourcePoemId,
         sourceHash
       )

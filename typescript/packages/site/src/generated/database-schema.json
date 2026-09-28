@@ -45,7 +45,8 @@
     "0079_drop_unused_poem_rig_last_error.sql",
     "0080_drop_unused_rig_updated_at.sql",
     "0081_remove_hidden_unpublished_author.sql",
-    "0082_drop_unused_author_hidden.sql"
+    "0082_drop_unused_author_hidden.sql",
+    "0083_index_source_ids.sql"
   ],
   "databases": [
     {

@@ -17,7 +17,6 @@ const publicFetch = vi.fn(
 const ENV = parseCloudflareEnv({
   DB: { prepare },
   PUBLIC_SITE: { fetch: publicFetch },
-  SAQI_SOURCE_NAME: "aldiwan",
   SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
   SAQI_RIG_ACTIVE: "0",
   SAQI_DIRECT_SOURCE_ACTIVE: "0",

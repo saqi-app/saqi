@@ -7,7 +7,6 @@ const validEnvironment = {
   CF_ACCESS_TEAM_DOMAIN: "https://example.cloudflareaccess.com",
   SAQI_PUBLIC_CACHE_PURGE_SECRET: "b".repeat(64),
   SAQI_SOURCE_BASE_URL: "https://source.example",
-  SAQI_SOURCE_NAME: "source",
 };
 
 function validate(overrides = {}) {
@@ -29,7 +28,6 @@ for (const [name, value] of [
   ["CF_ACCESS_AUD", "not-an-audience"],
   ["CF_ACCESS_TEAM_DOMAIN", "https://example.com"],
   ["SAQI_PUBLIC_CACHE_PURGE_SECRET", "not-a-secret"],
-  ["SAQI_SOURCE_NAME", "INVALID NAME"],
   ["SAQI_SOURCE_BASE_URL", "not-a-url"],
 ]) {
   const result = validate({ [name]: value });
