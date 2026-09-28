@@ -51,7 +51,9 @@
     "0085_backfill_legacy_titles.sql",
     "0086_reject_invalid_poems.sql",
     "0087_index_canonical_poems.sql",
-    "0088_drop_legacy_title_and_publishable.sql"
+    "0088_drop_legacy_title_and_publishable.sql",
+    "0089_drop_legacy_poem_title.sql",
+    "0090_drop_poem_publishable.sql"
   ],
   "databases": [
     {

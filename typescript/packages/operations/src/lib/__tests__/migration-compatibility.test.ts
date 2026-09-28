@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0088_drop_legacy_title_and_publishable.sql"
+      "0090_drop_poem_publishable.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -218,6 +218,8 @@ describe("canonical migration compatibility", () => {
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
       "0088_drop_legacy_title_and_publishable.sql",
+      "0089_drop_legacy_poem_title.sql",
+      "0090_drop_poem_publishable.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -320,6 +322,8 @@ describe("canonical migration compatibility", () => {
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
       "0088_drop_legacy_title_and_publishable.sql",
+      "0089_drop_legacy_poem_title.sql",
+      "0090_drop_poem_publishable.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -396,6 +400,8 @@ describe("canonical migration compatibility", () => {
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
       "0088_drop_legacy_title_and_publishable.sql",
+      "0089_drop_legacy_poem_title.sql",
+      "0090_drop_poem_publishable.sql",
     ]);
   });
 
@@ -510,6 +516,8 @@ describe("canonical migration compatibility", () => {
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
       "0088_drop_legacy_title_and_publishable.sql",
+      "0089_drop_legacy_poem_title.sql",
+      "0090_drop_poem_publishable.sql",
     ]);
   });
 
