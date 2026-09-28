@@ -50,7 +50,8 @@
     "0084_drop_source_names.sql",
     "0085_backfill_legacy_titles.sql",
     "0086_reject_invalid_poems.sql",
-    "0087_index_canonical_poems.sql"
+    "0087_index_canonical_poems.sql",
+    "0088_drop_legacy_title_and_publishable.sql"
   ],
   "databases": [
     {
@@ -159,18 +160,6 @@
             {
               "name": "content_arabic",
               "type": "TEXT",
-              "nullable": false,
-              "primaryKey": false
-            },
-            {
-              "name": "poem_title_first_line",
-              "type": "TEXT",
-              "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "publishable",
-              "type": "INTEGER",
               "nullable": false,
               "primaryKey": false
             },

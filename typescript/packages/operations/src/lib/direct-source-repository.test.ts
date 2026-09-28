@@ -440,7 +440,7 @@ test("direct source rejects unsafe text and foreign origin", async () => {
 });
 
 test.each([82, null])(
-  "direct source insert passes schema cutoff %s and publishability triggers",
+  "direct source insert passes schema cutoff %s and poem validity guards",
   async (cutoff) => {
     const sqlite = new Database(":memory:");
     DATABASES.push(sqlite);
@@ -486,8 +486,10 @@ test.each([82, null])(
       expectedHash: null,
     });
     expect(
-      sqlite.prepare("SELECT publishable FROM poem WHERE id = ?").get(poem.id)
-    ).toEqual({ publishable: 1 });
+      sqlite
+        .prepare("SELECT source_poem_id FROM poem WHERE id = ?")
+        .get(poem.id)
+    ).toEqual({ source_poem_id: "900001" });
     expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(
       sqlite.prepare("SELECT id FROM author WHERE id = ?").get(author.id)
