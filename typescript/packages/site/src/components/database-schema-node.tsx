@@ -1,7 +1,7 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 import { memo, type ReactNode } from "react";
 
-export interface SchemaColumn {
+interface SchemaColumn {
   name: string;
   nullable: boolean;
   primaryKey: boolean;
