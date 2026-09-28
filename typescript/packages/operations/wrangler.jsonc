@@ -19,7 +19,6 @@
       "SAQI_ACCESS_AUDIENCE",
       "SAQI_ACCESS_TEAM_ORIGIN",
       "SAQI_SOURCE_BASE_URL",
-      "SAQI_SOURCE_NAME",
     ],
   },
 

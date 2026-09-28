@@ -50,7 +50,6 @@ export async function get(
     return failure(503, "DIRECT_SOURCE_INACTIVE");
   const repository = new DirectSourceRepository(
     env.DB,
-    env.SAQI_SOURCE_NAME,
     env.SAQI_SOURCE_BASE_URL
   );
   // eslint-disable-next-line @sarj/no-fat-try-blocks -- All source reads share one unavailable response; no mutation occurs here.
@@ -107,7 +106,6 @@ export async function post(
   }
   const repository = new DirectSourceRepository(
     env.DB,
-    env.SAQI_SOURCE_NAME,
     env.SAQI_SOURCE_BASE_URL
   );
   try {

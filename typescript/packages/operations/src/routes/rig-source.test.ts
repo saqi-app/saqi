@@ -10,11 +10,10 @@ test("fresh requests honor a durable source deadline across authors until it exp
   sqlite.exec(`
     CREATE TABLE d1_migrations(name TEXT PRIMARY KEY);
     INSERT INTO d1_migrations VALUES ('0064_retire_collection_dashboard.sql');
-    CREATE TABLE author(id TEXT PRIMARY KEY, source_name TEXT, source_author_id TEXT,
+    CREATE TABLE author(id TEXT PRIMARY KEY, source_author_id TEXT,
       source_url TEXT, name_arabic TEXT, collected_at INTEGER, source_retry_after INTEGER);
-    INSERT INTO author VALUES ('a', 'aldiwan', 'a', 'https://www.aldiwan.net/cat-a', 'شاعر', 1, 2000000000);
-    INSERT INTO author VALUES ('b', 'aldiwan', 'b', 'https://www.aldiwan.net/cat-b', 'شاعر', NULL, NULL);
-    INSERT INTO author VALUES ('c', 'other', 'c', NULL, 'شاعر', NULL, 2100000000);
+    INSERT INTO author VALUES ('a', 'a', 'https://www.aldiwan.net/cat-a', 'شاعر', 1, 2000000000);
+    INSERT INTO author VALUES ('b', 'b', 'https://www.aldiwan.net/cat-b', 'شاعر', NULL, NULL);
   `);
   const wrap = (sql: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(sql, parameters),
@@ -30,7 +29,6 @@ test("fresh requests honor a durable source deadline across authors until it exp
   const env = parseCloudflareEnv({
     DB: { prepare: wrap },
     SAQI_DIRECT_SOURCE_ACTIVE: "1",
-    SAQI_SOURCE_NAME: "aldiwan",
     SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
   });
   const now = vi.spyOn(Date, "now").mockReturnValue(1999999900000);
@@ -71,7 +69,6 @@ test("manifest reconciliation has an authenticated bounded batch contract", asyn
   const env = parseCloudflareEnv({
     DB: { prepare: vi.fn() },
     SAQI_DIRECT_SOURCE_ACTIVE: "1",
-    SAQI_SOURCE_NAME: "aldiwan",
     SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
   });
   const request = (poemIds: string[], trusted = true) =>

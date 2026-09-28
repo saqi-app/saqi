@@ -149,9 +149,7 @@ describe("canonical migration compatibility", () => {
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
-    expect(applyPending(database).at(-1)).toBe(
-      "0082_drop_unused_author_hidden.sql"
-    );
+    expect(applyPending(database).at(-1)).toBe("0083_index_source_ids.sql");
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
       database
@@ -207,6 +205,7 @@ describe("canonical migration compatibility", () => {
     expect(database.pragma("foreign_key_check")).toEqual([]);
     expect(applyPending(database)).toEqual([
       "0082_drop_unused_author_hidden.sql",
+      "0083_index_source_ids.sql",
     ]);
   });
 
@@ -315,6 +314,7 @@ describe("canonical migration compatibility", () => {
       "0080_drop_unused_rig_updated_at.sql",
       "0081_remove_hidden_unpublished_author.sql",
       "0082_drop_unused_author_hidden.sql",
+      "0083_index_source_ids.sql",
     ]);
   });
 

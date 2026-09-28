@@ -37,13 +37,13 @@ jobs:
           SELECT COUNT(*) AS public_poems FROM poem p JOIN author a ON a.id = p.author_id
             WHERE p.publishable = 1;
           SELECT COUNT(*) AS publication_snapshots FROM poem WHERE publication_json IS NOT NULL;
-          SELECT COUNT(*) AS source_authors FROM author WHERE source_name IS NOT NULL;
+          SELECT COUNT(*) AS source_authors FROM author WHERE source_author_id IS NOT NULL;
           SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id
             WHERE a.id IS NULL;
           SELECT source_name, COUNT(*) AS authors FROM author
             WHERE source_name IS NOT NULL GROUP BY source_name;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
-            WHERE source_name IS NOT NULL AND collected_at IS NULL;
+            WHERE source_author_id IS NOT NULL AND collected_at IS NULL;
           SELECT COUNT(*) AS unpublishable_poems FROM poem WHERE publishable <> 1;
           SELECT COUNT(*) AS unpublishable_publications FROM poem
             WHERE publishable <> 1 AND publication_json IS NOT NULL;
@@ -54,14 +54,11 @@ jobs:
           SELECT COUNT(*) AS legacy_only_english_titles FROM poem
             WHERE (name_english IS NULL OR trim(name_english) = '')
               AND poem_title_first_line IS NOT NULL AND trim(poem_title_first_line) <> '';
-          SELECT source_name, COUNT(*) AS poems FROM poem
-            WHERE source_name IS NOT NULL GROUP BY source_name;
-          SELECT COUNT(*) AS bad_author_source_pair FROM author
-            WHERE (source_name IS NULL) <> (source_author_id IS NULL)
-              OR (source_name IS NOT NULL AND source_name <> 'aldiwan');
-          SELECT COUNT(*) AS bad_poem_source_pair FROM poem
-            WHERE (source_name IS NULL) <> (source_poem_id IS NULL)
-              OR (source_name IS NOT NULL AND source_name <> 'aldiwan');
+          SELECT COUNT(*) AS source_poems FROM poem WHERE source_poem_id IS NOT NULL;
+          SELECT COUNT(*) AS non_aldiwan_authors FROM author
+            WHERE source_name IS NOT NULL AND source_name <> 'aldiwan';
+          SELECT COUNT(*) AS non_aldiwan_poems FROM poem
+            WHERE source_name IS NOT NULL AND source_name <> 'aldiwan';
           SELECT COUNT(*) AS published_verse_mismatch FROM poem
             WHERE publishable = 1 AND json_valid(content_arabic)
               AND verses <> (json_array_length(content_arabic, '$.content') + 1) / 2;

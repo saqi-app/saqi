@@ -8,7 +8,6 @@ const SECRET_BINDINGS = [
   ["SAQI_ACCESS_AUDIENCE", "CF_ACCESS_AUD"],
   ["SAQI_ACCESS_TEAM_ORIGIN", "CF_ACCESS_TEAM_DOMAIN"],
   ["SAQI_SOURCE_BASE_URL", "SAQI_SOURCE_BASE_URL"],
-  ["SAQI_SOURCE_NAME", "SAQI_SOURCE_NAME"],
 ];
 
 function invalid(name) {
@@ -47,8 +46,6 @@ if (!/^[\da-f]{64}$/u.test(secrets.SAQI_ACCESS_AUDIENCE))
 if (!cleanHttpsOrigin(secrets.SAQI_ACCESS_TEAM_ORIGIN, true))
   invalid("CF_ACCESS_TEAM_DOMAIN");
 if (!/^[\da-f]{64}$/u.test(secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET)) invalid("SAQI_PUBLIC_CACHE_PURGE_SECRET");
-if (!/^[a-z][a-z0-9_-]{1,63}$/u.test(secrets.SAQI_SOURCE_NAME))
-  invalid("SAQI_SOURCE_NAME");
 if (!cleanHttpsOrigin(secrets.SAQI_SOURCE_BASE_URL))
   invalid("SAQI_SOURCE_BASE_URL");
 
