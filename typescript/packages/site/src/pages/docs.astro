@@ -20,6 +20,6 @@ import { pageTitle } from "../lib/metadata";
   <SchemaExplorer catalog={schema} client:only="react" />
   <noscript>
     <p>Enable JavaScript for the relationship diagram. The table inventory is below.</p>
-    {schema.databases.map((database) => <section><ul>{database.tables.map((table) => <li>{table.name} · {table.columns.length} columns</li>)}</ul></section>)}
+    <ul>{schema.tables.map((table) => <li>{table.name} · {table.columns.length} columns</li>)}</ul>
   </noscript>
 </BaseLayout>

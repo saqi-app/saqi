@@ -48,11 +48,9 @@ jobs:
           SELECT COUNT(*) AS orphan_checkpoints FROM poem
             WHERE author_id IS NULL AND rig_checkpoint_json IS NOT NULL;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
-            WHERE source_author_id IS NOT NULL AND collected_at IS NULL;
-          SELECT COUNT(*) AS pending_without_url FROM author
-            WHERE source_author_id IS NOT NULL AND collected_at IS NULL AND source_url IS NULL;
+            WHERE source_author_id IS NOT NULL AND source_url IS NOT NULL;
           SELECT COUNT(*) AS finished_source_authors FROM author
-            WHERE source_author_id IS NOT NULL AND collected_at IS NOT NULL;
+            WHERE source_author_id IS NOT NULL AND source_url IS NULL;
           SELECT COUNT(*) AS source_url_mismatch FROM author
             WHERE source_author_id IS NOT NULL AND source_url IS NOT NULL
               AND source_url <> 'https://www.aldiwan.net/cat-' || source_author_id;

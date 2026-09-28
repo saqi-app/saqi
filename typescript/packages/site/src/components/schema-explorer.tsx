@@ -16,14 +16,8 @@ import SchemaNodeView, {
   type SchemaTable,
 } from "./database-schema-node";
 
-interface SchemaDatabase {
-  id: string;
-  label: string;
-  tables: SchemaTable[];
-}
 interface Catalog {
-  databases: SchemaDatabase[];
-  migrationNames: string[];
+  tables: SchemaTable[];
 }
 const NODE_TYPES = { databaseSchema: SchemaNodeView } as const;
 
@@ -52,24 +46,22 @@ function positionTables(
 }
 
 export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
-  const initialDatabase = catalog.databases[0];
-  if (!initialDatabase) throw new Error("DATABASE_SCHEMA_EMPTY");
+  if (catalog.tables.length === 0) throw new Error("DATABASE_SCHEMA_EMPTY");
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<null | string>(
-    initialDatabase.tables[0]?.name ?? null,
+    catalog.tables[0]?.name ?? null,
   );
   const [flow, setFlow] = useState<null | ReactFlowInstance<SchemaNode>>(null);
-  const database = initialDatabase;
   const matches = useMemo(
     () =>
-      database.tables.filter(
+      catalog.tables.filter(
         (table) =>
           table.name.toLowerCase().includes(query.trim().toLowerCase()) ||
           table.columns.some((column) =>
             column.name.toLowerCase().includes(query.trim().toLowerCase()),
           ),
       ),
-    [database, query],
+    [catalog.tables, query],
   );
   const selected = matches.find((table) => table.name === selectedName) ?? null;
   const select = useCallback(
@@ -118,7 +110,7 @@ export default function SchemaExplorer({ catalog }: { catalog: Catalog }) {
             value={query}
           />
           <p>
-            {matches.length} of {database.tables.length} tables
+            {matches.length} of {catalog.tables.length} tables
           </p>
           <output aria-live="polite" className="visually-hidden" role="status">
             {matches.length} matching tables

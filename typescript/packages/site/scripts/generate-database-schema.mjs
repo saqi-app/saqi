@@ -8,8 +8,8 @@ const here = import.meta.dirname;
 const migrationDir = join(here, "../../operations/migrations");
 const outputPath = join(here, "../src/generated/database-schema.json");
 
-function inspect(database, id, label) {
-  const tables = database
+function inspect(database) {
+  return database
     .prepare(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
     )
@@ -32,7 +32,6 @@ function inspect(database, id, label) {
           to: key.to,
         })),
     }));
-  return { id, label, tables };
 }
 
 const corpus = new Database(":memory:");
@@ -46,8 +45,7 @@ try {
     migrationNames.map((name) => readFile(join(migrationDir, name), "utf8")),
   );
   for (const migration of migrations) corpus.exec(migration);
-  const databases = [inspect(corpus, "corpus", "Public corpus · Cloudflare D1")];
-  const output = `${JSON.stringify({ migrationNames, databases }, null, 2)}\n`;
+  const output = `${JSON.stringify({ tables: inspect(corpus) }, null, 2)}\n`;
   if (process.argv.includes("--check")) {
     const existing = await readFile(outputPath, "utf8");
     if (existing !== output) throw new Error("DATABASE_SCHEMA_ARTIFACT_STALE");

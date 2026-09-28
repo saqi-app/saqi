@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0091_fold_author_completion_into_source_url.sql"
+      "0092_drop_author_collected_at.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -204,6 +204,37 @@ describe("canonical migration compatibility", () => {
     expect(database.pragma("integrity_check", { simple: true })).toBe("ok");
   });
 
+  it("folds completed author state into its pending URL before dropping the timestamp", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0091_")
+    );
+    database.exec(`
+      INSERT INTO author(id, slug, name_arabic, source_author_id, source_url, collected_at)
+      VALUES ('complete', 'complete', 'شاعر', 'complete', 'https://www.aldiwan.net/cat-complete', 123);
+      INSERT INTO author(id, slug, name_arabic, source_author_id, source_url, collected_at)
+      VALUES ('pending', 'pending', 'شاعر', 'pending', 'https://www.aldiwan.net/cat-pending', NULL);
+    `);
+    expect(applyPending(database)).toEqual([
+      "0091_fold_author_completion_into_source_url.sql",
+      "0092_drop_author_collected_at.sql",
+    ]);
+    expect(
+      database
+        .prepare("SELECT id FROM author WHERE source_url IS NOT NULL")
+        .pluck()
+        .all()
+    ).toEqual(["pending"]);
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('author')")
+        .pluck()
+        .all()
+    ).not.toContain("collected_at");
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
   it("drops stored source names without changing mapped identities or publications", () => {
     const database = open();
     applyPending(
@@ -221,6 +252,7 @@ describe("canonical migration compatibility", () => {
       "0089_drop_legacy_poem_title.sql",
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
+      "0092_drop_author_collected_at.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -326,6 +358,7 @@ describe("canonical migration compatibility", () => {
       "0089_drop_legacy_poem_title.sql",
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
+      "0092_drop_author_collected_at.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -405,6 +438,7 @@ describe("canonical migration compatibility", () => {
       "0089_drop_legacy_poem_title.sql",
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
+      "0092_drop_author_collected_at.sql",
     ]);
   });
 
@@ -522,6 +556,7 @@ describe("canonical migration compatibility", () => {
       "0089_drop_legacy_poem_title.sql",
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
+      "0092_drop_author_collected_at.sql",
     ]);
   });
 
