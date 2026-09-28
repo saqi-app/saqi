@@ -150,9 +150,15 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0081_remove_hidden_unpublished_author.sql"
+      "0082_drop_unused_author_hidden.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('author')")
+        .pluck()
+        .all()
+    ).not.toContain("hidden");
     const before = database
       .prepare("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name")
       .all();
@@ -185,9 +191,12 @@ describe("canonical migration compatibility", () => {
       const id = `hidden-poem-${String(index)}`;
       insert.run(id, id);
     }
-    expect(applyPending(database)).toEqual([
-      "0081_remove_hidden_unpublished_author.sql",
-    ]);
+    expect(
+      applyPending(
+        database,
+        migrationFiles().filter((name) => name < "0082_")
+      )
+    ).toEqual(["0081_remove_hidden_unpublished_author.sql"]);
     expect(
       database
         .prepare("SELECT count(*) FROM author WHERE hidden <> 0")
@@ -196,6 +205,9 @@ describe("canonical migration compatibility", () => {
     ).toBe(0);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(0);
     expect(database.pragma("foreign_key_check")).toEqual([]);
+    expect(applyPending(database)).toEqual([
+      "0082_drop_unused_author_hidden.sql",
+    ]);
   });
 
   it("refuses to delete a hidden author with published content", () => {
@@ -302,6 +314,7 @@ describe("canonical migration compatibility", () => {
       "0079_drop_unused_poem_rig_last_error.sql",
       "0080_drop_unused_rig_updated_at.sql",
       "0081_remove_hidden_unpublished_author.sql",
+      "0082_drop_unused_author_hidden.sql",
     ]);
   });
 

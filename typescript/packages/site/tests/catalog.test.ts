@@ -146,8 +146,8 @@ void test("word-gloss publications keep the author-page insights badge", async (
   const sqlite = createDatabase();
   try {
     sqlite.exec(`
-      INSERT INTO author(id, slug, name_arabic, hidden)
-      VALUES ('a-gloss', 'gloss-poet', 'شاعر', 0);
+      INSERT INTO author(id, slug, name_arabic)
+      VALUES ('a-gloss', 'gloss-poet', 'شاعر');
       INSERT INTO poem(id, author_id, slug, verses, name_arabic, content_arabic)
       VALUES ('p-gloss', 'a-gloss', 'gloss', 1, 'قصيدة', '{"content":["بيت"]}');
     `);
@@ -374,8 +374,8 @@ void test("publishability triggers update indexed live counts", () => {
   const database = createDatabase();
   try {
     database.exec(`
-      INSERT INTO author (id, slug, name_arabic, hidden)
-      VALUES ('a-trigger', 'trigger', 'اختبار', 0);
+      INSERT INTO author (id, slug, name_arabic)
+      VALUES ('a-trigger', 'trigger', 'اختبار');
       INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
       VALUES ('p-trigger', 'a-trigger', 'trigger-poem', 1, 'اختبار', '{"content":[]}');
     `);
@@ -470,7 +470,7 @@ void test("standalone glosses keep their badge and stop aligning after source ch
   const sqlite = createDatabase();
   try {
     sqlite.exec(
-      "INSERT INTO author(id,slug,name_arabic,hidden) VALUES('a-standalone','standalone','شاعر',0)",
+      "INSERT INTO author(id,slug,name_arabic) VALUES('a-standalone','standalone','شاعر')",
     );
     sqlite
       .prepare(

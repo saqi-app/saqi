@@ -44,7 +44,8 @@
     "0078_drop_unused_poem_collected_at.sql",
     "0079_drop_unused_poem_rig_last_error.sql",
     "0080_drop_unused_rig_updated_at.sql",
-    "0081_remove_hidden_unpublished_author.sql"
+    "0081_remove_hidden_unpublished_author.sql",
+    "0082_drop_unused_author_hidden.sql"
   ],
   "databases": [
     {
@@ -76,12 +77,6 @@
               "name": "name",
               "type": "TEXT",
               "nullable": true,
-              "primaryKey": false
-            },
-            {
-              "name": "hidden",
-              "type": "INTEGER",
-              "nullable": false,
               "primaryKey": false
             },
             {

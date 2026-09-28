@@ -35,16 +35,11 @@ jobs:
           SELECT COUNT(*) AS authors FROM author;
           SELECT COUNT(*) AS poems FROM poem;
           SELECT COUNT(*) AS public_poems FROM poem p JOIN author a ON a.id = p.author_id
-            WHERE p.publishable = 1 AND a.hidden = 0;
+            WHERE p.publishable = 1;
           SELECT COUNT(*) AS publication_snapshots FROM poem WHERE publication_json IS NOT NULL;
           SELECT COUNT(*) AS source_authors FROM author WHERE source_name IS NOT NULL;
-          SELECT COUNT(*) AS hidden_authors FROM author WHERE hidden <> 0;
-          SELECT COUNT(*) AS hidden_author_poems FROM poem p JOIN author a ON a.id = p.author_id
-            WHERE a.hidden <> 0;
-          SELECT COUNT(*) AS hidden_author_publishable_poems FROM poem p JOIN author a ON a.id = p.author_id
-            WHERE a.hidden <> 0 AND p.publishable = 1;
-          SELECT COUNT(*) AS hidden_author_publications FROM poem p JOIN author a ON a.id = p.author_id
-            WHERE a.hidden <> 0 AND p.publication_json IS NOT NULL;
+          SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id
+            WHERE a.id IS NULL;
           SELECT source_name, COUNT(*) AS authors FROM author
             WHERE source_name IS NOT NULL GROUP BY source_name;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
