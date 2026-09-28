@@ -13,7 +13,7 @@ const labels = {
   error: "Needs attention",
 };
 const guidance = {
-  idle: "The collector checks for the next author every minute.",
+  idle: "Finished authors are skipped. New work is checked every minute.",
   collecting:
     "Source pages are visited one at a time, with a pause between requests.",
   paused:

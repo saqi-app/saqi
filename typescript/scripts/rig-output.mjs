@@ -1,6 +1,17 @@
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
 
-export function generationSchema(template, lines) {
+export function generationSchema(
+  template,
+  lines,
+  required = template.required,
+) {
+  if (
+    !Array.isArray(required) ||
+    !required.length ||
+    new Set(required).size !== required.length ||
+    required.some((field) => !template.required.includes(field))
+  )
+    throw new Error("Invalid required generation fields");
   const schema = structuredClone(template);
   schema.properties.translation.properties.lines.minItems = lines.length;
   schema.properties.translation.properties.lines.maxItems = lines.length;
@@ -20,11 +31,21 @@ export function generationSchema(template, lines) {
       ]),
     ),
   };
+  schema.required = [...required];
+  schema.properties = Object.fromEntries(
+    Object.entries(schema.properties).filter(([field]) =>
+      required.includes(field),
+    ),
+  );
   return schema;
 }
 
 export function normalizeWordMeanings(output) {
-  if (Array.isArray(output.wordMeanings)) return output;
+  // eslint-disable-next-line no-restricted-syntax -- Untrusted Codex JSON must be an object before field normalization.
+  if (!output || typeof output !== "object" || Array.isArray(output))
+    throw new Error("Invalid generation output");
+  if (!("wordMeanings" in output) || Array.isArray(output.wordMeanings))
+    return output;
   // eslint-disable-next-line no-restricted-syntax -- Raw Codex JSON is an untrusted boundary; reject non-object word maps before recovery.
   if (!output.wordMeanings || typeof output.wordMeanings !== "object")
     throw new Error("Missing word meanings");

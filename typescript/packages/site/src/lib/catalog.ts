@@ -18,6 +18,7 @@ import {
 } from "./snapshot-contract";
 
 const UNSAFE_CONTROL =
+  // eslint-disable-next-line no-control-regex -- Catalog text rejects these exact unsafe control characters.
   /[\u{0000}-\u{0008}\u{000b}\u{000c}\u{000e}-\u{001f}\u{007f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
 const UNSAFE_CONTROL_CODE_POINTS: readonly number[] = [
   ...Array.from({ length: 9 }, (_, index) => index),
@@ -318,6 +319,8 @@ function poemFromRow(raw: unknown): Poem | undefined {
     ...snapshot?.fields,
   });
   if (!parsedPoem.success) return undefined;
+  if (parsedPoem.data.wordGlosses?.sourceHash !== row.sourceHash)
+    delete parsedPoem.data.wordGlosses;
   if (
     snapshot &&
     row.sourceHash &&
@@ -468,6 +471,7 @@ export class CatalogRepository implements CatalogReader {
             hasEnglish: translationModels.length > 0,
             hasInsights: publication
               ? publication.fields.insights !== undefined ||
+                publication.fields.wordGlosses !== undefined ||
                 (publication.fields.modelEnrichments ?? []).some(
                   (enrichment) => enrichment.wordGlosses !== undefined,
                 )

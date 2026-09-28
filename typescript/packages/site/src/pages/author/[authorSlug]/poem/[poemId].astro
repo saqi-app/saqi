@@ -10,6 +10,7 @@ import {
   poemTranslationTracks,
   poemWordGlossTracks,
   translatedLineCount,
+  wordGlossMatchesTranslation,
 } from "../../../../lib/poem-translations";
 import { authorPath, englishAuthorLabel, poemPath } from "../../../../lib/routes";
 
@@ -207,7 +208,7 @@ const structuredData = [
                       data-word-gloss-line={gloss.key}
                       lang="ar"
                       dir="rtl"
-                      hidden={gloss.key !== primaryTranslation?.key}
+                      hidden={!wordGlossMatchesTranslation(gloss.key, primaryTranslation?.key)}
                     >
                       {gloss.segments.map((segment) => segment.kind === "text" ? (
                         segment.surface
@@ -231,7 +232,7 @@ const structuredData = [
                     lang="ar"
                     dir="rtl"
                     hidden={hemistich.glosses.some(
-                      ({ key }) => key === primaryTranslation?.key,
+                      ({ key }) => wordGlossMatchesTranslation(key, primaryTranslation?.key),
                     )}
                   >{hemistich.arabic.trim()}</p>
                 </>
@@ -285,6 +286,7 @@ const structuredData = [
   )}
 
   <script>
+    import { wordGlossMatchesTranslation } from "../../../../lib/poem-translations";
     const translationSelect = document.querySelector("#translation-track");
     if (translationSelect instanceof HTMLSelectElement) {
       translationSelect.disabled = false;
@@ -301,7 +303,7 @@ const structuredData = [
         let hasGlosses = false;
         for (const line of document.querySelectorAll("[data-word-gloss-line]")) {
           if (!(line instanceof HTMLElement)) continue;
-          line.hidden = line.dataset["wordGlossLine"] !== translationSelect.value;
+          line.hidden = !wordGlossMatchesTranslation(line.dataset["wordGlossLine"], translationSelect.value);
           if (!line.hidden) hasGlosses = true;
         }
         for (const fallback of document.querySelectorAll("[data-word-gloss-fallback]")) {

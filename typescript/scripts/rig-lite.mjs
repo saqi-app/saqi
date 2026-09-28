@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
+import { readQuota } from "./rig-quota.mjs";
 
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
-const model = process.env.SAQI_RIG_MODEL ?? "gpt-5.6-sol";
+const model = process.env.SAQI_RIG_MODEL ?? "gpt-6-sol";
 const clientId = process.env.CF_ACCESS_CLIENT_ID;
 const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 if (!clientId || !clientSecret)
@@ -23,31 +24,7 @@ const schemaPath = new URL(
 ).pathname;
 
 async function main() {
-  if (process.argv[2] === "retry-unknown") {
-    const [poemId, attemptId] = process.argv.slice(3);
-    if (!poemId || !attemptId || process.argv.length !== 5)
-      throw new Error("Usage: rig-lite.mjs retry-unknown POEM_ID ATTEMPT_ID");
-    const state = await current(poemId);
-    const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
-    if (
-      state?.poemId !== poemId ||
-      state.status !== "unknown" ||
-      checkpoint.invocation?.attemptId !== attemptId
-    )
-      throw new Error("The current unknown attempt does not match");
-    if (await readOutput(attemptId))
-      throw new Error(
-        "A recoverable Codex result exists; run the rig normally",
-      );
-    await request({
-      action: "retry-unknown",
-      poemId,
-      attemptId,
-      expectedVersion: state.version,
-    });
-    process.stdout.write(`Manual retry authorized for ${poemId}\n`);
-    return;
-  }
+  if (process.argv[2] === "retry-unknown") return retryUnknown();
   if (process.argv.length > 3)
     throw new Error(
       "Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
@@ -73,6 +50,13 @@ async function main() {
       return;
     }
   }
+  const quota = await readQuota();
+  if (!quota.allowed) {
+    process.stdout.write(
+      `Waiting for Codex quota: ${quota.reason}${quota.resetsAt ? `; reset ${new Date(quota.resetsAt * 1000).toISOString()}` : ""}.\n`,
+    );
+    return;
+  }
   const token = randomUUID();
   const claimRequest = { action: "claim-poem", token };
   if (preferredPoemId) claimRequest.poemId = preferredPoemId;
@@ -91,6 +75,9 @@ async function main() {
   const prompt = promptFor(source);
   const attemptId = randomUUID();
   const inputHash = createHash("sha256").update(prompt).digest("hex");
+  process.stdout.write(
+    `Model: ${model}; reasoning: medium; fields: ${(source.required ?? ["translation", "insights", "wordMeanings"]).join(", ")}\n`,
+  );
   const dispatched = await request({
     action: "dispatch",
     poemId: claim.poemId,
@@ -99,11 +86,17 @@ async function main() {
     attemptId,
     inputHash,
     model,
+    reasoningEffort: "medium",
   });
   process.stdout.write(
     `Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`,
   );
-  const output = await runCodex(prompt, attemptId, source.linesArabic);
+  const output = await runCodex(
+    prompt,
+    attemptId,
+    source.linesArabic,
+    source.required,
+  );
   const acknowledged = await request({
     action: "acknowledge",
     poemId: claim.poemId,
@@ -111,12 +104,51 @@ async function main() {
     expectedVersion: dispatched.state.version,
     output,
   });
-  await unlink(outputPath(attemptId));
+  await removeOutput(attemptId);
   await publish(acknowledged.state);
 }
 
+async function retryUnknown() {
+  const [poemId, attemptId] = process.argv.slice(3);
+  if (!poemId || !attemptId || process.argv.length !== 5)
+    throw new Error("Usage: rig-lite.mjs retry-unknown POEM_ID ATTEMPT_ID");
+  const state = await current(poemId);
+  const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
+  if (
+    state?.poemId !== poemId ||
+    state.status !== "unknown" ||
+    checkpoint.invocation?.attemptId !== attemptId
+  )
+    throw new Error("The current unknown attempt does not match");
+  if (await readOutput(attemptId))
+    throw new Error("A recoverable Codex result exists; run the rig normally");
+  await request({
+    action: "retry-unknown",
+    poemId,
+    attemptId,
+    expectedVersion: state.version,
+  });
+  await removeOutput(attemptId);
+  process.stdout.write(`Manual retry authorized for ${poemId}\n`);
+}
+
+const resultDirectory =
+  process.env.SAQI_RIG_RESULT_DIR ??
+  join(homedir(), "Library", "Application Support", "Saqi", "results");
 function outputPath(attemptId) {
-  return join(tmpdir(), `saqi-rig-${attemptId}.json`);
+  return join(resultDirectory, `saqi-rig-${attemptId}.json`);
+}
+function outputPaths(attemptId) {
+  return [outputPath(attemptId), join(tmpdir(), `saqi-rig-${attemptId}.json`)];
+}
+async function removeOutput(attemptId) {
+  await Promise.all(
+    outputPaths(attemptId).map((path) =>
+      unlink(path).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      }),
+    ),
+  );
 }
 
 async function request(body) {
@@ -131,6 +163,7 @@ async function request(body) {
       "Sec-Fetch-Site": "same-origin",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
     const text = await response.text();
@@ -145,6 +178,7 @@ async function current(poemId) {
   const url = new URL(endpoint);
   if (poemId) url.searchParams.set("poemId", poemId);
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(30_000),
     headers: {
       "CF-Access-Client-Id": clientId,
       "CF-Access-Client-Secret": clientSecret,
@@ -157,7 +191,14 @@ async function current(poemId) {
 }
 
 async function readOutput(attemptId) {
-  const path = outputPath(attemptId);
+  const [durable, legacy] = outputPaths(attemptId);
+  return (
+    (await readOutputFile(durable, attemptId)) ??
+    readOutputFile(legacy, attemptId)
+  );
+}
+
+async function readOutputFile(path, attemptId) {
   let size;
   try {
     const file = await stat(path);
@@ -166,7 +207,8 @@ async function readOutput(attemptId) {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
-  if (size < 1 || size > 1_048_576)
+  if (size === 0) return null;
+  if (size > 1_048_576)
     throw new Error(`Invalid Codex output size for ${attemptId}`);
   return normalizeWordMeanings(JSON.parse(await readFile(path, "utf8")));
 }
@@ -184,9 +226,7 @@ async function recover(state) {
       expectedVersion: state.version,
       output,
     });
-    await unlink(outputPath(attemptId)).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
-    });
+    await removeOutput(attemptId);
     await publish(acknowledged.state);
     return true;
   }
@@ -230,8 +270,10 @@ async function publish(state) {
 }
 
 function promptFor(poem) {
+  const required = poem.required ?? ["translation", "insights", "wordMeanings"];
   return [
-    "Translate this Arabic poem into English and write concise, source-grounded insights.",
+    `Generate only these missing fields: ${required.join(", ")}. Existing fields must not be regenerated.`,
+    "For requested fields, translate this Arabic poem into English and write concise, source-grounded insights.",
     "Output one English line for each Arabic line, in exactly the same order.",
     "Keep names and imagery faithful. Do not invent historical facts or cite sources you did not read.",
     "Every insight field and array must be nonempty. notableLines must quote actual Arabic lines.",
@@ -239,18 +281,26 @@ function promptFor(poem) {
     "Return only the JSON object required by the supplied schema.",
     `Author: ${poem.authorName}`,
     `Title: ${poem.titleArabic}`,
-    `Tokens by line: ${JSON.stringify(poem.linesArabic.map(arabicWords))}`,
+    ...(required.includes("wordMeanings")
+      ? [`Tokens by line: ${JSON.stringify(poem.linesArabic.map(arabicWords))}`]
+      : []),
     "Arabic lines:",
     ...poem.linesArabic.map((line, index) => `${index + 1}. ${line}`),
   ].join("\n");
 }
 
-async function runCodex(prompt, attemptId, lines) {
+async function runCodex(prompt, attemptId, lines, required) {
+  await mkdir(resultDirectory, { recursive: true, mode: 0o700 });
+  await writeFile(outputPath(attemptId), "", { mode: 0o600, flag: "wx" });
   const invocationSchema = join(tmpdir(), `saqi-schema-${attemptId}.json`);
   await writeFile(
     invocationSchema,
     JSON.stringify(
-      generationSchema(JSON.parse(await readFile(schemaPath, "utf8")), lines),
+      generationSchema(
+        JSON.parse(await readFile(schemaPath, "utf8")),
+        lines,
+        required,
+      ),
     ),
     { mode: 0o600 },
   );
@@ -277,6 +327,8 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
     "-c",
     'approval_policy="never"',
     "-c",
+    'model_reasoning_effort="medium"',
+    "-c",
     'web_search="disabled"',
     "--disable",
     "multi_agent",
@@ -289,15 +341,9 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
     "-",
   ];
   const child = spawn("codex", args, { stdio: ["pipe", "pipe", "pipe"] });
-  let outputBytes = 0;
   let diagnostic = "";
-  const capture = (chunk) => {
-    outputBytes += chunk.length;
-    if (outputBytes > 2_097_152) child.kill("SIGTERM");
-  };
-  child.stdout.on("data", capture);
+  child.stdout.resume();
   child.stderr.on("data", (chunk) => {
-    capture(chunk);
     if (diagnostic.length < 1_000)
       diagnostic += chunk.toString("utf8").slice(0, 1_000 - diagnostic.length);
   });

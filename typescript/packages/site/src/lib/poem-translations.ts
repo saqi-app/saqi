@@ -56,9 +56,12 @@ export function translationModelProvider(
   ) {
     return "anthropic";
   }
-  if (normalized === "gemini-3-pro-preview") return "google";
-  if (normalized === "gemini-3.7-flash") return "google";
-  if (normalized === HISTORICAL_GEMINI_LABEL) return "google";
+  if (
+    normalized === "gemini-3-pro-preview" ||
+    normalized === "gemini-3.7-flash" ||
+    normalized === HISTORICAL_GEMINI_LABEL
+  )
+    return "google";
   if (normalized === HISTORICAL_CLAUDE_LABEL) return "anthropic";
   if (normalized === LEGACY_GEMINI_MODEL_ESTIMATE) return "google";
   if (normalized === LEGACY_TRANSLATION_MODEL_ESTIMATE) return "anthropic";
@@ -91,8 +94,17 @@ function modelPresentation(
 }
 
 export function poemWordGlossTracks(
-  poem: Pick<Poem, "modelEnrichments">,
+  poem: Pick<Poem, "modelEnrichments" | "wordGlosses">,
 ): WordGlossTrack[] {
+  if (poem.wordGlosses)
+    return [
+      {
+        key: "current-glosses",
+        model: translationModelName(poem.wordGlosses.model),
+        provider: translationModelProvider(poem.wordGlosses.model),
+        wordGlosses: poem.wordGlosses.meanings,
+      },
+    ];
   return (poem.modelEnrichments ?? []).flatMap((enrichment) => {
     if (!enrichment.wordGlosses) return [];
     const presentation = modelPresentation(enrichment);
@@ -125,14 +137,16 @@ export function poemTranslationTracks(
   poem: TranslationPoem,
 ): TranslationTrack[] {
   const tracks: TranslationTrack[] = [];
-  for (const enrichment of poem.modelEnrichments ?? []) {
-    if (!hasTranslation(enrichment.lines)) continue;
-    const presentation = modelPresentation(enrichment);
-    tracks.push({
-      key: enrichment.modelKey,
-      lines: enrichment.lines,
-      ...presentation,
-    });
+  if (poem.modelEnrichments != null) {
+    for (const enrichment of poem.modelEnrichments) {
+      if (!hasTranslation(enrichment.lines)) continue;
+      const presentation = modelPresentation(enrichment);
+      tracks.push({
+        key: enrichment.modelKey,
+        lines: enrichment.lines,
+        ...presentation,
+      });
+    }
   }
   if (
     hasTranslation(poem.linesEnglishSol) &&
@@ -154,18 +168,20 @@ export function poemTranslationTracks(
   }
 
   if (hasTranslation(poem.linesEnglishGemini)) {
-    tracks.push({
-      ...(!poem.linesEnglishGeminiModel ||
-      poem.linesEnglishGeminiModel === HISTORICAL_GEMINI_LABEL
-        ? { attributionNote: LEGACY_GEMINI_ATTRIBUTION_NOTE }
-        : {}),
+    const gemini: TranslationTrack = {
       key: "gemini",
       lines: poem.linesEnglishGemini,
       model: poem.linesEnglishGeminiModel ?? LEGACY_GEMINI_MODEL_ESTIMATE,
       provider: poem.linesEnglishGeminiModel
         ? translationModelProvider(poem.linesEnglishGeminiModel)
         : "google",
-    });
+    };
+    if (
+      !poem.linesEnglishGeminiModel ||
+      poem.linesEnglishGeminiModel === HISTORICAL_GEMINI_LABEL
+    )
+      gemini.attributionNote = LEGACY_GEMINI_ATTRIBUTION_NOTE;
+    tracks.push(gemini);
   }
   return tracks;
 }
@@ -177,10 +193,7 @@ function legacyTranslationTrack(
   const inferred =
     !poem.linesEnglishModel ||
     poem.linesEnglishModel === HISTORICAL_CLAUDE_LABEL;
-  return {
-    ...(inferred
-      ? { attributionNote: LEGACY_TRANSLATION_ATTRIBUTION_NOTE }
-      : {}),
+  const track: TranslationTrack = {
     attributionCertainty:
       poem.linesEnglishAttributionCertainty ??
       (inferred ? "inferred_range" : undefined),
@@ -193,6 +206,8 @@ function legacyTranslationTrack(
         ? translationModelProvider(poem.linesEnglishModel)
         : "anthropic"),
   };
+  if (inferred) track.attributionNote = LEGACY_TRANSLATION_ATTRIBUTION_NOTE;
+  return track;
 }
 
 function hasTranslation(lines: string[] | undefined): lines is string[] {
@@ -207,5 +222,15 @@ export function translatedLineCount(
     (count, line, index) =>
       count + (line.trim() && lines[index]?.trim() ? 1 : 0),
     0,
+  );
+}
+
+export function wordGlossMatchesTranslation(
+  glossKey: string | undefined,
+  translationKey: string | undefined,
+): boolean {
+  return (
+    glossKey === "current-glosses" ||
+    (glossKey !== undefined && glossKey === translationKey)
   );
 }

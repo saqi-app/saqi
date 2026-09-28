@@ -15,9 +15,21 @@ function createSaqiCollector(browser, project, clock = globalThis) {
   let running, bridge, cancellation, standalone;
   const ready = browser.storage.local
     .get(["collectorControl", "collectorStatus"])
-    .then((stored) => {
+    .then(async (stored) => {
       control = { ...control, ...stored.collectorControl };
       snapshot = stored.collectorStatus || snapshot;
+      // Recover the old false conflict once after upgrading the backend.
+      if (
+        control.blocked &&
+        control.error?.code === "SOURCE_CHANGED" &&
+        !control.sourceConflictRetried
+      )
+        await saveControl({
+          blocked: false,
+          retryAt: null,
+          sourceConflictRetried: true,
+          error: null,
+        });
     });
   function currentStatus() {
     return {
@@ -198,7 +210,7 @@ function createSaqiCollector(browser, project, clock = globalThis) {
   }
   async function collect() {
     const { author } = await call("begin");
-    if (!author) return;
+    if (!author) return false;
     const tab = await collectorTab();
     const { poems } = await call("manifest", {
       projection: await visit(tab, author.sourceUrl, author.sourceUrl),
@@ -216,6 +228,7 @@ function createSaqiCollector(browser, project, clock = globalThis) {
     checkEnabled();
     await call("complete");
     await saveControl({ retryCount: 0, retryAt: null });
+    return true;
   }
   async function failed(failure) {
     if (!control.enabled || failure.code === "COLLECTOR_PAUSED") return;
@@ -277,7 +290,8 @@ function createSaqiCollector(browser, project, clock = globalThis) {
       heartbeat = clock.setInterval(() => {
         void call("status").catch((failure) => cancellation?.abort(failure));
       }, 30000);
-      await collect();
+      // eslint-disable-next-line no-empty, no-await-in-loop -- Completing one author immediately selects the next; source navigation remains serial and paced.
+      while (control.enabled && (await collect())) {}
     } catch (failure) {
       await failed(failure);
       if (!control.enabled && failure.code !== "COLLECTOR_PAUSED")
@@ -366,6 +380,7 @@ function createSaqiCollector(browser, project, clock = globalThis) {
             blocked: false,
             retryAt: null,
             retryCount: 0,
+            sourceConflictRetried: false,
             error: null,
           });
           await display({

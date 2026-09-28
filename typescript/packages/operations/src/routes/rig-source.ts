@@ -6,6 +6,7 @@ import {
   DirectPoemSchema,
   DirectSourceConflictError,
   DirectSourceRepository,
+  SourceManifestBatchSchema,
 } from "../lib/direct-source-repository";
 import {
   hasJsonContentType,
@@ -17,6 +18,7 @@ import { publicCacheConfig, purgePublishedPoem } from "../lib/public-cache";
 import { RigPublicationRepository } from "../lib/rig-publication-repository";
 
 const RequestSchema = z.discriminatedUnion("action", [
+  SourceManifestBatchSchema.extend({ action: z.literal("reconcile-manifest") }),
   z.strictObject({
     action: z.literal("upsert-author"),
     author: DirectAuthorSchema,
@@ -109,6 +111,19 @@ export async function post(
     env.SAQI_SOURCE_BASE_URL
   );
   try {
+    if (input.action === "reconcile-manifest") {
+      const { sourceAuthorId, poemIds } = input;
+      return Response.json(
+        {
+          ok: true,
+          existingPoemIds: await repository.existingPoemIds({
+            sourceAuthorId,
+            poemIds,
+          }),
+        },
+        { headers: NO_STORE_HEADERS }
+      );
+    }
     if (input.action === "defer-source") {
       await repository.deferSource(input.sourceAuthorId, input.retryAfter);
       return Response.json({ ok: true }, { headers: NO_STORE_HEADERS });

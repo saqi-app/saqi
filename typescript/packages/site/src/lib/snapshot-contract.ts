@@ -2,6 +2,7 @@ import { PoemWordGlossesSchema } from "@saqi/precedent-iso";
 import { z } from "zod";
 
 const UnsafeControl =
+  // eslint-disable-next-line no-control-regex -- Exact unsafe Unicode control characters are rejected at the publication boundary.
   /[\u{0000}-\u{0008}\u{000b}\u{000c}\u{000e}-\u{001f}\u{007f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
 const SafeStringSchema = z
   .string()
@@ -48,6 +49,13 @@ const SnapshotPoemInsightsSchema = z.strictObject({
 
 export const SnapshotPoemSchema = z.object({
   publicationOutdated: z.literal(true).optional(),
+  wordGlosses: z
+    .strictObject({
+      sourceHash: z.string().regex(/^[a-f0-9]{64}$/u),
+      model: SafeStringSchema.trim().min(1).max(100),
+      meanings: PoemWordGlossesSchema,
+    })
+    .optional(),
   id: RouteSegmentSchema,
   slug: RouteSegmentSchema,
   authorId: NonBlankSchema,

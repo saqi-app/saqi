@@ -33,6 +33,7 @@ const RequestSchema = z.discriminatedUnion("action", [
     attemptId: TokenSchema,
     inputHash: z.string().regex(/^[a-f0-9]{64}$/),
     model: z.string().trim().min(1).max(100),
+    reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]).optional(),
   }),
   z.strictObject({
     action: z.literal("acknowledge"),
@@ -134,6 +135,7 @@ export async function post(
             attemptId: input.attemptId,
             inputHash: input.inputHash,
             model: input.model,
+            reasoningEffort: input.reasoningEffort ?? "unknown",
             startedAt: now,
             deadlineAt: now + 1_800,
           }

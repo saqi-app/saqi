@@ -1,6 +1,12 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { z } from "zod";
 
+import {
+  EnrichmentPrioritySql,
+  NeedsEnrichmentSql,
+  RequiredSql,
+} from "./rig-requirements";
+
 const TokenSchema = z.uuid();
 const HashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const InvocationSchema = z.object({
@@ -8,13 +14,18 @@ const InvocationSchema = z.object({
   deadlineAt: z.number().int(),
   inputHash: HashSchema,
   model: z.string().trim().min(1).max(100),
+  reasoningEffort: z.string().trim().min(1).max(30).optional(),
   startedAt: z.number().int(),
   state: z.literal("possible_dispatch"),
 });
 const CheckpointSchema = z.object({
   model: z.string().trim().min(1).max(100).optional(),
+  reasoningEffort: z.string().optional(),
   phase: z.enum(["generation", "publish"]),
   sourceHash: HashSchema,
+  required: z
+    .array(z.enum(["translation", "insights", "wordMeanings"]))
+    .optional(),
   invocation: InvocationSchema.optional(),
   outputs: z.record(z.string(), z.unknown()).optional(),
 });
@@ -36,6 +47,7 @@ export interface InvocationIntent {
   readonly deadlineAt: number;
   readonly inputHash: string;
   readonly model: string;
+  readonly reasoningEffort?: string;
   readonly startedAt: number;
 }
 
@@ -132,6 +144,7 @@ export class RigStateRepository {
     const next = JSON.stringify({
       ...checkpoint,
       model: intent.model,
+      reasoningEffort: intent.reasoningEffort,
       invocation: { ...intent, state: "possible_dispatch" },
     });
     const result = await this.#database
@@ -240,10 +253,8 @@ export class RigStateRepository {
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id AND a.hidden = 0)
-           AND (p.publication_json IS NULL
-             OR p.publication_source_hash IS NULL
-             OR p.publication_source_hash <> p.source_hash)
-         ORDER BY p.id LIMIT 1`
+           AND ${NeedsEnrichmentSql}
+         ORDER BY ${EnrichmentPrioritySql}, p.id LIMIT 1`
       )
       .first<{ id: string }>();
     return candidate?.id ?? null;
@@ -257,15 +268,13 @@ export class RigStateRepository {
            AND p.source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = p.author_id AND a.hidden = 0)
-           AND (p.publication_json IS NULL
-             OR p.publication_source_hash IS NULL
-             OR p.publication_source_hash <> p.source_hash)
+           AND ${NeedsEnrichmentSql}
            AND (p.rig_status IS NULL
              OR p.rig_status IN ('retry', 'complete')
              OR (p.rig_status = 'claimed'
                AND (p.rig_lease_expires_at IS NULL
                  OR p.rig_lease_expires_at <= ?1)))
-         ORDER BY p.id LIMIT 1`
+         ORDER BY ${EnrichmentPrioritySql}, p.id LIMIT 1`
       )
       .bind(now)
       .first<{ id: string }>();
@@ -286,16 +295,14 @@ export class RigStateRepository {
                WHEN rig_status = 'claimed'
                  AND json_extract(rig_checkpoint_json, '$.sourceHash') = source_hash
                THEN rig_checkpoint_json
-               ELSE json_object('phase', 'generation', 'sourceHash', source_hash)
+               ELSE json_object('phase', 'generation', 'sourceHash', source_hash, 'required', json(${RequiredSql}))
              END,
              rig_updated_at = ?2
          WHERE id = ?3 AND publishable = 1
            AND source_hash IS NOT NULL
            AND EXISTS (SELECT 1 FROM author a
                        WHERE a.id = poem.author_id AND a.hidden = 0)
-           AND (publication_json IS NULL
-             OR publication_source_hash IS NULL
-             OR publication_source_hash <> source_hash)
+           AND ${NeedsEnrichmentSql}
            AND (rig_status IS NULL OR rig_status IN ('retry', 'complete')
              OR (rig_status = 'claimed' AND
                (rig_lease_expires_at IS NULL OR rig_lease_expires_at <= ?2)))
