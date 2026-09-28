@@ -63,20 +63,28 @@ function tables(database: Database.Database) {
 }
 
 function insertPoem(database: Database.Database) {
+  const sourceName = database
+    .prepare(
+      "SELECT 1 FROM pragma_table_info('author') WHERE name='source_name'"
+    )
+    .get()
+    ? "source_name,"
+    : "";
+  const sourceValue = sourceName ? "'aldiwan'," : "";
   database
     .prepare(
-      "INSERT INTO author(id,slug,name_arabic,source_name,source_author_id) VALUES (?, 'author', 'شاعر', 'aldiwan', 'poet-1')"
+      `INSERT INTO author(id,slug,name_arabic,${sourceName}source_author_id) VALUES (?, 'author', 'شاعر', ${sourceValue}'poet-1')`
     )
     .run(AUTHOR_ID);
   database
     .prepare(
       `INSERT INTO poem (
     id, author_id, slug, verses, name_arabic, content_arabic,
-    source_name, source_poem_id, source_hash, publication_json,
+    ${sourceName}source_poem_id, source_hash, publication_json,
     publication_hash, publication_source_hash, rig_status, rig_version,
     rig_checkpoint_json
   ) VALUES (?, ?, 'poem42', 1, 'قصيدة', '{"content":["صدر","عجز"]}',
-    'aldiwan','42',?,?,?,?,'unknown',7,'{"invocation":{"attemptId":"keep-me"}}')`
+    ${sourceValue}'42',?,?,?,?,'unknown',7,'{"invocation":{"attemptId":"keep-me"}}')`
     )
     .run(
       POEM_ID,
@@ -101,7 +109,7 @@ function canonicalPoem(database: Database.Database) {
   return database
     .prepare(
       `SELECT id,author_id,slug,verses,name_arabic,content_arabic,
-    source_name,source_poem_id,source_hash,publication_json,publication_hash,
+    source_poem_id,source_hash,publication_json,publication_hash,
     publication_source_hash,rig_status,rig_version,rig_checkpoint_json,
     publishable,sitemap_shard FROM poem WHERE id=?`
     )
@@ -149,7 +157,7 @@ describe("canonical migration compatibility", () => {
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
-    expect(applyPending(database).at(-1)).toBe("0083_index_source_ids.sql");
+    expect(applyPending(database).at(-1)).toBe("0084_drop_source_names.sql");
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
       database
@@ -157,6 +165,18 @@ describe("canonical migration compatibility", () => {
         .pluck()
         .all()
     ).not.toContain("hidden");
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('author')")
+        .pluck()
+        .all()
+    ).not.toContain("source_name");
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('poem')")
+        .pluck()
+        .all()
+    ).not.toContain("source_name");
     const before = database
       .prepare("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name")
       .all();
@@ -168,6 +188,39 @@ describe("canonical migration compatibility", () => {
     ).toEqual(before);
     expect(database.pragma("foreign_key_check")).toEqual([]);
     expect(database.pragma("integrity_check", { simple: true })).toBe("ok");
+  });
+
+  it("drops stored source names without changing mapped identities or publications", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0084_")
+    );
+    insertPoem(database);
+    const before = canonicalPoem(database);
+    expect(applyPending(database)).toEqual(["0084_drop_source_names.sql"]);
+    expect(canonicalPoem(database)).toEqual(before);
+    expect(
+      database
+        .prepare("SELECT source_author_id FROM author WHERE id=?")
+        .pluck()
+        .get(AUTHOR_ID)
+    ).toBe("poet-1");
+    expect(() =>
+      database
+        .prepare(
+          "INSERT INTO author(id,slug,name_arabic,source_author_id) VALUES ('duplicate','other','شاعر','poet-1')"
+        )
+        .run()
+    ).toThrow(/UNIQUE/u);
+    expect(() =>
+      database
+        .prepare(
+          "INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,source_poem_id) VALUES ('duplicate',?,'other',1,'قصيدة','{\"content\":[\"بيت\"]}','42')"
+        )
+        .run(AUTHOR_ID)
+    ).toThrow(/UNIQUE/u);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("removes only the audited hidden unpublished rows", () => {
@@ -206,6 +259,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0082_drop_unused_author_hidden.sql",
       "0083_index_source_ids.sql",
+      "0084_drop_source_names.sql",
     ]);
   });
 
@@ -264,7 +318,7 @@ describe("canonical migration compatibility", () => {
         .prepare("SELECT name FROM pragma_table_info('poem')")
         .pluck()
         .all();
-      expect(columns).toHaveLength(23);
+      expect(columns).toHaveLength(22);
       expect(columns).not.toContain("rig_updated_at");
       expect(columns).not.toContain("translation");
       expect(columns).not.toContain("active_source_revision_id");
@@ -315,6 +369,7 @@ describe("canonical migration compatibility", () => {
       "0081_remove_hidden_unpublished_author.sql",
       "0082_drop_unused_author_hidden.sql",
       "0083_index_source_ids.sql",
+      "0084_drop_source_names.sql",
     ]);
   });
 
@@ -368,7 +423,7 @@ describe("canonical migration compatibility", () => {
     expect(() =>
       database
         .prepare(
-          "INSERT INTO author(id,slug,name_arabic,source_name,source_author_id) VALUES ('duplicate','different','شاعر','aldiwan','poet-1')"
+          "INSERT INTO author(id,slug,name_arabic,source_author_id) VALUES ('duplicate','different','شاعر','poet-1')"
         )
         .run()
     ).toThrow(/UNIQUE/u);

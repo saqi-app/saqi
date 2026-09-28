@@ -40,8 +40,6 @@ jobs:
           SELECT COUNT(*) AS source_authors FROM author WHERE source_author_id IS NOT NULL;
           SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id
             WHERE a.id IS NULL;
-          SELECT source_name, COUNT(*) AS authors FROM author
-            WHERE source_name IS NOT NULL GROUP BY source_name;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
             WHERE source_author_id IS NOT NULL AND collected_at IS NULL;
           SELECT COUNT(*) AS unpublishable_poems FROM poem WHERE publishable <> 1;
@@ -55,10 +53,6 @@ jobs:
             WHERE (name_english IS NULL OR trim(name_english) = '')
               AND poem_title_first_line IS NOT NULL AND trim(poem_title_first_line) <> '';
           SELECT COUNT(*) AS source_poems FROM poem WHERE source_poem_id IS NOT NULL;
-          SELECT COUNT(*) AS non_aldiwan_authors FROM author
-            WHERE source_name IS NOT NULL AND source_name <> 'aldiwan';
-          SELECT COUNT(*) AS non_aldiwan_poems FROM poem
-            WHERE source_name IS NOT NULL AND source_name <> 'aldiwan';
           SELECT COUNT(*) AS published_verse_mismatch FROM poem
             WHERE publishable = 1 AND json_valid(content_arabic)
               AND verses <> (json_array_length(content_arabic, '$.content') + 1) / 2;
