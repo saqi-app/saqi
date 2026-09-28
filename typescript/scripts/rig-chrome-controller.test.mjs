@@ -449,52 +449,74 @@ test("authors continue immediately on one bridge and one paced tab", async () =>
   assert.equal(f.local.collectorStatus.state, "idle");
 });
 
-test("a persisted old source conflict gets one fresh session, then a repeated conflict stays visible", async () => {
+test("a persisted source conflict clears when there is no unfinished author", async () => {
   const stored = {
     collectorControl: {
       enabled: true,
       hasStarted: true,
       blocked: true,
+      sourceConflictRetried: true,
       error: { code: "SOURCE_CHANGED" },
     },
     collectorStatus: { state: "error", error: { code: "SOURCE_CHANGED" } },
   };
+  const f = fixture({ stored, authors: [] });
+  await f.controller.tick();
+  assert.equal(f.calls.filter((call) => call.action === "begin").length, 1);
+  assert.equal(f.local.collectorStatus.state, "idle");
+  assert.equal(f.local.collectorStatus.error, null);
+  assert.equal(f.local.collectorControl.blocked, false);
+  assert.equal(f.navigations.length, 0);
+});
+
+test("a source conflict retries from a fresh source page and then completes", async () => {
+  let conflicts = 0;
   const f = fixture({
-    stored,
+    enabled: true,
+    fail: (message) => {
+      if (message.action === "poem" && conflicts++ === 0)
+        return { code: "SOURCE_CHANGED" };
+      return null;
+    },
+  });
+  const initial = f.controller.tick();
+  await settle();
+  await f.advance(28000);
+  await initial;
+  assert.equal(f.local.collectorStatus.state, "cooldown");
+  assert.equal(f.local.collectorControl.retryCount, 1);
+  await f.advance(60000);
+  const retry = f.controller.tick();
+  await settle();
+  await f.advance(42000);
+  await retry;
+  assert.equal(f.calls.filter((call) => call.action === "begin").length, 3);
+  assert.equal(f.navigations.filter((url) => url === author.sourceUrl).length, 2);
+  assert.equal(f.calls.filter((call) => call.action === "complete").length, 1);
+  assert.equal(f.local.collectorControl.retryCount, 0);
+  assert.equal(f.local.collectorStatus.state, "idle");
+});
+
+test("repeated source conflicts stop after bounded fresh sessions", async () => {
+  const f = fixture({
+    enabled: true,
     fail: (message) =>
       message.action === "poem" ? { code: "SOURCE_CHANGED" } : null,
   });
-  const run = f.controller.tick();
-  await settle();
-  await f.advance(28000);
-  await run;
-  assert.equal(f.calls.filter((call) => call.action === "begin").length, 1);
-  assert.equal(f.local.collectorControl.sourceConflictRetried, true);
-  assert.equal(f.local.collectorStatus.error.code, "SOURCE_CHANGED");
+  for (const delay of [0, 60000, 120000, 300000]) {
+    await f.advance(delay);
+    const run = f.controller.tick();
+    await settle();
+    await f.advance(28000);
+    await run;
+  }
+  assert.equal(f.calls.filter((call) => call.action === "begin").length, 4);
+  assert.equal(f.local.collectorControl.blocked, true);
+  assert.equal(f.local.collectorStatus.error.code, "SOURCE_CONFLICT_RETRY_EXHAUSTED");
   const restarted = fixture({ stored: f.local });
   await restarted.controller.tick();
   assert.equal(
     restarted.calls.some((call) => call.action === "begin"),
     false,
   );
-});
-
-test("a persisted old source conflict resumes successfully after backend repair", async () => {
-  const f = fixture({
-    stored: {
-      collectorControl: {
-        enabled: true,
-        hasStarted: true,
-        blocked: true,
-        error: { code: "SOURCE_CHANGED" },
-      },
-      collectorStatus: { state: "error", error: { code: "SOURCE_CHANGED" } },
-    },
-  });
-  const run = f.controller.tick();
-  await settle();
-  await f.advance(42000);
-  await run;
-  assert.equal(f.local.collectorStatus.state, "idle");
-  assert.equal(f.calls.filter((call) => call.action === "complete").length, 1);
 });
