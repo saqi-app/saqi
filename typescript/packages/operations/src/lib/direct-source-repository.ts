@@ -164,10 +164,10 @@ export class DirectSourceRepository {
       const id = AuthorRowSchema.parse(existing).id;
       const result = await this.#database
         .prepare(
-          `UPDATE author SET name_arabic = ?1, source_url = ?2
-         WHERE id = ?3 AND source_author_id = ?4 RETURNING id`
+          `UPDATE author SET name_arabic = ?1
+         WHERE id = ?2 AND source_author_id = ?3 RETURNING id`
         )
-        .bind(input.nameArabic, input.sourceUrl, id, input.sourceAuthorId)
+        .bind(input.nameArabic, id, input.sourceAuthorId)
         .first<{ id: string }>();
       if (result?.id !== id)
         throw new DirectSourceConflictError("AUTHOR_CHANGED");
@@ -214,7 +214,7 @@ export class DirectSourceRepository {
     SourceIdSchema.parse(sourceAuthorId);
     const result = await this.#database
       .prepare(
-        `UPDATE author SET collected_at = unixepoch()
+        `UPDATE author SET collected_at = unixepoch(), source_url = NULL
          WHERE source_author_id = ?1 RETURNING id`
       )
       .bind(sourceAuthorId)
