@@ -339,7 +339,7 @@ void test("sitemap partitioning is stable and rejects invalid shards", async () 
 });
 
 for (const authorCount of [0, 1, 199, 200, 201]) {
-  void test(`author index lists all ${String(authorCount)} publishable authors`, async () => {
+  void test(`author index lists all ${String(authorCount)} authors with poems`, async () => {
     const sqlite = createDatabase();
     try {
       const insertAuthor = sqlite.prepare(
@@ -387,7 +387,7 @@ void test("invalid writes cannot enter indexed public poem counts", () => {
     const count = () =>
       database
         .prepare(
-          "SELECT count(*) AS count FROM poem WHERE author_id = 'a-trigger' AND publishable = 1",
+          "SELECT count(*) AS count FROM poem WHERE author_id = 'a-trigger'",
         )
         .get() as { count: number };
     assert.equal(count().count, 0);
@@ -432,7 +432,8 @@ void test("stable poem pagination index replaces translation-derived ordering", 
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
       .all() as { name: string }[];
     const names = new Set(indexes.map(({ name }) => name));
-    assert.ok(names.has("idx_poem_public_author_title"));
+    assert.ok(names.has("idx_poem_author_title_canonical"));
+    assert.ok(!names.has("idx_poem_public_author_title"));
     assert.ok(!names.has("idx_poem_public_author_order"));
   } finally {
     database.close();

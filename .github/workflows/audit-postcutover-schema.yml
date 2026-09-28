@@ -34,28 +34,18 @@ jobs:
             AND name NOT IN ('d1_migrations', '_cf_KV') ORDER BY name;
           SELECT COUNT(*) AS authors FROM author;
           SELECT COUNT(*) AS poems FROM poem;
-          SELECT COUNT(*) AS public_poems FROM poem p JOIN author a ON a.id = p.author_id
-            WHERE p.publishable = 1;
-          SELECT COUNT(*) AS canonical_public_poems FROM poem p JOIN author a ON a.id = p.author_id;
+          SELECT COUNT(*) AS public_poems FROM poem p JOIN author a ON a.id = p.author_id;
           SELECT COUNT(*) AS publication_snapshots FROM poem WHERE publication_json IS NOT NULL;
           SELECT COUNT(*) AS source_authors FROM author WHERE source_author_id IS NOT NULL;
           SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id
             WHERE a.id IS NULL;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
             WHERE source_author_id IS NOT NULL AND collected_at IS NULL;
-          SELECT COUNT(*) AS unpublishable_poems FROM poem WHERE publishable <> 1;
-          SELECT COUNT(*) AS unpublishable_publications FROM poem
-            WHERE publishable <> 1 AND publication_json IS NOT NULL;
-          SELECT COUNT(*) AS legacy_first_line_titles FROM poem
-            WHERE poem_title_first_line IS NOT NULL AND trim(poem_title_first_line) <> '';
           SELECT COUNT(*) AS modern_english_titles FROM poem
             WHERE name_english IS NOT NULL AND trim(name_english) <> '';
-          SELECT COUNT(*) AS legacy_only_english_titles FROM poem
-            WHERE (name_english IS NULL OR trim(name_english) = '')
-              AND poem_title_first_line IS NOT NULL AND trim(poem_title_first_line) <> '';
           SELECT COUNT(*) AS source_poems FROM poem WHERE source_poem_id IS NOT NULL;
           SELECT COUNT(*) AS published_verse_mismatch FROM poem
-            WHERE publishable = 1 AND json_valid(content_arabic)
+            WHERE json_valid(content_arabic)
               AND verses <> (json_array_length(content_arabic, '$.content') + 1) / 2;
           SELECT COUNT(*) AS published_missing_insights FROM poem
             WHERE publication_json IS NOT NULL

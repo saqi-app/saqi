@@ -111,7 +111,7 @@ function canonicalPoem(database: Database.Database) {
       `SELECT id,author_id,slug,verses,name_arabic,content_arabic,
     source_poem_id,source_hash,publication_json,publication_hash,
     publication_source_hash,rig_status,rig_version,rig_checkpoint_json,
-    publishable,sitemap_shard FROM poem WHERE id=?`
+    sitemap_shard FROM poem WHERE id=?`
     )
     .get(POEM_ID);
 }
@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0087_index_canonical_poems.sql"
+      "0088_drop_legacy_title_and_publishable.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -179,6 +179,18 @@ describe("canonical migration compatibility", () => {
         .pluck()
         .all()
     ).not.toContain("source_name");
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('poem')")
+        .pluck()
+        .all()
+    ).not.toContain("publishable");
+    expect(
+      database
+        .prepare("SELECT name FROM pragma_table_info('poem')")
+        .pluck()
+        .all()
+    ).not.toContain("poem_title_first_line");
     const before = database
       .prepare("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name")
       .all();
@@ -205,6 +217,7 @@ describe("canonical migration compatibility", () => {
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
+      "0088_drop_legacy_title_and_publishable.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -306,6 +319,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
+      "0088_drop_legacy_title_and_publishable.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -381,6 +395,7 @@ describe("canonical migration compatibility", () => {
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
+      "0088_drop_legacy_title_and_publishable.sql",
     ]);
   });
 
@@ -439,7 +454,7 @@ describe("canonical migration compatibility", () => {
         .prepare("SELECT name FROM pragma_table_info('poem')")
         .pluck()
         .all();
-      expect(columns).toHaveLength(22);
+      expect(columns).toHaveLength(20);
       expect(columns).not.toContain("rig_updated_at");
       expect(columns).not.toContain("translation");
       expect(columns).not.toContain("active_source_revision_id");
@@ -494,6 +509,7 @@ describe("canonical migration compatibility", () => {
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
       "0087_index_canonical_poems.sql",
+      "0088_drop_legacy_title_and_publishable.sql",
     ]);
   });
 
@@ -531,12 +547,12 @@ describe("canonical migration compatibility", () => {
     const database = open();
     applyPending(database);
     insertPoem(database);
-    const visible = () =>
+    const canonical = () =>
       database
-        .prepare("SELECT publishable FROM poem WHERE id=?")
+        .prepare("SELECT slug, content_arabic FROM poem WHERE id=?")
         .pluck()
         .get(POEM_ID);
-    expect(visible()).toBe(1);
+    const before = canonical();
     expect(() =>
       database
         .prepare(
@@ -556,12 +572,12 @@ describe("canonical migration compatibility", () => {
         .prepare("UPDATE poem SET slug=? WHERE id=?")
         .run("poem\u{202a}", POEM_ID)
     ).toThrow(/invalid poem/u);
-    expect(visible()).toBe(1);
+    expect(canonical()).toEqual(before);
     expect(() =>
       database
         .prepare("UPDATE poem SET content_arabic=? WHERE id=?")
         .run(JSON.stringify({ content: ["صدر\u{0000}عجز"] }), POEM_ID)
     ).toThrow(/invalid poem/u);
-    expect(visible()).toBe(1);
+    expect(canonical()).toEqual(before);
   });
 });
