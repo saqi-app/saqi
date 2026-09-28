@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0092_drop_author_collected_at.sql"
+      "0093_remove_broad_insights.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -204,6 +204,82 @@ describe("canonical migration compatibility", () => {
     expect(database.pragma("integrity_check", { simple: true })).toBe("ok");
   });
 
+  it("removes broad insights without changing English tracks or word glosses", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0093_")
+    );
+    insertPoem(database);
+    const fields = {
+      linesEnglish: ["First", "Second"],
+      insights: { summary: "Unneeded" },
+      insightsModel: "Old model",
+      wordGlosses: { model: "Sol 6", meanings: { lines: ["word"] } },
+      modelEnrichments: [
+        {
+          model: "Sol 6",
+          lines: ["First", "Second"],
+          insights: { summary: "Old" },
+        },
+        {
+          model: "Claude",
+          lines: ["Other", "Version"],
+          wordGlosses: { lines: ["gloss"] },
+        },
+      ],
+    };
+    database
+      .prepare("UPDATE poem SET publication_json=? WHERE id=?")
+      .run(JSON.stringify({ schemaVersion: 2, active: true, fields }), POEM_ID);
+    expect(applyPending(database)).toEqual(["0093_remove_broad_insights.sql"]);
+    const row = database
+      .prepare(
+        "SELECT publication_json AS publicationJson, publication_hash AS publicationHash, publication_cache_dirty AS cacheDirty FROM poem WHERE id=?"
+      )
+      .get(POEM_ID) as {
+      publicationJson: string;
+      publicationHash: null | string;
+      cacheDirty: number;
+    };
+    const migrated = JSON.parse(row.publicationJson) as {
+      fields: {
+        insights?: unknown;
+        insightsModel?: unknown;
+        linesEnglish: string[];
+        modelEnrichments: {
+          insights?: unknown;
+          lines: string[];
+          model: string;
+          wordGlosses?: unknown;
+        }[];
+        wordGlosses: unknown;
+      };
+    };
+    expect(migrated.fields.linesEnglish).toEqual(fields.linesEnglish);
+    expect(migrated.fields.wordGlosses).toEqual(fields.wordGlosses);
+    expect(
+      migrated.fields.modelEnrichments.map(({ lines, model, wordGlosses }) => ({
+        lines,
+        model,
+        wordGlosses,
+      }))
+    ).toEqual(
+      fields.modelEnrichments.map(({ lines, model, wordGlosses }) => ({
+        lines,
+        model,
+        wordGlosses,
+      }))
+    );
+    expect(migrated.fields.insights).toBeUndefined();
+    expect(migrated.fields.insightsModel).toBeUndefined();
+    expect(migrated.fields.modelEnrichments[0]?.insights).toBeUndefined();
+    expect(row.publicationHash).toBeNull();
+    expect(row.cacheDirty).toBe(1);
+    expect(applyPending(database)).toEqual([]);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
   it("folds completed author state into its pending URL before dropping the timestamp", () => {
     const database = open();
     applyPending(
@@ -219,6 +295,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
+      "0093_remove_broad_insights.sql",
     ]);
     expect(
       database
@@ -253,6 +330,7 @@ describe("canonical migration compatibility", () => {
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
+      "0093_remove_broad_insights.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -359,6 +437,7 @@ describe("canonical migration compatibility", () => {
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
+      "0093_remove_broad_insights.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -439,6 +518,7 @@ describe("canonical migration compatibility", () => {
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
+      "0093_remove_broad_insights.sql",
     ]);
   });
 
@@ -557,6 +637,7 @@ describe("canonical migration compatibility", () => {
       "0090_drop_poem_publishable.sql",
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
+      "0093_remove_broad_insights.sql",
     ]);
   });
 

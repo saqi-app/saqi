@@ -134,7 +134,7 @@ func run(_ executable: String, _ arguments: [String]) -> (Int32, String) {
                     VStack(alignment: .leading, spacing: 5) {
                         HStack {
                             Circle().fill((job.failed || job.waiting) ? .orange : job.running ? .green : .gray).frame(width: 8, height: 8)
-                            Text(job.id == "translate" ? "Translation + insights" : "Authors + poems").bold()
+                            Text(job.id == "translate" ? "Translation + word meanings" : "Authors + poems").bold()
                             Spacer()
                             Text(job.label ?? (!job.installed ? "Stopped" : job.waiting ? "Verify in Chrome" : job.running ? "Running" : job.failed ? "Needs attention" : "Scheduled"))
                                 .font(.caption).foregroundStyle(.secondary)

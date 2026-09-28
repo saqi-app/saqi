@@ -61,4 +61,25 @@ void describe("public Worker cache purge", () => {
     );
     assert.equal(response?.status, 503);
   });
+
+  void it("purges the corpus with one authenticated tag", async () => {
+    let tags: string[] = [];
+    const response = await handlePublicCachePurge(
+      new Request(URL, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ all: true }),
+      }),
+      SECRET,
+      async (requestedTags) => {
+        tags = requestedTags;
+        return { success: true };
+      },
+    );
+    assert.equal(response?.status, 204);
+    assert.deepEqual(tags, ["saqi-corpus"]);
+  });
 });

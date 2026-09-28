@@ -7,7 +7,11 @@ import {
   NO_STORE_HEADERS,
   readBoundedJson,
 } from "../lib/operations-boundary";
-import { publicCacheConfig, purgePublishedPoem } from "../lib/public-cache";
+import {
+  publicCacheConfig,
+  purgePublicCorpus,
+  purgePublishedPoem,
+} from "../lib/public-cache";
 import { RigPublicationRepository } from "../lib/rig-publication-repository";
 import { RigStateRepository } from "../lib/rig-state-repository";
 
@@ -55,6 +59,7 @@ const RequestSchema = z.discriminatedUnion("action", [
     expectedVersion: VersionSchema,
   }),
   z.strictObject({ action: z.literal("purge-cache") }),
+  z.strictObject({ action: z.literal("purge-corpus") }),
 ]);
 
 function failure(status: number, code: string): Response {
@@ -186,6 +191,8 @@ export async function post(
       case "publish":
       case "purge-cache":
         return await handlePublicationAction(env, state, input);
+      case "purge-corpus":
+        return await handleCorpusPurge(env);
     }
   } catch (error) {
     console.error("[ops] Rig state rejected", {
@@ -193,6 +200,24 @@ export async function post(
     });
     return failure(503, "RIG_STATE_UNAVAILABLE");
   }
+}
+
+async function handleCorpusPurge(env: CloudflareEnv): Promise<Response> {
+  const cache = publicCacheConfig(env);
+  if (cache.state === "disabled")
+    return failure(503, "PUBLIC_CACHE_PURGE_NOT_CONFIGURED");
+  await purgePublicCorpus(cache.config);
+  // Migration 0093 clears the hash only for rewritten snapshots. A concurrent
+  // new publication has a non-null hash; a changed source has a new source hash.
+  const cleared = await env.DB.prepare(
+    `UPDATE poem SET publication_cache_dirty = 0
+     WHERE publication_cache_dirty = 1 AND publication_hash IS NULL
+       AND publication_source_hash IS source_hash`
+  ).run();
+  return Response.json(
+    { ok: true, cleared: cleared.meta.changes },
+    { headers: NO_STORE_HEADERS }
+  );
 }
 
 async function handlePublicationAction(
@@ -205,8 +230,11 @@ async function handlePublicationAction(
 ): Promise<Response> {
   if (input.action === "purge-cache") {
     const purged = await purgeDirtyPublication(env);
-    return purged
-      ? Response.json({ ok: true }, { headers: NO_STORE_HEADERS })
+    return purged !== "disabled"
+      ? Response.json(
+          { ok: true, purged: purged === "purged" },
+          { headers: NO_STORE_HEADERS }
+        )
       : failure(503, "PUBLIC_CACHE_PURGE_NOT_CONFIGURED");
   }
   const changed = await new RigPublicationRepository(env.DB).publish(
@@ -217,7 +245,8 @@ async function handlePublicationAction(
   if (!changed) return failure(409, "RIG_PUBLICATION_CHANGED");
   let cachePurged = false;
   try {
-    cachePurged = await purgeDirtyPublication(env, input.poemId);
+    cachePurged =
+      (await purgeDirtyPublication(env, input.poemId)) !== "disabled";
   } catch {
     // The dirty bit persists so the next runner start retries the purge.
   }
@@ -234,17 +263,17 @@ async function handlePublicationAction(
 async function purgeDirtyPublication(
   env: CloudflareEnv,
   poemId?: string
-): Promise<boolean> {
+): Promise<"disabled" | "empty" | "purged"> {
   const cache = publicCacheConfig(env);
-  if (cache.state === "disabled") return false;
+  if (cache.state === "disabled") return "disabled";
   const repository = new RigPublicationRepository(env.DB);
   const row = await repository.pendingPurge(poemId);
-  if (!row) return true;
+  if (!row) return "empty";
   await purgePublishedPoem(cache.config, row);
   await repository.clearCacheDirty(
     row.poemId,
     row.publicationHash,
     row.sourceHash
   );
-  return true;
+  return "purged";
 }

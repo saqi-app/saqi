@@ -87,15 +87,28 @@ export async function purgePublishedPoem(
   transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
 ): Promise<string> {
   const url = publishedPoemUrl(config.publicOrigin, route);
+  await sendCachePurge(config, route, transport);
+  return url;
+}
+
+export async function purgePublicCorpus(
+  config: PublicCacheConfig,
+  transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
+): Promise<void> {
+  await sendCachePurge(config, { all: true }, transport);
+}
+
+async function sendCachePurge(
+  config: PublicCacheConfig,
+  body: { readonly all: true } | PublishedPoemRoute,
+  transport: PurgeTransport
+): Promise<void> {
   let response: { status: number };
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     response = await Promise.race([
       transport(`${config.publicOrigin}/internal/purge-publication-cache`, {
-        body: JSON.stringify({
-          authorSlug: route.authorSlug,
-          poemId: route.poemId,
-        }),
+        body: JSON.stringify(body),
         headers: {
           authorization: `Bearer ${config.purgeSecret}`,
           "content-type": "application/json",
@@ -117,5 +130,4 @@ export async function purgePublishedPoem(
   if (response.status !== 204) {
     throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED");
   }
-  return url;
 }

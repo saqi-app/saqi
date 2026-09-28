@@ -230,10 +230,9 @@ test("a lost dispatch response cannot cause a second Codex invocation", async ()
           ],
         },
       },
-      insightsTrack: "model",
-      insightsModel: "Codex Sol",
     },
   });
+  expect(JSON.parse(published.publicationJson).fields.insights).toBeUndefined();
   await expect(repository.claimNextPoem(owner, 205)).resolves.toMatchObject({
     poemId: "poem-2",
   });
@@ -442,7 +441,7 @@ const PRESERVED_FIELDS = {
   ],
 };
 
-test("missing insights and glosses are selected without regenerating current English", async () => {
+test("missing glosses are selected without regenerating current English", async () => {
   const { publisher, repository, sqlite } = fixture();
   const original = JSON.stringify({
     schemaVersion: 2,
@@ -458,17 +457,17 @@ test("missing insights and glosses are selected without regenerating current Eng
   const token = "11111111-1111-4111-8111-111111111111";
   const claim = await repository.claimNextPoem(token, 100, "poem-1");
   expect(JSON.parse(claim!.checkpointJson!)).toMatchObject({
-    required: ["insights", "wordMeanings"],
+    required: ["wordMeanings"],
   });
   await expect(
     publisher.readClaimedSource("poem-1", token, 101)
-  ).resolves.toMatchObject({ required: ["insights", "wordMeanings"] });
+  ).resolves.toMatchObject({ required: ["wordMeanings"] });
   const checkpoint = {
     ...JSON.parse(claim!.checkpointJson!),
     model: "gpt-6-sol",
     reasoningEffort: "medium",
     phase: "publish",
-    outputs: { generation: { insights: INSIGHTS, wordMeanings: [["verse"]] } },
+    outputs: { generation: { wordMeanings: [["verse"]] } },
   };
   sqlite
     .prepare("UPDATE poem SET rig_checkpoint_json = ? WHERE id = 'poem-1'")
@@ -482,8 +481,7 @@ test("missing insights and glosses are selected without regenerating current Eng
   const fields = JSON.parse(row.publicationJson).fields;
   for (const [key, value] of Object.entries(PRESERVED_FIELDS))
     expect(fields[key]).toEqual(value);
-  expect(fields.insights).toEqual(INSIGHTS);
-  expect(fields.insightsModel).toBe("gpt-6-sol");
+  expect(fields.insights).toBeUndefined();
   expect(fields.wordGlosses.model).toBe("gpt-6-sol");
   expect(fields.modelEnrichments).toHaveLength(1);
   await expect(
@@ -529,7 +527,7 @@ test("new poems outrank incomplete publications, which outrank stale publication
   });
 });
 
-test("gloss-only publication preserves English and existing insights without an extra translation track", async () => {
+test("gloss-only publication preserves English and drops legacy insights", async () => {
   const { publisher, repository, sqlite } = fixture();
   const fields = {
     ...PRESERVED_FIELDS,
@@ -564,8 +562,9 @@ test("gloss-only publication preserves English and existing insights without an 
       "SELECT publication_json AS publicationJson FROM poem WHERE id = 'poem-1'"
     )
     .get() as { publicationJson: string };
-  expect(JSON.parse(row.publicationJson).fields).toMatchObject(fields);
-  expect(JSON.parse(row.publicationJson).fields.modelEnrichments).toHaveLength(
-    1
-  );
+  const published = JSON.parse(row.publicationJson).fields;
+  expect(published.linesEnglish).toEqual(fields.linesEnglish);
+  expect(published.wordGlosses).toBeDefined();
+  expect(published.insights).toBeUndefined();
+  expect(published.modelEnrichments).toHaveLength(1);
 });

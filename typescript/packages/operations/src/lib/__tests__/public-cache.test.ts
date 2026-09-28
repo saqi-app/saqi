@@ -4,6 +4,7 @@ import {
   publicCacheConfig,
   PublicCacheInvalidationError,
   publishedPoemUrl,
+  purgePublicCorpus,
   purgePublishedPoem,
 } from "../public-cache";
 
@@ -96,5 +97,23 @@ describe("public cache invalidation", () => {
         transport
       )
     ).rejects.not.toThrow(SECRET);
+  });
+
+  it("requests one corpus-wide purge", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    await purgePublicCorpus(
+      {
+        publicSite: PUBLIC_SITE,
+        publicOrigin: "https://saqi.app",
+        purgeSecret: SECRET,
+      },
+      transport
+    );
+    expect(transport).toHaveBeenCalledExactlyOnceWith(
+      "https://saqi.app/internal/purge-publication-cache",
+      expect.objectContaining({ body: '{"all":true}' })
+    );
   });
 });

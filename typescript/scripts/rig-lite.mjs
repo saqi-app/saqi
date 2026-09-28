@@ -76,7 +76,7 @@ async function main() {
   const attemptId = randomUUID();
   const inputHash = createHash("sha256").update(prompt).digest("hex");
   process.stdout.write(
-    `Model: ${model}; reasoning: medium; fields: ${(source.required ?? ["translation", "insights", "wordMeanings"]).join(", ")}\n`,
+    `Model: ${model}; reasoning: medium; fields: ${(source.required ?? ["translation", "wordMeanings"]).join(", ")}\n`,
   );
   const dispatched = await request({
     action: "dispatch",
@@ -270,13 +270,12 @@ async function publish(state) {
 }
 
 function promptFor(poem) {
-  const required = poem.required ?? ["translation", "insights", "wordMeanings"];
+  const required = poem.required ?? ["translation", "wordMeanings"];
   return [
     `Generate only these missing fields: ${required.join(", ")}. Existing fields must not be regenerated.`,
-    "For requested fields, translate this Arabic poem into English and write concise, source-grounded insights.",
+    "For requested fields, translate this Arabic poem into English and provide concise word-by-word meanings.",
     "Output one English line for each Arabic line, in exactly the same order.",
     "Keep names and imagery faithful. Do not invent historical facts or cite sources you did not read.",
-    "Every insight field and array must be nonempty. notableLines must quote actual Arabic lines.",
     "For wordMeanings, return the required line_1, line_2, etc. properties, each containing one concise English meaning per listed token in exactly the given order. Preserve attached conjunctions/pronouns in the meaning. Empty token lists require an empty array. Do not merge, skip, or add words.",
     "Return only the JSON object required by the supplied schema.",
     `Author: ${poem.authorName}`,
