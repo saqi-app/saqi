@@ -109,7 +109,9 @@ void test("canonical publication preserves visible alternatives and attribution"
     assert.equal(changedSource?.poem.publicationOutdated, true);
     assert.deepEqual(changedSource.poem.linesEnglish, ["Legacy English"]);
     assert.equal(await reader.getPoemPage("wrong-poet", "p"), undefined);
-    sqlite.exec("DELETE FROM poem WHERE id='p'; DELETE FROM author WHERE id='a'");
+    sqlite.exec(
+      "DELETE FROM poem WHERE id='p'; DELETE FROM author WHERE id='a'",
+    );
     assert.equal(await reader.getPoemPage("poet", "p"), undefined);
     assert.deepEqual(await reader.listAuthors(), []);
   } finally {
@@ -133,10 +135,15 @@ void test("invalid publication cannot hide readable Arabic or advertise English"
     assert.equal(page.poem.linesEnglish, undefined);
     const summary = await reader.getAuthorPage("poet");
     assert.equal(summary?.poems[0]?.hasEnglish, false);
-    sqlite
-      .prepare("UPDATE poem SET content_arabic=? WHERE id='p'")
-      .run(JSON.stringify({ content: [] }));
-    assert.equal(await reader.getPoemPage("poet", "p"), undefined);
+    assert.throws(
+      () =>
+        sqlite
+          .prepare("UPDATE poem SET content_arabic=? WHERE id='p'")
+          .run(JSON.stringify({ content: [] })),
+      /invalid poem/u,
+    );
+    const unchanged = await reader.getPoemPage("poet", "p");
+    assert.deepEqual(unchanged?.poem.linesArabic, ["بيت"]);
   } finally {
     sqlite.close();
   }
@@ -370,14 +377,12 @@ for (const authorCount of [0, 1, 199, 200, 201]) {
   });
 }
 
-void test("publishability triggers update indexed live counts", () => {
+void test("invalid writes cannot enter indexed public poem counts", () => {
   const database = createDatabase();
   try {
     database.exec(`
       INSERT INTO author (id, slug, name_arabic)
       VALUES ('a-trigger', 'trigger', 'اختبار');
-      INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
-      VALUES ('p-trigger', 'a-trigger', 'trigger-poem', 1, 'اختبار', '{"content":[]}');
     `);
     const count = () =>
       database
@@ -386,17 +391,32 @@ void test("publishability triggers update indexed live counts", () => {
         )
         .get() as { count: number };
     assert.equal(count().count, 0);
-    database
-      .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-trigger'")
-      .run(JSON.stringify({ content: [1, "بيت"] }));
+    const insert = database.prepare(
+      `INSERT INTO poem (id, author_id, slug, verses, name_arabic, content_arabic)
+       VALUES ('p-trigger', 'a-trigger', 'trigger-poem', 1, 'اختبار', ?)`,
+    );
+    assert.throws(
+      () => insert.run(JSON.stringify({ content: [] })),
+      /invalid poem/u,
+    );
+    assert.throws(
+      () => insert.run(JSON.stringify({ content: [1, "بيت"] })),
+      /invalid poem/u,
+    );
+    assert.throws(
+      () => insert.run(JSON.stringify({ content: [{ line: "بيت" }] })),
+      /invalid poem/u,
+    );
     assert.equal(count().count, 0);
-    database
-      .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-trigger'")
-      .run(JSON.stringify({ content: [{ line: "بيت" }] }));
-    assert.equal(count().count, 0);
-    database
-      .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-trigger'")
-      .run(JSON.stringify({ content: ["بيت"] }));
+    insert.run(JSON.stringify({ content: ["بيت"] }));
+    assert.equal(count().count, 1);
+    assert.throws(
+      () =>
+        database
+          .prepare("UPDATE poem SET content_arabic = ? WHERE id = 'p-trigger'")
+          .run(JSON.stringify({ content: ["بيت\u{0000}"] })),
+      /invalid poem/u,
+    );
     assert.equal(count().count, 1);
     database.prepare("DELETE FROM poem WHERE id = 'p-trigger'").run();
     assert.equal(count().count, 0);
