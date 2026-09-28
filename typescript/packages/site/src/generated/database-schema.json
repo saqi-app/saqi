@@ -47,7 +47,8 @@
     "0081_remove_hidden_unpublished_author.sql",
     "0082_drop_unused_author_hidden.sql",
     "0083_index_source_ids.sql",
-    "0084_drop_source_names.sql"
+    "0084_drop_source_names.sql",
+    "0085_backfill_legacy_titles.sql"
   ],
   "databases": [
     {
