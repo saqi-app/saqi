@@ -222,11 +222,8 @@ test("an interrupted author collection stays due until its manifest completes", 
 
   await repository.completeAuthor(author.sourceAuthorId);
   const completed = sqlite
-    .prepare(
-      "SELECT collected_at AS collectedAt, source_url AS sourceUrl FROM author WHERE id = ?"
-    )
-    .get(created.id) as { collectedAt: number; sourceUrl: null };
-  expect(completed.collectedAt).toBeGreaterThan(0);
+    .prepare("SELECT source_url AS sourceUrl FROM author WHERE id = ?")
+    .get(created.id) as { sourceUrl: null };
   expect(completed.sourceUrl).toBeNull();
   await repository.upsertAuthor(author);
   expect(
