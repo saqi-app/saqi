@@ -76,6 +76,8 @@ jobs:
               AND EXISTS (SELECT 1 FROM json_each(p.rig_checkpoint_json, '$.required') component
                 WHERE component.value = 'insights')
             GROUP BY rig_status;
+          SELECT COUNT(*) AS checkpoints_with_insights_payload FROM poem
+            WHERE json_type(rig_checkpoint_json, '$.outputs.generation.insights') IS NOT NULL;
           SELECT id AS blocked_poem_id,
             json_extract(rig_checkpoint_json, '$.phase') AS checkpoint_phase,
             json_extract(rig_checkpoint_json, '$.required') AS checkpoint_required,

@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0093_remove_broad_insights.sql"
+      "0094_recover_blocked_without_insights.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -232,7 +232,10 @@ describe("canonical migration compatibility", () => {
     database
       .prepare("UPDATE poem SET publication_json=? WHERE id=?")
       .run(JSON.stringify({ schemaVersion: 2, active: true, fields }), POEM_ID);
-    expect(applyPending(database)).toEqual(["0093_remove_broad_insights.sql"]);
+    expect(applyPending(database)).toEqual([
+      "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
+    ]);
     const row = database
       .prepare(
         "SELECT publication_json AS publicationJson, publication_hash AS publicationHash, publication_cache_dirty AS cacheDirty FROM poem WHERE id=?"
@@ -280,6 +283,73 @@ describe("canonical migration compatibility", () => {
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
+  it("recovers blocked English and word meanings without replaying stale output", () => {
+    const database = open();
+    applyPending(
+      database,
+      migrationFiles().filter((name) => name < "0094_")
+    );
+    insertPoem(database);
+    const translation = { lines: ["First", "Second"] };
+    const wordMeanings = [["first"], ["second"]];
+    const checkpoint = {
+      phase: "publish",
+      sourceHash: SOURCE_HASH,
+      required: ["translation", "insights", "wordMeanings"],
+      outputs: {
+        generation: {
+          translation,
+          wordMeanings,
+          insights: { summary: "Discard this prose" },
+        },
+      },
+    };
+    database
+      .prepare(
+        "UPDATE poem SET rig_status='blocked',rig_checkpoint_json=? WHERE id=?"
+      )
+      .run(JSON.stringify(checkpoint), POEM_ID);
+    expect(applyPending(database)).toEqual([
+      "0094_recover_blocked_without_insights.sql",
+    ]);
+    const row = database
+      .prepare(
+        "SELECT rig_status AS status,rig_version AS version,rig_checkpoint_json AS checkpoint FROM poem WHERE id=?"
+      )
+      .get(POEM_ID) as { status: string; version: number; checkpoint: string };
+    const migrated = JSON.parse(row.checkpoint) as typeof checkpoint;
+    expect(row.status).toBe("claimed");
+    expect(row.version).toBe(8);
+    expect(migrated.required).toEqual(["translation", "wordMeanings"]);
+    expect(migrated.outputs.generation.translation).toEqual(translation);
+    expect(migrated.outputs.generation.wordMeanings).toEqual(wordMeanings);
+    expect(migrated.outputs.generation.insights).toBeUndefined();
+    expect(applyPending(database)).toEqual([]);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+
+    database
+      .prepare(
+        "UPDATE poem SET rig_status='blocked',rig_checkpoint_json=?,source_hash=? WHERE id=?"
+      )
+      .run(JSON.stringify(checkpoint), "b".repeat(64), POEM_ID);
+    database.exec(
+      readFileSync(
+        join(DIRECTORY, "0094_recover_blocked_without_insights.sql"),
+        "utf8"
+      )
+    );
+    const stale = database
+      .prepare(
+        "SELECT rig_status AS status,rig_version AS version,rig_checkpoint_json AS checkpoint FROM poem WHERE id=?"
+      )
+      .get(POEM_ID) as { status: string; version: number; checkpoint: string };
+    expect(stale.status).toBe("blocked");
+    expect(stale.version).toBe(8);
+    expect(JSON.parse(stale.checkpoint).outputs.generation.translation).toEqual(
+      translation
+    );
+  });
+
   it("folds completed author state into its pending URL before dropping the timestamp", () => {
     const database = open();
     applyPending(
@@ -296,6 +366,7 @@ describe("canonical migration compatibility", () => {
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
     ]);
     expect(
       database
@@ -331,6 +402,7 @@ describe("canonical migration compatibility", () => {
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -438,6 +510,7 @@ describe("canonical migration compatibility", () => {
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -519,6 +592,7 @@ describe("canonical migration compatibility", () => {
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
     ]);
   });
 
@@ -638,6 +712,7 @@ describe("canonical migration compatibility", () => {
       "0091_fold_author_completion_into_source_url.sql",
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
+      "0094_recover_blocked_without_insights.sql",
     ]);
   });
 

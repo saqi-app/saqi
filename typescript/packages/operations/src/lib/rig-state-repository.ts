@@ -23,9 +23,7 @@ const CheckpointSchema = z.object({
   reasoningEffort: z.string().optional(),
   phase: z.enum(["generation", "publish"]),
   sourceHash: HashSchema,
-  required: z
-    .array(z.enum(["translation", "insights", "wordMeanings"]))
-    .optional(),
+  required: z.array(z.enum(["translation", "wordMeanings"])).optional(),
   invocation: InvocationSchema.optional(),
   outputs: z.record(z.string(), z.unknown()).optional(),
 });
