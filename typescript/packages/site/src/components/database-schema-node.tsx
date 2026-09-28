@@ -47,25 +47,6 @@ function DatabaseSchemaTableCell({ children }: { children: ReactNode }) {
   return <td>{children}</td>;
 }
 
-export function illustrativeValue(column: SchemaColumn, row: number): string {
-  const name = column.name.toLowerCase();
-  if (name.includes("url") || name.includes("href"))
-    return `https://example.invalid/${String(row)}`;
-  if (name.includes("hash") || name.includes("digest"))
-    return String(row).repeat(64);
-  if (name.includes("json") || name.includes("payload"))
-    return JSON.stringify({ example: row });
-  if (name.includes("arabic") || name.endsWith("_ar"))
-    return `مثال ${String(row)}`;
-  if (name.includes("_at") || name.includes("timestamp"))
-    return String(1_750_000_000 + row * 86_400);
-  if (name === "singleton") return "1";
-  if (/INT|REAL|NUMERIC|BOOLEAN/i.test(column.type)) return String(row);
-  if (name.endsWith("_id") || name === "id") return `example-${String(row)}`;
-  if (name.includes("month")) return `2025-0${String(row)}-01`;
-  return `example ${String(row)}`;
-}
-
 function SchemaNodeView({ data }: NodeProps<SchemaNode>) {
   const { table, onSelect } = data;
   return (

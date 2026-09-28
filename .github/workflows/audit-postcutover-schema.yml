@@ -39,8 +39,38 @@ jobs:
           SELECT COUNT(*) AS source_authors FROM author WHERE source_author_id IS NOT NULL;
           SELECT COUNT(*) AS orphan_poems FROM poem p LEFT JOIN author a ON a.id = p.author_id
             WHERE a.id IS NULL;
+          SELECT COUNT(*) AS orphan_publications FROM poem
+            WHERE author_id IS NULL AND publication_json IS NOT NULL;
+          SELECT COUNT(*) AS orphan_source_identities FROM poem
+            WHERE author_id IS NULL AND source_poem_id IS NOT NULL;
+          SELECT COUNT(*) AS orphan_active_work FROM poem
+            WHERE author_id IS NULL AND rig_status IN ('claimed', 'dispatching', 'unknown');
+          SELECT COUNT(*) AS orphan_checkpoints FROM poem
+            WHERE author_id IS NULL AND rig_checkpoint_json IS NOT NULL;
           SELECT COUNT(*) AS unfinished_source_authors FROM author
             WHERE source_author_id IS NOT NULL AND collected_at IS NULL;
+          SELECT COUNT(*) AS pending_without_url FROM author
+            WHERE source_author_id IS NOT NULL AND collected_at IS NULL AND source_url IS NULL;
+          SELECT COUNT(*) AS finished_source_authors FROM author
+            WHERE source_author_id IS NOT NULL AND collected_at IS NOT NULL;
+          SELECT COUNT(*) AS source_url_mismatch FROM author
+            WHERE source_author_id IS NOT NULL AND source_url IS NOT NULL
+              AND source_url <> 'https://www.aldiwan.net/cat-' || source_author_id;
+          SELECT COUNT(*) AS dirty_publication_caches FROM poem
+            WHERE publication_cache_dirty = 1;
+          SELECT COUNT(*) AS publications_with_dirty_cache FROM poem
+            WHERE publication_json IS NOT NULL AND publication_cache_dirty = 1;
+          SELECT SUM(length(publication_json)) AS publication_json_bytes,
+            MAX(length(publication_json)) AS largest_publication_json_bytes
+            FROM poem WHERE publication_json IS NOT NULL;
+          SELECT p.id AS verified_poem_id, a.slug AS verified_author_slug,
+            p.rig_status AS verified_rig_status,
+            p.publication_source_hash = p.source_hash AS verified_source_current,
+            json_array_length(p.publication_json, '$.fields.modelEnrichments') AS verified_translation_tracks,
+            json_type(p.publication_json, '$.fields.insights') AS verified_insights_type,
+            json_type(p.publication_json, '$.fields.wordGlosses') AS verified_glosses_type
+            FROM poem p JOIN author a ON a.id = p.author_id
+            WHERE p.id = '18f6ccf7-badb-4223-87e1-3c6487924045';
           SELECT COUNT(*) AS modern_english_titles FROM poem
             WHERE name_english IS NOT NULL AND trim(name_english) <> '';
           SELECT COUNT(*) AS source_poems FROM poem WHERE source_poem_id IS NOT NULL;
