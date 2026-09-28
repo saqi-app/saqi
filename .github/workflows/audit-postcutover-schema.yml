@@ -61,6 +61,21 @@ jobs:
           SELECT SUM(length(publication_json)) AS publication_json_bytes,
             MAX(length(publication_json)) AS largest_publication_json_bytes
             FROM poem WHERE publication_json IS NOT NULL;
+          SELECT COUNT(*) AS poems_with_broad_insights,
+            SUM(length(json_extract(publication_json, '$.fields.insights'))) AS broad_insights_bytes
+            FROM poem WHERE json_type(publication_json, '$.fields.insights') IS NOT NULL;
+          SELECT COUNT(*) AS poems_with_nested_insights FROM poem p
+            WHERE EXISTS (SELECT 1 FROM json_each(p.publication_json, '$.fields.modelEnrichments') track
+              WHERE json_type(track.value, '$.insights') IS NOT NULL);
+          SELECT COUNT(*) AS poems_with_word_glosses FROM poem p
+            WHERE json_type(p.publication_json, '$.fields.wordGlosses') IS NOT NULL
+              OR EXISTS (SELECT 1 FROM json_each(p.publication_json, '$.fields.modelEnrichments') track
+                WHERE json_type(track.value, '$.wordGlosses') IS NOT NULL);
+          SELECT rig_status, COUNT(*) AS active_checkpoints_requiring_insights
+            FROM poem p WHERE rig_checkpoint_json IS NOT NULL
+              AND EXISTS (SELECT 1 FROM json_each(p.rig_checkpoint_json, '$.required') component
+                WHERE component.value = 'insights')
+            GROUP BY rig_status;
           SELECT p.id AS verified_poem_id, a.slug AS verified_author_slug,
             p.rig_status AS verified_rig_status,
             p.publication_source_hash = p.source_hash AS verified_source_current,
