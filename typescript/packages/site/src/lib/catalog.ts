@@ -48,8 +48,7 @@ function safeTextSql(column: string) {
 const SAFE_ROUTE_SEGMENT_SQL = (column: string) => `${SAFE_IDENTITY_SQL(column)}
   AND ${column} NOT IN ('.', '..')
   AND instr(${column}, '/') = 0`;
-const PUBLISHABLE_POEM = `p.publishable = 1
-  AND ${SAFE_ROUTE_SEGMENT_SQL("p.id")}
+const PUBLISHABLE_POEM = `${SAFE_ROUTE_SEGMENT_SQL("p.id")}
   AND ${SAFE_ROUTE_SEGMENT_SQL("p.slug")}
   AND ${SAFE_IDENTITY_SQL("p.name_arabic")}
   AND p.verses BETWEEN 1 AND 1000`;
@@ -59,11 +58,9 @@ const PUBLISHABLE_AUTHOR = `${SAFE_IDENTITY_SQL("a.id")}
   AND ${SAFE_IDENTITY_SQL("a.name_arabic")}
   AND (a.name IS NULL OR trim(a.name) = '' OR ${SAFE_IDENTITY_SQL("a.name")})`;
 const PUBLIC_POEM_COUNT = `(SELECT count(*) FROM poem public_poem
-  WHERE public_poem.author_id = a.id
-    AND public_poem.publishable = 1)`;
+  WHERE public_poem.author_id = a.id)`;
 const HAS_PUBLIC_POEM = `EXISTS (SELECT 1 FROM poem public_poem
-  WHERE public_poem.author_id = a.id
-    AND public_poem.publishable = 1)`;
+  WHERE public_poem.author_id = a.id)`;
 const AuthorRowSchema = z.object({
   id: z.string(),
   slug: z.string(),
@@ -90,7 +87,6 @@ const PoemSummaryRowSchema = z.object({
   verses: z.number().int().positive(),
   nameArabic: z.string(),
   nameEnglish: z.string().nullable(),
-  nameEnglishLegacy: z.string().nullable(),
   publicationJson: z.string().nullable(),
 });
 const SitemapPoemRowSchema = z.object({
@@ -106,7 +102,6 @@ const PoemRowSchema = z.object({
   verses: z.number().int().positive(),
   nameArabic: z.string(),
   nameEnglish: z.string().nullable(),
-  nameEnglishLegacy: z.string().nullable(),
   contentArabic: z.string(),
   publicationJson: z.string().nullable(),
   sourceHash: z.string().nullable(),
@@ -313,7 +308,7 @@ function poemFromRow(raw: unknown): Poem | undefined {
     authorId: row.authorId,
     verses: Math.ceil(linesArabic.length / 2),
     nameArabic: row.nameArabic,
-    ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
+    ...englishTitleFields(row.nameEnglish),
     linesArabic,
     ...snapshot?.fields,
   });
@@ -346,7 +341,6 @@ const POEM_COLUMNS = `p.id,
   p.verses,
   p.name_arabic AS nameArabic,
   NULLIF(trim(p.name_english), '') AS nameEnglish,
-  NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy,
   p.content_arabic AS contentArabic,
   p.publication_json AS publicationJson,
   p.source_hash AS sourceHash,
@@ -361,8 +355,7 @@ const BASE_POEM_SUMMARY_COLUMNS = `p.id,
     WHERE line.type = 'text' AND trim(line.value) <> ''
   ) AS INTEGER) AS verses,
   p.name_arabic AS nameArabic,
-  NULLIF(trim(p.name_english), '') AS nameEnglish,
-  NULLIF(trim(p.poem_title_first_line), '') AS nameEnglishLegacy`;
+  NULLIF(trim(p.name_english), '') AS nameEnglish`;
 
 const POEM_SUMMARY_COLUMNS = `${BASE_POEM_SUMMARY_COLUMNS},
   p.publication_json AS publicationJson`;
@@ -477,7 +470,7 @@ export class CatalogRepository implements CatalogReader {
               : false,
             id: row.id,
             nameArabic: row.nameArabic,
-            ...englishTitleFields(row.nameEnglish, row.nameEnglishLegacy),
+            ...englishTitleFields(row.nameEnglish),
             slug: row.slug,
             verses: row.verses,
             translationModels,

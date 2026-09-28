@@ -157,7 +157,9 @@ describe("canonical migration compatibility", () => {
 
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
-    expect(applyPending(database).at(-1)).toBe("0086_reject_invalid_poems.sql");
+    expect(applyPending(database).at(-1)).toBe(
+      "0087_index_canonical_poems.sql"
+    );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
       database
@@ -202,6 +204,7 @@ describe("canonical migration compatibility", () => {
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
+      "0087_index_canonical_poems.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -300,7 +303,10 @@ describe("canonical migration compatibility", () => {
         .pluck()
         .get()
     ).toBe(66);
-    expect(applyPending(database)).toEqual(["0086_reject_invalid_poems.sql"]);
+    expect(applyPending(database)).toEqual([
+      "0086_reject_invalid_poems.sql",
+      "0087_index_canonical_poems.sql",
+    ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
       database
@@ -374,6 +380,7 @@ describe("canonical migration compatibility", () => {
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
+      "0087_index_canonical_poems.sql",
     ]);
   });
 
@@ -486,6 +493,7 @@ describe("canonical migration compatibility", () => {
       "0084_drop_source_names.sql",
       "0085_backfill_legacy_titles.sql",
       "0086_reject_invalid_poems.sql",
+      "0087_index_canonical_poems.sql",
     ]);
   });
 
