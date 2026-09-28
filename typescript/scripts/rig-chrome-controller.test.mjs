@@ -23,7 +23,14 @@ const settle = async () => {
     await Promise.resolve();
   }
 };
-function fixture({ enabled = false, fail, project, redirect, stored } = {}) {
+function fixture({
+  enabled = false,
+  fail,
+  project,
+  redirect,
+  stored,
+  authors = [author],
+} = {}) {
   let time = Date.parse("2026-09-26T12:00:00Z"),
     serial = 0;
   const timers = new Map(),
@@ -43,6 +50,7 @@ function fixture({ enabled = false, fail, project, redirect, stored } = {}) {
     error: null,
     current: null,
   };
+  let authorIndex = 0;
   let connections = 0,
     tab;
   const clock = {
@@ -145,11 +153,14 @@ function fixture({ enabled = false, fail, project, redirect, stored } = {}) {
               const result = {};
               if (message.action === "hello") result.protocol = 1;
               if (message.action === "begin") {
-                result.author = author;
-                status.state = "collecting";
+                result.author = authors[authorIndex] || null;
+                status.state = result.author ? "collecting" : "idle";
               }
               if (message.action === "manifest") result.poems = poems;
-              if (message.action === "complete") status.state = "idle";
+              if (message.action === "complete") {
+                status.state = "idle";
+                authorIndex++;
+              }
               if (
                 ["status", "set-control"].includes(message.action) &&
                 message.state
@@ -424,4 +435,66 @@ test("successful explicit retry replaces the old error badge and tooltip", async
   await f.advance(42000);
   assert.equal(f.badges.at(-1), "");
   assert.equal(f.titles.at(-1), "Saqi: idle");
+});
+
+test("authors continue immediately on one bridge and one paced tab", async () => {
+  const f = fixture({ enabled: true, authors: [author, author] });
+  const run = f.controller.tick();
+  await settle();
+  await f.advance(84000);
+  await run;
+  assert.equal(f.calls.filter((call) => call.action === "complete").length, 2);
+  assert.equal(f.connections(), 1);
+  assert.equal(f.navigations.length, 6);
+  assert.equal(f.local.collectorStatus.state, "idle");
+});
+
+test("a persisted old source conflict gets one fresh session, then a repeated conflict stays visible", async () => {
+  const stored = {
+    collectorControl: {
+      enabled: true,
+      hasStarted: true,
+      blocked: true,
+      error: { code: "SOURCE_CHANGED" },
+    },
+    collectorStatus: { state: "error", error: { code: "SOURCE_CHANGED" } },
+  };
+  const f = fixture({
+    stored,
+    fail: (message) =>
+      message.action === "poem" ? { code: "SOURCE_CHANGED" } : null,
+  });
+  const run = f.controller.tick();
+  await settle();
+  await f.advance(28000);
+  await run;
+  assert.equal(f.calls.filter((call) => call.action === "begin").length, 1);
+  assert.equal(f.local.collectorControl.sourceConflictRetried, true);
+  assert.equal(f.local.collectorStatus.error.code, "SOURCE_CHANGED");
+  const restarted = fixture({ stored: f.local });
+  await restarted.controller.tick();
+  assert.equal(
+    restarted.calls.some((call) => call.action === "begin"),
+    false,
+  );
+});
+
+test("a persisted old source conflict resumes successfully after backend repair", async () => {
+  const f = fixture({
+    stored: {
+      collectorControl: {
+        enabled: true,
+        hasStarted: true,
+        blocked: true,
+        error: { code: "SOURCE_CHANGED" },
+      },
+      collectorStatus: { state: "error", error: { code: "SOURCE_CHANGED" } },
+    },
+  });
+  const run = f.controller.tick();
+  await settle();
+  await f.advance(42000);
+  await run;
+  assert.equal(f.local.collectorStatus.state, "idle");
+  assert.equal(f.calls.filter((call) => call.action === "complete").length, 1);
 });

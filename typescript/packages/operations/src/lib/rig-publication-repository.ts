@@ -3,6 +3,7 @@ import { wordGlossesFromMeanings } from "@saqi/precedent-iso";
 import { z } from "zod";
 
 import { PublicationSnapshotSchema } from "../../../site/src/lib/publication-snapshot";
+import { RequiredSql } from "./rig-requirements";
 
 const UnsafeControl =
   // eslint-disable-next-line no-control-regex -- These exact control characters cannot be published.
@@ -39,15 +40,20 @@ const InsightsSchema = z.strictObject({
     .min(1)
     .max(100),
 });
+const ComponentSchema = z.enum(["translation", "insights", "wordMeanings"]);
+const RequiredSchema = z.array(ComponentSchema).min(1).max(3);
 const OutputSchema = z.strictObject({
-  translation: z.strictObject({
-    lines: z.array(TranslatedLineSchema).min(1).max(2_000),
-  }),
-  insights: InsightsSchema,
+  translation: z
+    .strictObject({
+      lines: z.array(TranslatedLineSchema).min(1).max(2_000),
+    })
+    .optional(),
+  insights: InsightsSchema.optional(),
   wordMeanings: z
     .array(z.array(InsightTextSchema.max(2_000)).max(5_000))
     .min(1)
-    .max(2_000),
+    .max(2_000)
+    .optional(),
 });
 const SourceSchema = z.object({
   poemId: z.string(),
@@ -56,8 +62,11 @@ const SourceSchema = z.object({
   contentArabic: z.string(),
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   version: z.number().int().nonnegative(),
+  requiredJson: z.string(),
 });
 const PublishRowSchema = z.object({
+  publicationJson: z.string().nullable(),
+  publicationHash: z.string().nullable(),
   status: z.literal("claimed"),
   checkpointJson: z.string(),
   contentArabic: z.string(),
@@ -65,6 +74,8 @@ const PublishRowSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 const CheckpointSchema = z.object({
+  required: RequiredSchema.optional(),
+  reasoningEffort: z.string().optional(),
   model: ModelLabelSchema,
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   outputs: z.object({ generation: z.unknown() }),
@@ -75,6 +86,7 @@ const ArabicSchema = z.object({
 
 export type RigSourcePoem = z.infer<typeof SourceSchema> & {
   readonly linesArabic: readonly string[];
+  readonly required: z.infer<typeof RequiredSchema>;
 };
 
 interface PendingPurgeRoute {
@@ -131,7 +143,8 @@ export class RigPublicationRepository {
       .prepare(
         `SELECT p.id AS poemId, a.name_arabic AS authorName,
               p.name_arabic AS titleArabic, p.content_arabic AS contentArabic,
-              p.source_hash AS sourceHash, p.rig_version AS version
+              p.source_hash AS sourceHash, p.rig_version AS version,
+              coalesce(json_extract(p.rig_checkpoint_json, '$.required'), ${RequiredSql}) AS requiredJson
        FROM poem p JOIN author a ON a.id = p.author_id
        WHERE p.id = ?1 AND p.rig_status = 'claimed'
          AND a.hidden = 0
@@ -142,7 +155,11 @@ export class RigPublicationRepository {
     if (!raw) return null;
     const source = SourceSchema.parse(raw);
     const arabic = ArabicSchema.parse(JSON.parse(source.contentArabic));
-    return { ...source, linesArabic: arabic.content };
+    return {
+      ...source,
+      linesArabic: arabic.content,
+      required: RequiredSchema.parse(JSON.parse(source.requiredJson)),
+    };
   }
 
   async publish(
@@ -155,7 +172,7 @@ export class RigPublicationRepository {
       const invalid =
         error instanceof z.ZodError ||
         (error instanceof Error &&
-          /^(GLOSS_|TRANSLATION_LINE_COUNT_MISMATCH$|TRANSLATION_HAS_BLANK_LINE$|INSIGHT_LINE_NOT_IN_SOURCE$)/u.test(
+          /^(GENERATION_COMPONENT_|GLOSS_|TRANSLATION_LINE_COUNT_MISMATCH$|TRANSLATION_HAS_BLANK_LINE$|INSIGHT_LINE_NOT_IN_SOURCE$)/u.test(
             error.message
           ));
       if (!invalid) throw error;
@@ -186,7 +203,8 @@ export class RigPublicationRepository {
       .prepare(
         `SELECT rig_status AS status, rig_checkpoint_json AS checkpointJson,
               content_arabic AS contentArabic, source_hash AS sourceHash,
-              rig_version AS version
+              rig_version AS version, publication_json AS publicationJson,
+              publication_hash AS publicationHash
        FROM poem WHERE id = ?1`
       )
       .bind(poemId)
@@ -196,47 +214,61 @@ export class RigPublicationRepository {
       return false;
     const row = parsed.data;
     const checkpoint = CheckpointSchema.parse(JSON.parse(row.checkpointJson));
-    const output = OutputSchema.parse(checkpoint.outputs.generation);
-    const arabic = ArabicSchema.parse(JSON.parse(row.contentArabic));
-    if (checkpoint.sourceHash !== row.sourceHash)
-      throw new Error("SOURCE_CHANGED_BEFORE_PUBLICATION");
-    if (output.translation.lines.length !== arabic.content.length)
-      throw new Error("TRANSLATION_LINE_COUNT_MISMATCH");
-    if (
-      output.translation.lines.some(
-        (line, index) => arabic.content[index]?.trim() && !line.trim()
-      )
-    )
-      throw new Error("TRANSLATION_HAS_BLANK_LINE");
-    const sourceLines = new Set(arabic.content.map((line) => line.trim()));
-    if (
-      output.insights.notableLines.some(
-        ({ line }) => !sourceLines.has(line.trim())
-      )
-    )
-      throw new Error("INSIGHT_LINE_NOT_IN_SOURCE");
+    if (checkpoint.sourceHash !== row.sourceHash) {
+      // Known output for obsolete Arabic is safe to supersede. Public data stays.
+      await this.#database
+        .prepare(
+          `UPDATE poem SET rig_status = 'retry',
+        rig_version = rig_version + 1, rig_lease_token = NULL,
+        rig_lease_expires_at = NULL, rig_updated_at = unixepoch()
+        WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
+          AND rig_checkpoint_json = ?3`
+        )
+        .bind(poemId, expectedVersion, row.checkpointJson)
+        .run();
+      return false;
+    }
+    const { output, arabic } = validatedGeneration(
+      checkpoint,
+      row.contentArabic
+    );
+    const existing = row.publicationJson
+      ? PublicationSnapshotSchema.parse(JSON.parse(row.publicationJson)).fields
+      : {};
+    const fields = { ...existing };
+    if (output.translation) {
+      fields.modelEnrichments = [
+        ...(existing.modelEnrichments ?? []).filter(
+          (track) => track.modelKey !== "saqi-current"
+        ),
+        {
+          lines: output.translation.lines,
+          model: checkpoint.model,
+          modelKey: "saqi-current",
+          reasoningEffort: checkpoint.reasoningEffort ?? "unknown",
+          vendorKey: "openai",
+        },
+      ];
+    }
+    if (output.wordMeanings)
+      fields.wordGlosses = {
+        sourceHash: row.sourceHash,
+        model: checkpoint.model,
+        meanings: wordGlossesFromMeanings(arabic.content, output.wordMeanings),
+      };
+    if (output.insights) {
+      fields.insights = output.insights;
+      fields.insightsModel = checkpoint.model;
+      fields.insightsTrack = "model";
+      if (checkpoint.reasoningEffort)
+        fields.insightsReasoningEffort = checkpoint.reasoningEffort;
+      else delete fields.insightsReasoningEffort;
+    }
     const publication = JSON.stringify(
       PublicationSnapshotSchema.parse({
         schemaVersion: 2,
         active: true,
-        fields: {
-          modelEnrichments: [
-            {
-              lines: output.translation.lines,
-              wordGlosses: wordGlossesFromMeanings(
-                arabic.content,
-                output.wordMeanings
-              ),
-              model: checkpoint.model,
-              modelKey: "current",
-              reasoningEffort: "unknown",
-              vendorKey: "openai",
-            },
-          ],
-          insights: output.insights,
-          insightsModel: checkpoint.model,
-          insightsTrack: "model",
-        },
+        fields,
       })
     );
     const digest = await crypto.subtle.digest(
@@ -256,7 +288,8 @@ export class RigPublicationRepository {
            rig_checkpoint_json = NULL, rig_lease_token = NULL,
            rig_lease_expires_at = NULL, rig_updated_at = unixepoch()
        WHERE id = ?4 AND rig_status = 'claimed' AND rig_version = ?5
-         AND source_hash = ?2 AND rig_checkpoint_json = ?6`
+         AND source_hash = ?2 AND rig_checkpoint_json = ?6
+         AND publication_hash IS ?7`
       )
       .bind(
         publication,
@@ -264,9 +297,53 @@ export class RigPublicationRepository {
         publicationHash,
         poemId,
         expectedVersion,
-        row.checkpointJson
+        row.checkpointJson,
+        row.publicationHash
       )
       .run();
     return result.meta.changes === 1;
   }
+}
+
+function validatedGeneration(
+  checkpoint: z.infer<typeof CheckpointSchema>,
+  contentArabic: string
+) {
+  const output = OutputSchema.parse(checkpoint.outputs.generation);
+  const required = checkpoint.required ?? [
+    "translation",
+    "insights",
+    "wordMeanings",
+  ];
+  if (
+    (required.includes("translation") && !output.translation) ||
+    (required.includes("insights") && !output.insights) ||
+    (required.includes("wordMeanings") && !output.wordMeanings)
+  )
+    throw new Error("GENERATION_COMPONENT_MISSING");
+  if (
+    Object.keys(output).some(
+      (component) => !required.includes(ComponentSchema.parse(component))
+    )
+  )
+    throw new Error("GENERATION_COMPONENT_UNREQUESTED");
+  const arabic = ArabicSchema.parse(JSON.parse(contentArabic));
+  if (output.translation) {
+    if (output.translation.lines.length !== arabic.content.length)
+      throw new Error("TRANSLATION_LINE_COUNT_MISMATCH");
+    if (
+      output.translation.lines.some(
+        (line, index) => arabic.content[index]?.trim() && !line.trim()
+      )
+    )
+      throw new Error("TRANSLATION_HAS_BLANK_LINE");
+  }
+  const sourceLines = new Set(arabic.content.map((line) => line.trim()));
+  if (
+    output.insights?.notableLines.some(
+      ({ line }) => !sourceLines.has(line.trim())
+    )
+  )
+    throw new Error("INSIGHT_LINE_NOT_IN_SOURCE");
+  return { output, arabic };
 }

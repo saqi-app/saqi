@@ -45,9 +45,18 @@ function fixture() {
   const wrap = (query: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(query, parameters),
     first: async () => sqlite.prepare(query).get(numbered(values)) ?? null,
+    all: async () => ({ results: sqlite.prepare(query).all(numbered(values)) }),
     run: async () => {
-      const result = sqlite.prepare(query).run(numbered(values));
-      return { meta: { changes: result.changes } };
+      const before = sqlite
+        .prepare("SELECT total_changes()")
+        .pluck()
+        .get() as number;
+      sqlite.prepare(query).run(numbered(values));
+      const after = sqlite
+        .prepare("SELECT total_changes()")
+        .pluck()
+        .get() as number;
+      return { meta: { changes: after - before } };
     },
   });
   const database = { prepare: wrap } as unknown as D1Database;
@@ -140,6 +149,13 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
   await expect(
     repository.upsertPoem({
       ...poem,
+      linesArabic: ["نص عربي معدل", "سطر عربي ثان"],
+      expectedHash: created.sourceHash,
+    })
+  ).resolves.toMatchObject({ id: created.id, status: "unchanged" });
+  await expect(
+    repository.upsertPoem({
+      ...poem,
       linesArabic: ["كاتب قديم", "سطر عربي ثان"],
       expectedHash: created.sourceHash,
     })
@@ -178,25 +194,74 @@ test("direct source upsert creates one canonical poem and updates Arabic with ha
 test("an interrupted author collection stays due until its manifest completes", async () => {
   const { author, repository, sqlite } = fixture();
   const created = await repository.upsertAuthor(author);
-  sqlite
-    .prepare("UPDATE author SET collected_at = ? WHERE id = ?")
-    .run(100, created.id);
-
   await repository.upsertAuthor(author);
   expect(
     sqlite
       .prepare("SELECT collected_at AS collectedAt FROM author WHERE id = ?")
       .get(created.id)
-  ).toEqual({ collectedAt: 100 });
+  ).toEqual({ collectedAt: null });
+  await expect(repository.nextAuthor()).resolves.toMatchObject({
+    id: created.id,
+  });
 
   await repository.completeAuthor(author.sourceAuthorId);
   const completed = sqlite
     .prepare("SELECT collected_at AS collectedAt FROM author WHERE id = ?")
     .get(created.id) as { collectedAt: number };
-  expect(completed.collectedAt).toBeGreaterThan(100);
+  expect(completed.collectedAt).toBeGreaterThan(0);
+  await repository.upsertAuthor(author);
+  await expect(repository.nextAuthor()).resolves.toBeNull();
   await expect(
     repository.completeAuthor("unknown-author")
   ).rejects.toMatchObject({ message: "AUTHOR_NOT_FOUND" });
+});
+
+test("manifest reconciliation skips only this author's mapped canonical poems", async () => {
+  const { author, poem, repository, sqlite } = fixture();
+  await repository.upsertAuthor(author);
+  await repository.upsertPoem(poem);
+  const otherAuthor = { ...author, sourceAuthorId: "other-poet" };
+  await repository.upsertAuthor(otherAuthor);
+  await repository.upsertPoem({
+    ...poem,
+    sourceAuthorId: "other-poet",
+    sourcePoemId: "900002",
+  });
+  await repository.upsertPoem({ ...poem, sourcePoemId: "900003" });
+  sqlite
+    .prepare("UPDATE poem SET source_hash = NULL WHERE source_poem_id = ?")
+    .run("900003");
+  await expect(
+    repository.existingPoemIds({
+      sourceAuthorId: author.sourceAuthorId,
+      poemIds: ["900001", "900002", "900003", "900004"],
+    })
+  ).resolves.toEqual(["900001"]);
+  await expect(
+    repository.existingPoemIds({
+      sourceAuthorId: author.sourceAuthorId,
+      poemIds: Array.from({ length: 201 }, (_, index) => String(index + 1)),
+    })
+  ).rejects.toThrow();
+});
+
+test("author writes succeed with triggers and leave missing authors detectable", async () => {
+  const { author, repository, sqlite } = fixture();
+  const created = await repository.upsertAuthor(author);
+  sqlite.exec(`CREATE TABLE author_updates(id TEXT);
+    CREATE TRIGGER record_author_update AFTER UPDATE ON author
+    BEGIN INSERT INTO author_updates VALUES (NEW.id); END;`);
+  await expect(repository.upsertAuthor(author)).resolves.toMatchObject({
+    id: created.id,
+  });
+  await repository.deferSource(author.sourceAuthorId, 2_000_000_000);
+  await repository.completeAuthor(author.sourceAuthorId);
+  expect(
+    sqlite.prepare("SELECT count(*) AS total FROM author_updates").get()
+  ).toEqual({ total: 3 });
+  await expect(repository.completeAuthor("absent")).rejects.toThrow(
+    "AUTHOR_NOT_FOUND"
+  );
 });
 
 test("direct upsert accepts the Arabic source author IDs used by the live corpus", async () => {

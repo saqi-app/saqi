@@ -10,6 +10,7 @@ import {
   translatedLineCount,
   translationModelName,
   translationModelProvider,
+  wordGlossMatchesTranslation,
 } from "../src/lib/poem-translations";
 
 const ModelInsights = {
@@ -143,18 +144,18 @@ void test("legacy display estimates preserve recorded provenance and explain unc
     linesEnglishGemini: ["Alternate"],
     linesEnglishGeminiModel: "Gemini (legacy model unknown)",
   });
-  assert.deepEqual(tracks.map(({ model }) => model), [
-    "Claude 1 or 2",
-    "Gemini (legacy model unknown)",
-  ]);
-  assert.deepEqual(tracks.map(({ model }) => translationModelName(model ?? "")), [
-    "Claude 2",
-    "Gemini 3.5 Flash",
-  ]);
-  assert.deepEqual(tracks.map(({ attributionNote }) => attributionNote), [
-    LEGACY_TRANSLATION_ATTRIBUTION_NOTE,
-    LEGACY_GEMINI_ATTRIBUTION_NOTE,
-  ]);
+  assert.deepEqual(
+    tracks.map(({ model }) => model),
+    ["Claude 1 or 2", "Gemini (legacy model unknown)"],
+  );
+  assert.deepEqual(
+    tracks.map(({ model }) => translationModelName(model ?? "")),
+    ["Claude 2", "Gemini 3.5 Flash"],
+  );
+  assert.deepEqual(
+    tracks.map(({ attributionNote }) => attributionNote),
+    [LEGACY_TRANSLATION_ATTRIBUTION_NOTE, LEGACY_GEMINI_ATTRIBUTION_NOTE],
+  );
 });
 
 void test("explicit legacy model identifiers are never replaced by estimates", () => {
@@ -165,11 +166,13 @@ void test("explicit legacy model identifiers are never replaced by estimates", (
     linesEnglishGemini: ["Alternate"],
     linesEnglishGeminiModel: "gemini-3.7-flash",
   });
-  assert.deepEqual(tracks.map(({ model }) => model), [
-    "claude-sonnet-4-5-20250929",
-    "gemini-3.7-flash",
-  ]);
-  assert.ok(tracks.every(({ attributionNote }) => attributionNote === undefined));
+  assert.deepEqual(
+    tracks.map(({ model }) => model),
+    ["claude-sonnet-4-5-20250929", "gemini-3.7-flash"],
+  );
+  assert.ok(
+    tracks.every(({ attributionNote }) => attributionNote === undefined),
+  );
   assert.equal(tracks[0]?.attributionCertainty, "recorded");
 });
 
@@ -187,10 +190,10 @@ void test("Sol is an explicit preferred track without replacing legacy tracks", 
 });
 
 for (const [model, provider] of [
-    ["claude-2", "anthropic"],
-    ["claude-sonnet-4-5-20250929", "anthropic"],
-    ["gemini-3-pro-preview", "google"],
-    ["unregistered-model", "other"],
+  ["claude-2", "anthropic"],
+  ["claude-sonnet-4-5-20250929", "anthropic"],
+  ["gemini-3-pro-preview", "google"],
+  ["unregistered-model", "other"],
 ] as const) {
   void test(`exact legacy model ${model} retains its provider without inferred certainty`, () => {
     const [track] = poemTranslationTracks({
@@ -274,4 +277,60 @@ void test("word glosses retain their translation model provenance", () => {
     }).map(({ key, model, provider }) => ({ key, model, provider })),
     [{ key: "sol-5.6", model: "Sol 5.6", provider: "openai" }],
   );
+});
+
+void test("standalone Sol 6 glosses do not create or relabel a translation", () => {
+  const poem = {
+    linesEnglish: ["Historical English"],
+    linesEnglishModel: "claude-2",
+    wordGlosses: {
+      sourceHash: "a".repeat(64),
+      model: "gpt-6-sol",
+      meanings: {
+        tokenizerVersion: "saqi-orthographic-v1" as const,
+        lines: [
+          {
+            lineIndex: 0,
+            segments: [
+              {
+                kind: "word" as const,
+                surface: "بيت",
+                tokenIndex: 0,
+                meaning: "verse",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+  assert.equal(poemTranslationTracks(poem).length, 1);
+  assert.equal(poemTranslationTracks(poem)[0]?.model, "claude-2");
+  assert.deepEqual(poemWordGlossTracks(poem), [
+    {
+      key: "current-glosses",
+      model: "Sol 6",
+      provider: "openai",
+      wordGlosses: poem.wordGlosses.meanings,
+    },
+  ]);
+  assert.equal(translationModelName("gpt-5.6-sol"), "Sol 5.6");
+});
+
+void test("independent glosses remain visible across every English selection", () => {
+  for (const selection of [
+    undefined,
+    "legacy",
+    "gemini",
+    "sol",
+    "saqi-current",
+  ]) {
+    assert.equal(
+      wordGlossMatchesTranslation("current-glosses", selection),
+      true,
+    );
+  }
+  assert.equal(wordGlossMatchesTranslation("sol-5.6", "sol-5.6"), true);
+  assert.equal(wordGlossMatchesTranslation("sol-5.6", "legacy"), false);
+  assert.equal(wordGlossMatchesTranslation(undefined, undefined), false);
 });

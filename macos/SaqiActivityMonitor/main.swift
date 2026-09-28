@@ -42,6 +42,10 @@ struct JobStatus: Identifiable {
                                          updated: CollectorStatus.date(status.progressAt), label: status.label)
                     }
                     let (code, output) = run("/bin/launchctl", ["print", "gui/\(getuid())/app.saqi.rig.\(name)"])
+                    if code != 0 {
+                        return JobStatus(id: name, installed: false, running: false, failed: false,
+                                         waiting: false, detail: "Background translation is stopped.", updated: nil)
+                    }
                     let running = output.contains("state = running")
                     let failed = output.split(separator: "\n").contains { line in
                         let value = line.trimmingCharacters(in: .whitespaces)
@@ -58,9 +62,10 @@ struct JobStatus: Identifiable {
                         detail = lines.suffix(2).joined(separator: "\n")
                     }
                     let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    return JobStatus(id: name, installed: code == 0, running: running, failed: !running && failed,
-                                     waiting: detail.split(separator: "\n").last?.contains("SOURCE_HUMAN_REQUIRED") == true,
-                                     detail: detail, updated: date)
+                    let quotaWaiting = !running && detail.contains("Waiting for Codex quota:")
+                    return JobStatus(id: name, installed: true, running: running, failed: !running && failed,
+                                     waiting: quotaWaiting, detail: detail, updated: date,
+                                     label: quotaWaiting ? "Waiting for quota" : nil)
                 }
             }.value
             jobs = result

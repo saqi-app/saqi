@@ -30,13 +30,19 @@ const poem = {
   title: "قصيدة",
   lines: ["قلب المحب", "نور القمر"],
 };
-function fixture(statuses = []) {
+function fixture(statuses = [], existingIds = []) {
   const writes = [],
     reports = [];
   const session = collectorSession(
     async (query, body) => {
       if (body) {
         writes.push(body);
+        if (body.action === "reconcile-manifest")
+          return {
+            existingPoemIds: existingIds.filter((id) =>
+              body.poemIds.includes(id),
+            ),
+          };
         if (body.action === "upsert-poem") {
           const status = statuses.shift() || "unchanged";
           if (status === "review") throw new Error("UNMAPPED_POEM_COLLISION");
@@ -80,9 +86,69 @@ test("preserves pre-fetch source hash and completes only after every poem", asyn
   );
   await session({ action: "poem", projection: poem });
   await session({ action: "complete" });
-  assert.equal(writes[1].poem.expectedHash, "before-fetch");
+  assert.equal(
+    writes.find((body) => body.action === "upsert-poem").poem.expectedHash,
+    "before-fetch",
+  );
   assert.equal(writes.at(-1).action, "complete-author");
   assert.equal(reports.at(-1).state, "idle");
+});
+
+test("canonical poems are skipped in bounded manifest batches on restart", async () => {
+  const ids = Array.from({ length: 201 }, (_, index) => String(index + 1));
+  const { session, writes, reports } = fixture([], ids.slice(0, 200));
+  await session({ action: "begin" });
+  const result = await session({
+    action: "manifest",
+    projection: {
+      ...manifest,
+      declaredPoemCountText: "201",
+      poems: ids.map((id) => ({
+        ...manifest.poems[0],
+        href: `/poem${id}.html`,
+      })),
+    },
+  });
+  assert.deepEqual(
+    result.poems.map((value) => value.numericId),
+    ["201"],
+  );
+  assert.deepEqual(
+    writes
+      .filter((body) => body.action === "reconcile-manifest")
+      .map((body) => body.poemIds.length),
+    [200, 1],
+  );
+  assert.equal(reports.at(-1).current.processed, 200);
+  await assert.rejects(session({ action: "prepare", poemId: "1" }));
+  await session({ action: "prepare", poemId: "201" });
+  await session({
+    action: "poem",
+    projection: { ...poem, sourceUrl: "https://www.aldiwan.net/poem201.html" },
+  });
+  await session({ action: "complete" });
+  assert.equal(reports.at(-1).lastCompleted.processed, 201);
+});
+
+test("a complete manifest of stored poems finishes without poem fetches and resets the session", async () => {
+  const { session, writes, reports } = fixture([], ["1"]);
+  await session({ action: "begin" });
+  assert.deepEqual(
+    await session({ action: "manifest", projection: manifest }),
+    { poems: [] },
+  );
+  await session({ action: "complete" });
+  assert.equal(
+    writes.some((body) => body.action === "upsert-poem"),
+    false,
+  );
+  assert.equal(reports.at(-1).lastCompleted.unchanged, 1);
+  await session({ action: "begin" });
+  assert.equal(reports.at(-1).current.processed, 0);
+  assert.deepEqual(
+    await session({ action: "manifest", projection: manifest }),
+    { poems: [] },
+  );
 });
 test("challenge and unknown commands cannot mutate corpus", async () => {
   const { session, writes } = fixture();

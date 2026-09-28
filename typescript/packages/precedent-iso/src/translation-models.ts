@@ -8,6 +8,12 @@ export const TRANSLATION_MODELS = [
     modelVendorKey: "openai",
   },
   {
+    modelKey: "sol-6",
+    model: "gpt-6-sol",
+    displayName: "Sol 6",
+    modelVendorKey: "openai",
+  },
+  {
     modelKey: "claude-opus-5",
     model: "claude-opus-5",
     displayName: "Claude Opus 5",

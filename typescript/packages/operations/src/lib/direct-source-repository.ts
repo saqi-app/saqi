@@ -25,6 +25,10 @@ export const DirectAuthorSchema = z.strictObject({
   sourceUrl: SourceUrlSchema,
   nameArabic: SafeTextSchema,
 });
+export const SourceManifestBatchSchema = z.strictObject({
+  sourceAuthorId: SourceIdSchema,
+  poemIds: z.array(PoemIdSchema).min(1).max(200),
+});
 export const DirectPoemSchema = z.strictObject({
   sourceAuthorId: SourceIdSchema,
   sourcePoemId: PoemIdSchema,
@@ -105,12 +109,11 @@ export class DirectSourceRepository {
       .prepare(
         `UPDATE author
                 SET source_retry_after = max(coalesce(source_retry_after, 0), ?1)
-                WHERE source_name = ?2 AND source_author_id = ?3`
+                WHERE source_name = ?2 AND source_author_id = ?3 RETURNING id`
       )
       .bind(retryAfter, this.#sourceName, sourceAuthorId)
-      .run();
-    if (result.meta.changes !== 1)
-      throw new DirectSourceConflictError("SOURCE_AUTHOR_MISSING");
+      .first<{ id: string }>();
+    if (!result) throw new DirectSourceConflictError("SOURCE_AUTHOR_MISSING");
   }
 
   async nextAuthor(): Promise<unknown> {
@@ -120,7 +123,8 @@ export class DirectSourceRepository {
               source_url AS sourceUrl, name_arabic AS nameArabic,
               collected_at AS collectedAt
        FROM author WHERE source_name = ?1 AND source_author_id IS NOT NULL
-       ORDER BY collected_at, id LIMIT 1`
+         AND collected_at IS NULL
+       ORDER BY id LIMIT 1`
       )
       .bind(this.#sourceName)
       .first();
@@ -137,6 +141,27 @@ export class DirectSourceRepository {
       .first();
   }
 
+  async existingPoemIds(
+    raw: z.infer<typeof SourceManifestBatchSchema>
+  ): Promise<string[]> {
+    const input = SourceManifestBatchSchema.parse(raw);
+    const rows = await this.#database
+      .prepare(
+        `SELECT p.source_poem_id AS sourcePoemId
+         FROM poem p JOIN author a ON a.id = p.author_id
+         WHERE p.source_name = ?1 AND a.source_name = ?1
+           AND a.source_author_id = ?2 AND p.source_hash IS NOT NULL
+           AND p.source_poem_id IN (SELECT value FROM json_each(?3))`
+      )
+      .bind(
+        this.#sourceName,
+        input.sourceAuthorId,
+        JSON.stringify(input.poemIds)
+      )
+      .all<{ sourcePoemId: string }>();
+    return rows.results.map((row) => row.sourcePoemId);
+  }
+
   async upsertAuthor(raw: DirectAuthorInput): Promise<AuthorUpsertResult> {
     const input = DirectAuthorSchema.parse(raw);
     this.#assertOrigin(input.sourceUrl);
@@ -149,7 +174,7 @@ export class DirectSourceRepository {
       const result = await this.#database
         .prepare(
           `UPDATE author SET name_arabic = ?1, source_url = ?2
-         WHERE id = ?3 AND source_name = ?4 AND source_author_id = ?5`
+         WHERE id = ?3 AND source_name = ?4 AND source_author_id = ?5 RETURNING id`
         )
         .bind(
           input.nameArabic,
@@ -158,8 +183,8 @@ export class DirectSourceRepository {
           this.#sourceName,
           input.sourceAuthorId
         )
-        .run();
-      if (result.meta.changes !== 1)
+        .first<{ id: string }>();
+      if (result?.id !== id)
         throw new DirectSourceConflictError("AUTHOR_CHANGED");
       return { id, status: "updated" };
     }
@@ -215,12 +240,11 @@ export class DirectSourceRepository {
     const result = await this.#database
       .prepare(
         `UPDATE author SET collected_at = unixepoch()
-         WHERE source_name = ?1 AND source_author_id = ?2`
+         WHERE source_name = ?1 AND source_author_id = ?2 RETURNING id`
       )
       .bind(this.#sourceName, sourceAuthorId)
-      .run();
-    if (result.meta.changes !== 1)
-      throw new DirectSourceConflictError("AUTHOR_NOT_FOUND");
+      .first<{ id: string }>();
+    if (!result) throw new DirectSourceConflictError("AUTHOR_NOT_FOUND");
   }
 
   async upsertPoem(raw: DirectPoemInput): Promise<PoemUpsertResult> {
@@ -254,13 +278,10 @@ export class DirectSourceRepository {
       throw new DirectSourceConflictError("POEM_AUTHOR_CONFLICT");
     if (stored.sourceHash === null)
       throw new DirectSourceConflictError("SOURCE_HASH_UNRECONCILED");
-    if (
-      stored.sourceHash !== input.expectedHash &&
-      !(input.expectedHash === null && stored.sourceHash === sourceHash)
-    )
-      throw new DirectSourceConflictError("SOURCE_CHANGED");
     if (stored.sourceHash === sourceHash)
       return { id: stored.id, sourceHash, status: "unchanged" };
+    if (stored.sourceHash !== input.expectedHash)
+      throw new DirectSourceConflictError("SOURCE_CHANGED");
     const contentArabic = JSON.stringify({
       content: input.linesArabic,
       titleArabic: input.titleArabic,

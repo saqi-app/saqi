@@ -465,3 +465,63 @@ void test("catalogs use normalized Arabic alphabetical order", async () => {
     sqlite.close();
   }
 });
+
+void test("standalone glosses keep their badge and stop aligning after source changes", async () => {
+  const sqlite = createDatabase();
+  try {
+    sqlite.exec(
+      "INSERT INTO author(id,slug,name_arabic,hidden) VALUES('a-standalone','standalone','شاعر',0)",
+    );
+    sqlite
+      .prepare(
+        `INSERT INTO poem(id,author_id,slug,verses,name_arabic,content_arabic,source_hash)
+      VALUES('p-standalone','a-standalone','standalone',1,'قصيدة','{"content":["بيت"]}',?)`,
+      )
+      .run("a".repeat(64));
+    const publication = publicationSnapshotFromPoem({
+      id: "p-standalone",
+      authorId: "a-standalone",
+      slug: "standalone",
+      verses: 1,
+      nameArabic: "قصيدة",
+      linesArabic: ["بيت"],
+      linesEnglish: ["Historical verse"],
+      wordGlosses: {
+        model: "gpt-6-sol",
+        sourceHash: "a".repeat(64),
+        meanings: {
+          tokenizerVersion: "saqi-orthographic-v1",
+          lines: [
+            {
+              lineIndex: 0,
+              segments: [
+                {
+                  kind: "word",
+                  surface: "بيت",
+                  tokenIndex: 0,
+                  meaning: "verse",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    sqlite
+      .prepare("UPDATE poem SET publication_json=? WHERE id='p-standalone'")
+      .run(JSON.stringify(publication));
+    const reader = catalogRepository(sqlite);
+    const before = await reader.getPoemPage("standalone", "p-standalone");
+    assert.equal(before?.poem.wordGlosses?.model, "gpt-6-sol");
+    const summary = await reader.getAuthorPage("standalone");
+    assert.equal(summary?.poems[0]?.hasInsights, true);
+    sqlite
+      .prepare("UPDATE poem SET source_hash=? WHERE id='p-standalone'")
+      .run("b".repeat(64));
+    const after = await reader.getPoemPage("standalone", "p-standalone");
+    assert.equal(after?.poem.wordGlosses, undefined);
+    assert.deepEqual(after?.poem.linesEnglish, ["Historical verse"]);
+  } finally {
+    sqlite.close();
+  }
+});

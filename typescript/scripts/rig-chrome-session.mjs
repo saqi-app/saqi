@@ -39,7 +39,7 @@ export function collectorSession(api, report) {
           current: author ? current() : null,
           message: author
             ? `Collecting ${author.nameArabic}`
-            : "No source-linked author available",
+            : "No unfinished source-linked author available",
           progress: Boolean(author),
         });
         return { author };
@@ -48,24 +48,8 @@ export function collectorSession(api, report) {
       case "origin":
         await api("?action=origin");
         return {};
-      case "manifest": {
-        if (!author || manifest) throw new Error("No pending author manifest");
-        const candidate = verifiedManifest(input.projection);
-        if (candidate.author.slug !== author.sourceAuthorId)
-          throw new Error("SOURCE_MANIFEST_AUTHOR_MISMATCH");
-        manifest = candidate;
-        await api("", {
-          action: "upsert-author",
-          author: {
-            sourceAuthorId: author.sourceAuthorId,
-            sourceUrl: author.sourceUrl,
-            nameArabic: author.nameArabic,
-          },
-        });
-        counts.total = manifest.poems.length;
-        progress(`${author.nameArabic}: 0/${counts.total} poems`);
-        return { poems: manifest.poems };
-      }
+      case "manifest":
+        return collectManifest(input.projection);
       case "prepare": {
         if (
           prepared ||
@@ -93,10 +77,55 @@ export function collectorSession(api, report) {
           sourceAuthorId: author.sourceAuthorId,
         });
         reportCompleted();
+        author = manifest = prepared = undefined;
+        completed.clear();
+        reviewIds.length = 0;
+        for (const key of Object.keys(counts)) counts[key] = 0;
         return {};
       default:
         throw new Error("Unknown collector action");
     }
+  }
+  async function collectManifest(projection) {
+    if (!author || manifest) throw new Error("No pending author manifest");
+    const candidate = verifiedManifest(projection);
+    if (candidate.author.slug !== author.sourceAuthorId)
+      throw new Error("SOURCE_MANIFEST_AUTHOR_MISMATCH");
+    manifest = candidate;
+    await api("", {
+      action: "upsert-author",
+      author: {
+        sourceAuthorId: author.sourceAuthorId,
+        sourceUrl: author.sourceUrl,
+        nameArabic: author.nameArabic,
+      },
+    });
+    counts.total = manifest.poems.length;
+    for (let offset = 0; offset < manifest.poems.length; offset += 200) {
+      const poemIds = manifest.poems
+        .slice(offset, offset + 200)
+        .map((poem) => poem.numericId);
+      // eslint-disable-next-line no-await-in-loop -- Bounded batches keep the API and native messages small.
+      const { existingPoemIds } = await api("", {
+        action: "reconcile-manifest",
+        sourceAuthorId: author.sourceAuthorId,
+        poemIds,
+      });
+      if (
+        !Array.isArray(existingPoemIds) ||
+        existingPoemIds.some((id) => !poemIds.includes(id))
+      )
+        throw new Error("SOURCE_MANIFEST_RESULT_INVALID");
+      for (const id of existingPoemIds) completed.add(id);
+    }
+    counts.processed = completed.size;
+    counts.unchanged = completed.size;
+    progress(
+      `${author.nameArabic}: ${counts.processed}/${counts.total} poems; existing poems skipped`,
+    );
+    return {
+      poems: manifest.poems.filter((poem) => !completed.has(poem.numericId)),
+    };
   }
   function reportCompleted() {
     const patch = {

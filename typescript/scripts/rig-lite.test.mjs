@@ -10,97 +10,155 @@ import { test } from "node:test";
 
 const script = new URL("rig-lite.mjs", import.meta.url);
 const localScript = new URL("rig-local.mjs", import.meta.url);
+const quotaResponder = String.raw`
+if (process.argv[2] === "app-server") {
+  let input = "";
+  process.stdin.on("data", (chunk) => {
+    input += chunk;
+    let end;
+    while ((end = input.indexOf("\n")) >= 0) {
+      const message = JSON.parse(input.slice(0, end)); input = input.slice(end + 1);
+      if (message.id) process.stdout.write(JSON.stringify({ id: message.id, result: message.id === 1 ? {} : {
+        ordinaryUsageAllowed: true, rateLimits: { primary: { usedPercent: Number(process.env.SAQI_TEST_QUOTA ?? 10) } }
+      } }) + "\n");
+    }
+  });
+} else
+`;
 
-test("killing the runner before acknowledgement recovers the exact result without another invocation", { timeout: 20_000 }, async () => {
-  const directory = await mkdtemp(join(tmpdir(), "saqi-rig-crash-"));
-  const callsPath = join(directory, "calls");
-  const output = { translation: { lines: ["Recovered English"] }, wordMeanings: [["line"]] };
-  await writeFile(join(directory, "codex"), String.raw`#!/usr/bin/env node
+test(
+  "killing the runner before acknowledgement recovers the exact result without another invocation",
+  { timeout: 20_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "saqi-rig-crash-"));
+    const callsPath = join(directory, "calls");
+    const output = {
+      translation: { lines: ["Recovered English"] },
+      wordMeanings: [["line"]],
+    };
+    await writeFile(
+      join(directory, "codex"),
+      String.raw`#!/usr/bin/env node
+${quotaResponder} {
 const fs = require("node:fs");
+require("node:assert/strict").equal(process.argv[process.argv.indexOf("--model") + 1], "gpt-6-sol");
+require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="medium"'));
 fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
 fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify({ ...output, wordMeanings: { line_1: ["line"] } }))});
 process.stdin.resume();
-`, { mode: 0o700 });
-  let state = null;
-  let attemptId;
-  let acknowledgeCount = 0;
-  let publishCount = 0;
-  const reachedAcknowledgement = Promise.withResolvers();
-  const server = createServer(async (request, response) => {
-    response.setHeader("content-type", "application/json");
-    if (request.method === "GET") {
-      response.end(JSON.stringify({ ok: true, state }));
-      return;
-    }
-    const body = JSON.parse(Buffer.concat(await Array.fromAsync(request)).toString("utf8"));
-    switch (body.action) {
-      case "claim-poem":
-        state = { poemId: "crash-poem", status: "claimed", version: 1 };
-        break;
-      case "source":
-        response.end(JSON.stringify({ ok: true, poem: { authorName: "Author", titleArabic: "عنوان", linesArabic: ["سطر"] } }));
+}
+`,
+      { mode: 0o700 },
+    );
+    let state = null;
+    let attemptId;
+    let acknowledgeCount = 0;
+    let publishCount = 0;
+    const reachedAcknowledgement = Promise.withResolvers();
+    const server = createServer(async (request, response) => {
+      response.setHeader("content-type", "application/json");
+      if (request.method === "GET") {
+        response.end(JSON.stringify({ ok: true, state }));
         return;
-      case "dispatch":
-        attemptId = body.attemptId;
-        state = { poemId: "crash-poem", status: "dispatching", version: 2, checkpointJson: JSON.stringify({ invocation: { attemptId } }) };
-        break;
-      case "acknowledge":
-        acknowledgeCount += 1;
-        assert.equal(body.attemptId, attemptId);
-        assert.equal(body.expectedVersion, 2);
-        assert.deepEqual(body.output, output);
-        if (acknowledgeCount === 1) {
-          reachedAcknowledgement.resolve();
+      }
+      const body = JSON.parse(
+        Buffer.concat(await Array.fromAsync(request)).toString("utf8"),
+      );
+      switch (body.action) {
+        case "claim-poem":
+          state = { poemId: "crash-poem", status: "claimed", version: 1 };
+          break;
+        case "source":
+          response.end(
+            JSON.stringify({
+              ok: true,
+              poem: {
+                authorName: "Author",
+                titleArabic: "عنوان",
+                linesArabic: ["سطر"],
+              },
+            }),
+          );
           return;
-        }
-        state = { poemId: "crash-poem", status: "claimed", version: 3 };
-        break;
-      case "publish":
-        assert.equal(body.expectedVersion, 3);
-        publishCount += 1;
-        state = null;
-        break;
+        case "dispatch":
+          attemptId = body.attemptId;
+          state = {
+            poemId: "crash-poem",
+            status: "dispatching",
+            version: 2,
+            checkpointJson: JSON.stringify({ invocation: { attemptId } }),
+          };
+          break;
+        case "acknowledge":
+          acknowledgeCount += 1;
+          assert.equal(body.attemptId, attemptId);
+          assert.equal(body.expectedVersion, 2);
+          assert.deepEqual(body.output, output);
+          if (acknowledgeCount === 1) {
+            reachedAcknowledgement.resolve();
+            return;
+          }
+          state = { poemId: "crash-poem", status: "claimed", version: 3 };
+          break;
+        case "publish":
+          assert.equal(body.expectedVersion, 3);
+          publishCount += 1;
+          state = null;
+          break;
+      }
+      response.end(JSON.stringify({ ok: true, state, cachePending: false }));
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const environment = {
+      CF_ACCESS_CLIENT_ID: "test-id",
+      CF_ACCESS_CLIENT_SECRET: "test-secret",
+      PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
+      SAQI_TEST_CALLS: callsPath,
+      SAQI_RIG_RESULT_DIR: directory,
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_RIG_ENDPOINT: `http://127.0.0.1:${server.address().port}/rig`,
+    };
+    const child = spawn(process.execPath, [script.pathname], {
+      env: { ...process.env, ...environment },
+      stdio: "ignore",
+    });
+    const exited = once(child, "exit");
+    try {
+      await reachedAcknowledgement.promise;
+      child.kill("SIGKILL");
+      await exited;
+      const result = await runScript(environment);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(acknowledgeCount, 2);
+      assert.equal(publishCount, 1);
+      assert.equal(await readFile(callsPath, "utf8"), "call\n");
+      await assert.rejects(
+        access(join(directory, `saqi-rig-${attemptId}.json`)),
+        { code: "ENOENT" },
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+      if (attemptId)
+        await rm(join(tmpdir(), `saqi-rig-${attemptId}.json`), { force: true });
+      await rm(directory, { recursive: true, force: true });
     }
-    response.end(JSON.stringify({ ok: true, state, cachePending: false }));
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const environment = {
-    CF_ACCESS_CLIENT_ID: "test-id",
-    CF_ACCESS_CLIENT_SECRET: "test-secret",
-    PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
-    SAQI_TEST_CALLS: callsPath,
-    SAQI_RIG_ACTIVE: "1",
-    SAQI_RIG_ENDPOINT: `http://127.0.0.1:${server.address().port}/rig`,
-  };
-  const child = spawn(process.execPath, [script.pathname], { env: { ...process.env, ...environment }, stdio: "ignore" });
-  const exited = once(child, "exit");
-  try {
-    await reachedAcknowledgement.promise;
-    child.kill("SIGKILL");
-    await exited;
-    const result = await runScript(environment);
-    assert.equal(result.code, 0, result.stderr);
-    assert.equal(acknowledgeCount, 2);
-    assert.equal(publishCount, 1);
-    assert.equal(await readFile(callsPath, "utf8"), "call\n");
-    await assert.rejects(access(join(tmpdir(), `saqi-rig-${attemptId}.json`)), { code: "ENOENT" });
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    if (attemptId) await rm(join(tmpdir(), `saqi-rig-${attemptId}.json`), { force: true });
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+  },
+);
 
 test("a durable Codex result is acknowledged and published after restart without another call", async () => {
   const attemptId = randomUUID();
   const outputPath = join(tmpdir(), `saqi-rig-${attemptId}.json`);
-  const output = { translation: { lines: ["A translated line"] }, wordMeanings: [["line"]] };
+  const output = {
+    translation: { lines: ["A translated line"] },
+    wordMeanings: [["line"]],
+  };
   await writeFile(outputPath, JSON.stringify(output));
   try {
-    const run = await exerciseUnknown(attemptId);
+    const run = await exerciseUnknown(attemptId, script, [], "82");
     assert.equal(run.code, 0, run.stderr);
     assert.deepEqual(run.actions, ["purge-cache", "acknowledge", "publish"]);
     assert.equal(run.codexCalled, false);
@@ -202,27 +260,39 @@ test("a targeted smoke run sends only the requested poem ID to the D1 claim", as
   await once(server, "listening");
   try {
     const port = server.address()?.port;
-    const run = await runScript({
-      CF_ACCESS_CLIENT_ID: "test-id",
-      CF_ACCESS_CLIENT_SECRET: "test-secret",
-      SAQI_RIG_ACTIVE: "1",
-      SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
-    }, script, ["poem-2"]);
+    const run = await runScript(
+      {
+        CF_ACCESS_CLIENT_ID: "test-id",
+        CF_ACCESS_CLIENT_SECRET: "test-secret",
+        SAQI_RIG_ACTIVE: "1",
+        SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
+      },
+      script,
+      ["poem-2"],
+    );
     assert.equal(run.code, 0, run.stderr);
-    assert.deepEqual(actions.map((item) => item.action), ["purge-cache", "claim-poem"]);
+    assert.deepEqual(
+      actions.map((item) => item.action),
+      ["purge-cache", "claim-poem"],
+    );
     assert.equal(actions[1].poemId, "poem-2");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 });
 
-async function exerciseUnknown(attemptId, entry = script, args = []) {
+async function exerciseUnknown(
+  attemptId,
+  entry = script,
+  args = [],
+  quota = "10",
+) {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-test-"));
   const markerPath = join(directory, "codex-called");
   const fakeCodex = join(directory, "codex");
   await writeFile(
     fakeCodex,
-    '#!/bin/sh\necho called > "$SAQI_TEST_CODEX_MARKER"\nexit 97\n',
+    `#!/usr/bin/env node\n${quotaResponder} { require("node:fs").writeFileSync(process.env.SAQI_TEST_CODEX_MARKER, "called"); process.exit(97); }\n`,
     { mode: 0o700 },
   );
   const actions = [];
@@ -267,14 +337,19 @@ async function exerciseUnknown(attemptId, entry = script, args = []) {
   await once(server, "listening");
   try {
     const port = server.address()?.port;
-    const result = await runScript({
-      CF_ACCESS_CLIENT_ID: "test-id",
-      CF_ACCESS_CLIENT_SECRET: "test-secret",
-      PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
-      SAQI_RIG_ACTIVE: "1",
-      SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
-      SAQI_TEST_CODEX_MARKER: markerPath,
-    }, entry, args);
+    const result = await runScript(
+      {
+        CF_ACCESS_CLIENT_ID: "test-id",
+        CF_ACCESS_CLIENT_SECRET: "test-secret",
+        PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
+        SAQI_RIG_ACTIVE: "1",
+        SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
+        SAQI_TEST_CODEX_MARKER: markerPath,
+        SAQI_TEST_QUOTA: quota,
+      },
+      entry,
+      args,
+    );
     let codexCalled = true;
     try {
       await access(markerPath);
@@ -289,21 +364,48 @@ async function exerciseUnknown(attemptId, entry = script, args = []) {
   }
 }
 
-function runScript(environment, entry = script, args = []) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [entry.pathname, ...args], {
-      env: { ...process.env, ...environment },
-      stdio: ["ignore", "pipe", "pipe"],
+async function runScript(environment, entry = script, args = []) {
+  let quotaDirectory;
+  let runEnvironment = environment;
+  if (!environment.PATH) {
+    quotaDirectory = await mkdtemp(join(tmpdir(), "saqi-quota-test-"));
+    await writeFile(
+      join(quotaDirectory, "codex"),
+      `#!/usr/bin/env node\n${quotaResponder} { process.exit(97); }`,
+      { mode: 0o700 },
+    );
+    runEnvironment = {
+      ...environment,
+      PATH: `${quotaDirectory}${delimiter}${process.env.PATH ?? ""}`,
+    };
+  }
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [entry.pathname, ...args], {
+        env: { ...process.env, ...runEnvironment },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout, stderr }));
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout, stderr }));
-  });
+  } finally {
+    if (quotaDirectory)
+      await rm(quotaDirectory, { recursive: true, force: true });
+  }
 }
+
+test("quota reserve prevents claiming any new poem while unresolved work stays fenced", async () => {
+  const run = await exerciseUnknown(randomUUID(), script, [], "82");
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stdout, /Waiting for Codex quota: Quota reserve: 82% used/u);
+  assert.deepEqual(run.actions, ["purge-cache"]);
+  assert.equal(run.codexCalled, false);
+});

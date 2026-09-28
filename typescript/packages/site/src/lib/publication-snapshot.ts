@@ -5,6 +5,7 @@ import { type Poem, SnapshotPoemSchema } from "./snapshot-contract";
 // These are the publication fields that the existing poem page actually uses.
 // Arabic, route identity, and visibility remain authoritative on poem.
 const PublicationFieldsSchema = z.object({
+  wordGlosses: SnapshotPoemSchema.shape.wordGlosses,
   linesEnglish: SnapshotPoemSchema.shape.linesEnglish,
   linesEnglishAttributionCertainty:
     SnapshotPoemSchema.shape.linesEnglishAttributionCertainty,
