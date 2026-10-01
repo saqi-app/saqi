@@ -55,7 +55,7 @@
     "knip": "6.38.0",
     "react-doctor": "0.9.14",
     "tailwindcss": "^4.3.3",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "typescript-eslint": "8.70.1"
   },
   "resolutions": {
