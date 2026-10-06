@@ -17,8 +17,8 @@ import { RigCodexServer } from "./rig-codex-server.mjs";
 import { translateNext } from "./rig-lite.mjs";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
-const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 20);
-if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 20)
+const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 40);
+if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 40)
   throw new Error("INVALID_POOL_CONCURRENCY");
 const directory =
   process.env.SAQI_RIG_RESULT_DIR ??
@@ -34,6 +34,8 @@ const active = new Map();
 const paused = new Map();
 const sampledWindows = new Set();
 let stopping = false;
+let scheduling = Promise.resolve();
+
 process.on("SIGTERM", () => {
   stopping = true;
   process.stdout.write("Pool draining; no new poems will be claimed.\n");
@@ -101,6 +103,13 @@ async function worker(id) {
   }
   await delay((id - 1) * 250);
   while (!stopping && server.alive) {
+    // Queue setup is serial; paid model turns run concurrently after dispatch.
+    // eslint-disable-next-line no-await-in-loop -- Each worker enters the shared scheduling gate before claiming.
+    const releaseScheduling = await acquireScheduling();
+    if (stopping || !server.alive) {
+      releaseScheduling();
+      break;
+    }
     try {
       // eslint-disable-next-line no-await-in-loop -- Each worker persists and publishes its current poem before claiming another.
       await translateNext(undefined, {
@@ -127,6 +136,7 @@ async function worker(id) {
             startedAt: new Date().toISOString(),
           });
           await snapshot();
+          releaseScheduling();
           try {
             const metrics = await server.generate(
               prompt,
@@ -167,20 +177,37 @@ async function worker(id) {
       });
       paused.delete(id);
     } catch (error) {
+      const code = workerFailureCode(error);
       paused.set(id, {
         worker: id,
         poemId: ownedPoemId,
-        code:
-          error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ??
-          "TRANSLATION_REQUIRES_RECOVERY",
+        code,
         checkedAt: new Date().toISOString(),
       });
       if (!server.alive) stopping = true;
-      console.error(
-        `Worker ${id} paused: ${error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ?? "TRANSLATION_REQUIRES_RECOVERY"}`,
-      );
+      console.error(`Worker ${id} paused: ${code}`);
+    } finally {
+      releaseScheduling();
     }
     // eslint-disable-next-line no-await-in-loop -- Backoff is per worker and must not create overlapping invocations.
     await delay(5_000);
   }
+}
+
+async function acquireScheduling() {
+  const previous = scheduling;
+  const next = Promise.withResolvers();
+  scheduling = next.promise;
+  await previous;
+  return next.resolve;
+}
+
+function workerFailureCode(error) {
+  if (error?.name === "TimeoutError") return "RIG_API_TIMEOUT";
+  const httpStatus = error.message?.match(/^Rig API(?: GET)? (\d{3})/u)?.[1];
+  if (httpStatus) return `RIG_API_HTTP_${httpStatus}`;
+  return (
+    error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ??
+    "TRANSLATION_REQUIRES_RECOVERY"
+  );
 }

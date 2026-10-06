@@ -9,14 +9,15 @@ import { delimiter, join } from "node:path";
 import process from "node:process";
 import { test } from "node:test";
 
-test(
-  "twenty pool workers publish distinct poems and SIGTERM drains without another claim",
-  { timeout: 25_000 },
-  async () => {
-    const directory = await mkdtemp(join(tmpdir(), "saqi-pool-test-"));
-    await writeFile(
-      join(directory, "codex"),
-      String.raw`#!/usr/bin/env node
+for (const concurrency of [20, 40]) {
+  test(
+    `${concurrency} pool workers publish distinct poems and SIGTERM drains without another claim`,
+    { timeout: 30_000 },
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "saqi-pool-test-"));
+      await writeFile(
+        join(directory, "codex"),
+        String.raw`#!/usr/bin/env node
 const readline = require('node:readline');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,7 +30,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:m.params.serviceTier}});
  else if(m.method==='turn/start') {
   if(m.params.serviceTierForTurn!=='priority') throw new Error('Fast tier missing');
-  if (++turns===20) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
+  if (++turns===Number(process.env.SAQI_RIG_CONCURRENCY)) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
   send({id:m.id,result:{turn:{id:'turn'}}});
   const release=setInterval(()=>{
    if (!fs.existsSync(path.join(__dirname,'release'))) return;
@@ -41,152 +42,178 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  } else send({id:m.id,result:{}});
 });
 `,
-      { mode: 0o700 },
-    );
-    const states = new Map();
-    let dispatches = 0;
-    let publications = 0;
-    let claims = 0;
-    const ready = Promise.withResolvers();
-    const http = createServer(async (request, response) => {
-      response.setHeader("content-type", "application/json");
-      if (request.method === "GET") {
-        const poemId = new URL(
-          request.url,
-          "http://localhost",
-        ).searchParams.get("poemId");
-        response.end(
-          JSON.stringify({ ok: true, state: states.get(poemId) ?? null }),
-        );
-        return;
-      }
-      const body = JSON.parse(
-        Buffer.concat(await Array.fromAsync(request)).toString(),
+        { mode: 0o700 },
       );
-      let state = states.get(body.poemId);
-      switch (body.action) {
-        case "claim-poem": {
-          assert.equal(body.maxConcurrent, 20);
-          claims += 1;
-          state = {
-            poemId: `poem-${String(claims)}`,
-            status: "claimed",
-            version: 1,
-          };
-          states.set(state.poemId, state);
-
-          break;
-        }
-        case "source": {
+      const states = new Map();
+      let dispatches = 0;
+      let publications = 0;
+      let claims = 0;
+      let scheduling = 0;
+      let failedPurge = false;
+      const ready = Promise.withResolvers();
+      const http = createServer(async (request, response) => {
+        response.setHeader("content-type", "application/json");
+        if (request.method === "GET") {
+          const poemId = new URL(
+            request.url,
+            "http://localhost",
+          ).searchParams.get("poemId");
           response.end(
-            JSON.stringify({
-              ok: true,
-              poem: {
-                authorName: "شاعر",
-                titleArabic: "بيت",
-                linesArabic: ["بيت"],
-                required: ["translation", "wordMeanings"],
-              },
-            }),
+            JSON.stringify({ ok: true, state: states.get(poemId) ?? null }),
           );
           return;
         }
-        case "dispatch": {
-          assert.equal(body.reasoningEffort, "xhigh");
-          state.status = "dispatching";
-          state.version = 2;
-          state.attemptId = body.attemptId;
-          dispatches += 1;
-          if (dispatches === 20) ready.resolve();
+        const body = JSON.parse(
+          Buffer.concat(await Array.fromAsync(request)).toString(),
+        );
+        let state = states.get(body.poemId);
+        switch (body.action) {
+          case "purge-cache": {
+            if (!failedPurge) {
+              failedPurge = true;
+              response.statusCode = 503;
+              response.end(
+                JSON.stringify({
+                  ok: false,
+                  code: "TEST_TRANSIENT_QUEUE_ERROR",
+                }),
+              );
+              return;
+            }
+            break;
+          }
+          case "claim-poem": {
+            scheduling += 1;
+            assert.equal(
+              scheduling,
+              1,
+              "Queue setup must be serial while model turns run concurrently",
+            );
+            assert.equal(body.maxConcurrent, concurrency);
+            claims += 1;
+            state = {
+              poemId: `poem-${String(claims)}`,
+              status: "claimed",
+              version: 1,
+            };
+            states.set(state.poemId, state);
 
-          break;
-        }
-        case "acknowledge": {
-          assert.equal(body.attemptId, state.attemptId);
-          assert.equal(body.expectedVersion, 2);
-          assert.deepEqual(body.output, {
-            translation: { lines: ["A verse"] },
-            wordMeanings: [["verse"]],
-          });
-          state.status = "claimed";
-          state.version = 3;
+            break;
+          }
+          case "source": {
+            response.end(
+              JSON.stringify({
+                ok: true,
+                poem: {
+                  authorName: "شاعر",
+                  titleArabic: "بيت",
+                  linesArabic: ["بيت"],
+                  required: ["translation", "wordMeanings"],
+                },
+              }),
+            );
+            return;
+          }
+          case "dispatch": {
+            scheduling -= 1;
+            assert.equal(body.reasoningEffort, "xhigh");
+            state.status = "dispatching";
+            state.version = 2;
+            state.attemptId = body.attemptId;
+            dispatches += 1;
+            if (dispatches === concurrency) ready.resolve();
 
-          break;
-        }
-        case "publish": {
-          assert.equal(body.expectedVersion, 3);
-          state.status = "complete";
-          state.version = 4;
-          publications += 1;
+            break;
+          }
+          case "acknowledge": {
+            assert.equal(body.attemptId, state.attemptId);
+            assert.equal(body.expectedVersion, 2);
+            assert.deepEqual(body.output, {
+              translation: { lines: ["A verse"] },
+              wordMeanings: [["verse"]],
+            });
+            state.status = "claimed";
+            state.version = 3;
 
-          break;
+            break;
+          }
+          case "publish": {
+            assert.equal(body.expectedVersion, 3);
+            state.status = "complete";
+            state.version = 4;
+            publications += 1;
+
+            break;
+          }
+          // No default
         }
-        // No default
-      }
-      response.end(JSON.stringify({ ok: true, state: state ?? null }));
-    });
-    http.listen(0, "127.0.0.1");
-    await once(http, "listening");
-    const allTurns = Promise.withResolvers();
-    const watcher = watch(directory, (_event, name) => {
-      if (name === "all-turns") allTurns.resolve();
-    });
-    const child = spawn(
-      process.execPath,
-      [new URL("rig-pool.mjs", import.meta.url).pathname],
-      {
-        env: {
-          ...process.env,
-          PATH: directory + delimiter + process.env.PATH,
-          CF_ACCESS_CLIENT_ID: "test",
-          CF_ACCESS_CLIENT_SECRET: "test",
-          SAQI_RIG_ACTIVE: "1",
-          SAQI_RIG_CONCURRENCY: "20",
-          SAQI_RIG_RESULT_DIR: directory,
-          SAQI_RIG_ENDPOINT: `http://127.0.0.1:${http.address().port}/rig`,
+        response.end(JSON.stringify({ ok: true, state: state ?? null }));
+      });
+      http.listen(0, "127.0.0.1");
+      await once(http, "listening");
+      const allTurns = Promise.withResolvers();
+      const watcher = watch(directory, (_event, name) => {
+        if (name === "all-turns") allTurns.resolve();
+      });
+      const child = spawn(
+        process.execPath,
+        [new URL("rig-pool.mjs", import.meta.url).pathname],
+        {
+          env: {
+            ...process.env,
+            PATH: directory + delimiter + process.env.PATH,
+            CF_ACCESS_CLIENT_ID: "test",
+            CF_ACCESS_CLIENT_SECRET: "test",
+            SAQI_RIG_ACTIVE: "1",
+            SAQI_RIG_CONCURRENCY: String(concurrency),
+            SAQI_RIG_RESULT_DIR: directory,
+            SAQI_RIG_ENDPOINT: `http://127.0.0.1:${http.address().port}/rig`,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    let diagnostic = "";
-    const draining = Promise.withResolvers();
-    child.stdout.on("data", (chunk) => {
-      if (chunk.toString().includes("Pool draining;")) draining.resolve();
-    });
-    child.stderr.on("data", (chunk) => {
-      diagnostic += chunk;
-    });
-    try {
-      await ready.promise;
-      await allTurns.promise;
-      assert.equal(publications, 0);
-      const running = JSON.parse(
-        await readFile(join(directory, "pool-health.json"), "utf8"),
       );
-      assert.equal(running.activePoems.length, 20);
-      assert.ok(
-        running.activePoems.every((poem) => poem.serviceTier === "priority"),
-      );
-      child.kill("SIGTERM");
-      await draining.promise;
-      await writeFile(join(directory, "release"), "ready");
-      const [code] = await once(child, "exit");
-      assert.equal(code, 0, diagnostic);
-      assert.equal(claims, 20);
-      assert.equal(publications, 20);
-      const health = JSON.parse(
-        await readFile(join(directory, "pool-health.json"), "utf8"),
-      );
-      assert.equal(health.stopping, true);
-      assert.equal(health.activePoems.length, 0);
-      assert.equal(health.pausedWorkers.length, 0);
-    } finally {
-      watcher.close();
-      if (child.exitCode === null && child.signalCode === null)
-        child.kill("SIGKILL");
-      http.closeAllConnections();
-      await new Promise((resolve) => http.close(resolve));
-      await rm(directory, { recursive: true, force: true });
-    }
-  },
-);
+      let diagnostic = "";
+      const draining = Promise.withResolvers();
+      child.stdout.on("data", (chunk) => {
+        if (chunk.toString().includes("Pool draining;")) draining.resolve();
+      });
+      child.stderr.on("data", (chunk) => {
+        diagnostic += chunk;
+      });
+      try {
+        await ready.promise;
+        await allTurns.promise;
+        assert.equal(publications, 0);
+        const running = JSON.parse(
+          await readFile(join(directory, "pool-health.json"), "utf8"),
+        );
+        assert.equal(running.activePoems.length, concurrency);
+        assert.ok(
+          running.activePoems.every((poem) => poem.serviceTier === "priority"),
+        );
+        child.kill("SIGTERM");
+        await draining.promise;
+        await writeFile(join(directory, "release"), "ready");
+        const [code] = await once(child, "exit");
+        assert.equal(code, 0, diagnostic);
+        assert.equal(claims, concurrency);
+        assert.equal(publications, concurrency);
+        assert.equal(scheduling, 0);
+        assert.equal(failedPurge, true);
+        const health = JSON.parse(
+          await readFile(join(directory, "pool-health.json"), "utf8"),
+        );
+        assert.equal(health.stopping, true);
+        assert.equal(health.activePoems.length, 0);
+        assert.equal(health.pausedWorkers.length, 0);
+      } finally {
+        watcher.close();
+        if (child.exitCode === null && child.signalCode === null)
+          child.kill("SIGKILL");
+        http.closeAllConnections();
+        await new Promise((resolve) => http.close(resolve));
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+}

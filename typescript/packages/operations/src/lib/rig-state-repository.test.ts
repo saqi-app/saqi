@@ -569,11 +569,11 @@ test("gloss-only publication preserves English and drops legacy insights", async
   expect(published.modelEnrichments).toHaveLength(1);
 });
 
-test.each([10, 20])(
+test.each([10, 20, 40])(
   "concurrent claims atomically enforce %i slots and distinct poems",
   async (maxConcurrent) => {
     const { repository, sqlite } = fixture();
-    for (let index = 3; index <= 25; index += 1) {
+    for (let index = 3; index <= maxConcurrent + 5; index += 1) {
       sqlite
         .prepare(
           `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,source_hash)
