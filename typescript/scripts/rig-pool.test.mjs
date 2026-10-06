@@ -26,8 +26,9 @@ const send=m=>process.stdout.write(JSON.stringify(m)+'\n');
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);
  if (!m.id) return;
- if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh'}});
+ if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:m.params.serviceTier}});
  else if(m.method==='turn/start') {
+  if(m.params.serviceTierForTurn!=='priority') throw new Error('Fast tier missing');
   if (++turns===20) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
   send({id:m.id,result:{turn:{id:'turn'}}});
   const release=setInterval(()=>{
@@ -163,6 +164,9 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         await readFile(join(directory, "pool-health.json"), "utf8"),
       );
       assert.equal(running.activePoems.length, 20);
+      assert.ok(
+        running.activePoems.every((poem) => poem.serviceTier === "priority"),
+      );
       child.kill("SIGTERM");
       await draining.promise;
       await writeFile(join(directory, "release"), "ready");

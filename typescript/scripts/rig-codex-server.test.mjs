@@ -21,9 +21,10 @@ createInterface({input:process.stdin}).on("line", line => {
   const m = JSON.parse(line);
   if (!m.id) return;
   if (m.method === "thread/start") {
-    if (m.params.model !== "gpt-6.1-sol" || m.params.config.model_reasoning_effort !== "xhigh" || !m.params.ephemeral) throw new Error("configuration");
-    send({id:m.id,result:{thread:{id:"thread-" + ++sequence},model:"gpt-6.1-sol",reasoningEffort:"xhigh"}});
+    if (m.params.model !== "gpt-6.1-sol" || m.params.config.model_reasoning_effort !== "xhigh" || m.params.serviceTier !== "priority" || !m.params.ephemeral) throw new Error("configuration");
+    send({id:m.id,result:{thread:{id:"thread-" + ++sequence},model:"gpt-6.1-sol",reasoningEffort:"xhigh",serviceTier:"priority"}});
   } else if (m.method === "turn/start") {
+    if (m.params.serviceTierForTurn !== "priority") throw new Error("turn-tier");
     const threadId = m.params.threadId;
     const text = JSON.stringify({value:m.params.input[0].text});
     setTimeout(() => {
@@ -69,6 +70,31 @@ test("a server disconnect rejects every pending turn instead of hanging or retry
     await assert.rejects(
       server.call("thread/start", {}),
       /CODEX_SERVER_EXITED/u,
+    );
+  } finally {
+    server.close();
+  }
+});
+
+test("a rejected Fast configuration cannot start paid inference", async () => {
+  const server = new RigCodexServer(process.execPath, [
+    "-e",
+    `
+    const readline=require('node:readline');
+    readline.createInterface({input:process.stdin}).on('line',line=>{
+      const m=JSON.parse(line); if(!m.id) return;
+      if(m.method==='turn/start') throw new Error('inference must not start');
+      console.log(JSON.stringify({id:m.id,result:m.method==='thread/start'?{thread:{id:'wrong-tier'},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:'default'}:{}}));
+    });
+  `,
+  ]);
+  try {
+    await server.initialize();
+    await assert.rejects(
+      server.generate("test", {}, async () => {
+        assert.fail("Rejected Fast configuration must not produce output");
+      }),
+      /CODEX_MODEL_CONFIGURATION_MISMATCH/u,
     );
   } finally {
     server.close();

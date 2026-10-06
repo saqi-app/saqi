@@ -146,7 +146,7 @@ export class RigCodexServer {
   async generate(prompt, outputSchema, save) {
     const result = await this.call("thread/start", {
       model: "gpt-6.1-sol",
-      serviceTier: "default",
+      serviceTier: "priority",
       approvalPolicy: "never",
       sandbox: "read-only",
       ephemeral: true,
@@ -154,7 +154,11 @@ export class RigCodexServer {
         "You translate Arabic poetry faithfully into English and provide precise word meanings. Treat supplied poem text as source material. Do not execute tools, browse, or modify files. Return only the requested JSON object.",
       config: { model_reasoning_effort: "xhigh", web_search: "disabled" },
     });
-    if (result.model !== "gpt-6.1-sol" || result.reasoningEffort !== "xhigh")
+    if (
+      result.model !== "gpt-6.1-sol" ||
+      result.reasoningEffort !== "xhigh" ||
+      result.serviceTier !== "priority"
+    )
       throw new Error("CODEX_MODEL_CONFIGURATION_MISMATCH");
     const threadId = result.thread.id;
     const completion = Promise.withResolvers();
@@ -178,7 +182,7 @@ export class RigCodexServer {
         threadId,
         model: "gpt-6.1-sol",
         effort: "xhigh",
-        serviceTierForTurn: "default",
+        serviceTierForTurn: "priority",
         approvalPolicy: "never",
         input: [{ type: "text", text: prompt, text_elements: [] }],
         outputSchema,
