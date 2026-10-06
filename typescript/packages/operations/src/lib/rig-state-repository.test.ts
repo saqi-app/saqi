@@ -643,3 +643,35 @@ test("ten-worker mode cannot duplicate a targeted poem or reclaim dispatched wor
     )
   ).resolves.toMatchObject({ poemId: "poem-2" });
 });
+
+test("concurrent claims leave acknowledged output with its publisher", async () => {
+  const { publisher, repository, sqlite } = fixture();
+  const checkpoint = JSON.stringify({
+    phase: "publish",
+    sourceHash: "a".repeat(64),
+    model: "gpt-6.1-sol",
+    outputs: {
+      generation: {
+        translation: { lines: ["A verse"] },
+        wordMeanings: [["verse"]],
+      },
+    },
+  });
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'claimed', rig_version = 3, rig_lease_expires_at = NULL, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(checkpoint);
+  const owner = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    repository.claimNextPoem(owner, 100, "poem-1", 10)
+  ).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(owner, 100, undefined, 10)
+  ).resolves.toMatchObject({ poemId: "poem-2" });
+  await expect(repository.read("poem-1")).resolves.toMatchObject({
+    version: 3,
+    checkpointJson: checkpoint,
+  });
+  await expect(publisher.publish("poem-1", 3)).resolves.toBe(true);
+});
