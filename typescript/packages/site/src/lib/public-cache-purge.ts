@@ -16,8 +16,8 @@ export async function handlePublicCachePurge(
   purge: (
     tags: string[],
   ) => Promise<
-    | { success: true }
     | { success: false; errors?: { code: number; message: string }[] }
+    | { success: true }
   >,
 ): Promise<Response | undefined> {
   if (new URL(request.url).pathname !== PURGE_PATH) return undefined;
