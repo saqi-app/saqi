@@ -100,7 +100,11 @@ export async function purgePublishedPoem(
   transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
 ): Promise<string> {
   const url = publishedPoemUrl(config.publicOrigin, route);
-  await sendCachePurge(config, route, transport);
+  await sendCachePurge(
+    config,
+    { authorSlug: route.authorSlug, poemId: route.poemId },
+    transport
+  );
   return url;
 }
 

@@ -1,3 +1,4 @@
+import { PublicCachePurgeRequestSchema } from "@saqi/precedent-iso";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -99,6 +100,43 @@ describe("public cache invalidation", () => {
         transport
       )
     ).rejects.not.toThrow(SECRET);
+  });
+
+  it("purges a repository row using only the public route contract", async () => {
+    const row = {
+      authorSlug: "author-1",
+      poemId: "poem-1",
+      publicationHash: "a".repeat(64),
+      sourceHash: "b".repeat(64),
+    };
+    const transport = vi
+      .fn()
+      .mockImplementation(async (_url: string, init: { body: string }) => {
+        const valid = PublicCachePurgeRequestSchema.safeParse(
+          JSON.parse(init.body)
+        ).success;
+        return new Response(null, { status: valid ? 204 : 400 });
+      });
+    await expect(
+      purgePublishedPoem(
+        {
+          publicSite: PUBLIC_SITE,
+          publicOrigin: "https://saqi.app",
+          purgeSecret: SECRET,
+        },
+        row,
+        transport
+      )
+    ).resolves.toBe("https://saqi.app/author/author-1/poem/poem-1");
+    expect(transport).toHaveBeenCalledExactlyOnceWith(
+      "https://saqi.app/internal/purge-publication-cache",
+      expect.objectContaining({
+        body: JSON.stringify({
+          authorSlug: row.authorSlug,
+          poemId: row.poemId,
+        }),
+      })
+    );
   });
 
   it("reports bounded public Worker errors and discards arbitrary response bodies", async () => {
