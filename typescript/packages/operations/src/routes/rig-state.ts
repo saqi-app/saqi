@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { poemTranslationTracks } from "../../../site/src/lib/poem-translations";
 import type { CloudflareEnv } from "../lib/cloudflare";
 import {
   hasJsonContentType,
@@ -24,7 +25,7 @@ const RequestSchema = z.discriminatedUnion("action", [
     action: z.literal("claim-poem"),
     token: TokenSchema,
     poemId: PoemIdSchema.optional(),
-    maxConcurrent: z.number().int().min(1).max(10).optional(),
+    maxConcurrent: z.number().int().min(1).max(20).optional(),
   }),
   z.strictObject({
     action: z.literal("source"),
@@ -90,7 +91,19 @@ export async function get(
   if (!parsed.success) return failure(400, "INVALID_POEM_ID");
   try {
     const state = await new RigStateRepository(env.DB).read(parsed.data);
-    return Response.json({ ok: true, state }, { headers: NO_STORE_HEADERS });
+    const publication =
+      new URL(request.url).searchParams.get("publication") === "1"
+        ? await new RigPublicationRepository(env.DB).readPublication(
+            parsed.data
+          )
+        : undefined;
+    const publicPage = publication
+      ? await verifyPublishedPage(publication, parsed.data, env)
+      : undefined;
+    return Response.json(
+      { ok: true, state, publication, publicPage },
+      { headers: NO_STORE_HEADERS }
+    );
   } catch {
     return failure(503, "RIG_STATE_UNAVAILABLE");
   }
@@ -291,4 +304,53 @@ async function purgeDirtyPublication(
     row.sourceHash
   );
   return "purged";
+}
+
+async function verifyPublishedPage(
+  publication: NonNullable<
+    Awaited<ReturnType<RigPublicationRepository["readPublication"]>>
+  >,
+  poemId: string,
+  env: CloudflareEnv
+) {
+  const url = `https://saqi.app/author/${encodeURIComponent(publication.authorSlug)}/poem/${encodeURIComponent(poemId)}`;
+  if (!env.PUBLIC_SITE) return { url, error: "PUBLIC_SITE_UNAVAILABLE" };
+  try {
+    const response = await env.PUBLIC_SITE.fetch(url);
+    const html = await response.text();
+    const contains = (text: string) => {
+      const escaped = text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+      return (
+        html.includes(escaped) ||
+        html.includes(
+          escaped.replaceAll('"', "&quot;").replaceAll("'", "&#39;")
+        ) ||
+        html.includes(
+          escaped.replaceAll('"', "&quot;").replaceAll("'", "&#x27;")
+        )
+      );
+    };
+    const lines = poemTranslationTracks(publication.snapshot.fields)
+      .flatMap((track) => track.lines)
+      .filter((line) => line.trim().length > 0);
+    const meanings =
+      publication.snapshot.fields.wordGlosses?.meanings.lines.flatMap((line) =>
+        line.segments.flatMap((segment) =>
+          segment.kind === "word" ? [segment.meaning] : []
+        )
+      ) ?? [];
+    return {
+      url,
+      status: response.status,
+      translationMatches:
+        response.ok && lines.length > 0 && lines.every(contains),
+      wordMeaningsMatch:
+        response.ok && meanings.length > 0 && meanings.every(contains),
+    };
+  } catch {
+    return { url, error: "PUBLIC_PAGE_UNAVAILABLE" };
+  }
 }

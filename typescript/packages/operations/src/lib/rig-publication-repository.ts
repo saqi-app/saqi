@@ -63,6 +63,14 @@ const CheckpointSchema = z.object({
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   outputs: z.object({ generation: z.unknown() }),
 });
+const PublicationReadRowSchema = z.object({
+  authorSlug: z.string(),
+  sourceHash: z.string().nullable(),
+  publicationSourceHash: z.string().nullable(),
+  publicationHash: z.string().nullable(),
+  cacheDirty: z.number().int().min(0).max(1),
+  publicationJson: z.string().nullable(),
+});
 const ArabicSchema = z.object({
   content: z.array(SafeLineSchema).min(1).max(2_000),
 });
@@ -85,6 +93,28 @@ export class RigPublicationRepository {
 
   constructor(database: D1Database) {
     this.#database = database;
+  }
+
+  async readPublication(poemId: string) {
+    const raw = await this.#database
+      .prepare(
+        `SELECT a.slug AS authorSlug, p.source_hash AS sourceHash,
+       p.publication_source_hash AS publicationSourceHash,
+       p.publication_hash AS publicationHash,
+       p.publication_cache_dirty AS cacheDirty,
+       p.publication_json AS publicationJson
+       FROM poem p JOIN author a ON a.id = p.author_id WHERE p.id = ?1`
+      )
+      .bind(poemId)
+      .first<unknown>();
+    if (raw === null) return null;
+    const { publicationJson, ...metadata } =
+      PublicationReadRowSchema.parse(raw);
+    if (publicationJson === null) return null;
+    return {
+      ...metadata,
+      snapshot: PublicationSnapshotSchema.parse(JSON.parse(publicationJson)),
+    };
   }
 
   async pendingPurge(poemId?: string): Promise<null | PendingPurgeRoute> {

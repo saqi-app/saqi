@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { watch } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import process from "node:process";
 import { test } from "node:test";
 
 test(
-  "ten pool workers publish distinct poems and SIGTERM drains without another claim",
+  "twenty pool workers publish distinct poems and SIGTERM drains without another claim",
   { timeout: 25_000 },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "saqi-pool-test-"));
@@ -17,19 +18,25 @@ test(
       join(directory, "codex"),
       String.raw`#!/usr/bin/env node
 const readline = require('node:readline');
+const fs = require('node:fs');
+const path = require('node:path');
 let sequence=0;
+let turns=0;
 const send=m=>process.stdout.write(JSON.stringify(m)+'\n');
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);
  if (!m.id) return;
  if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh'}});
  else if(m.method==='turn/start') {
+  if (++turns===20) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
   send({id:m.id,result:{turn:{id:'turn'}}});
-  setTimeout(()=>{
+  const release=setInterval(()=>{
+   if (!fs.existsSync(path.join(__dirname,'release'))) return;
+   clearInterval(release);
    const threadId=m.params.threadId;
    send({method:'item/completed',params:{threadId,item:{type:'agentMessage',phase:'final_answer',text:JSON.stringify({translation:{lines:['A verse']},wordMeanings:{line_1:['verse']}})}}});
    send({method:'turn/completed',params:{threadId,turn:{status:'completed'}}});
-  },5000);
+  },10);
  } else send({id:m.id,result:{}});
 });
 `,
@@ -58,7 +65,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       let state = states.get(body.poemId);
       switch (body.action) {
         case "claim-poem": {
-          assert.equal(body.maxConcurrent, 10);
+          assert.equal(body.maxConcurrent, 20);
           claims += 1;
           state = {
             poemId: `poem-${String(claims)}`,
@@ -89,7 +96,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
           state.version = 2;
           state.attemptId = body.attemptId;
           dispatches += 1;
-          if (dispatches === 10) ready.resolve();
+          if (dispatches === 20) ready.resolve();
 
           break;
         }
@@ -119,6 +126,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
     });
     http.listen(0, "127.0.0.1");
     await once(http, "listening");
+    const allTurns = Promise.withResolvers();
+    const watcher = watch(directory, (_event, name) => {
+      if (name === "all-turns") allTurns.resolve();
+    });
     const child = spawn(
       process.execPath,
       [new URL("rig-pool.mjs", import.meta.url).pathname],
@@ -129,7 +140,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
           CF_ACCESS_CLIENT_ID: "test",
           CF_ACCESS_CLIENT_SECRET: "test",
           SAQI_RIG_ACTIVE: "1",
-          SAQI_RIG_CONCURRENCY: "10",
+          SAQI_RIG_CONCURRENCY: "20",
           SAQI_RIG_RESULT_DIR: directory,
           SAQI_RIG_ENDPOINT: `http://127.0.0.1:${http.address().port}/rig`,
         },
@@ -137,17 +148,28 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       },
     );
     let diagnostic = "";
-    child.stdout.resume();
+    const draining = Promise.withResolvers();
+    child.stdout.on("data", (chunk) => {
+      if (chunk.toString().includes("Pool draining;")) draining.resolve();
+    });
     child.stderr.on("data", (chunk) => {
       diagnostic += chunk;
     });
     try {
       await ready.promise;
+      await allTurns.promise;
+      assert.equal(publications, 0);
+      const running = JSON.parse(
+        await readFile(join(directory, "pool-health.json"), "utf8"),
+      );
+      assert.equal(running.activePoems.length, 20);
       child.kill("SIGTERM");
+      await draining.promise;
+      await writeFile(join(directory, "release"), "ready");
       const [code] = await once(child, "exit");
       assert.equal(code, 0, diagnostic);
-      assert.equal(claims, 10);
-      assert.equal(publications, 10);
+      assert.equal(claims, 20);
+      assert.equal(publications, 20);
       const health = JSON.parse(
         await readFile(join(directory, "pool-health.json"), "utf8"),
       );
@@ -155,6 +177,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       assert.equal(health.activePoems.length, 0);
       assert.equal(health.pausedWorkers.length, 0);
     } finally {
+      watcher.close();
       if (child.exitCode === null && child.signalCode === null)
         child.kill("SIGKILL");
       http.closeAllConnections();
