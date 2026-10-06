@@ -1,0 +1,14 @@
+[Unit]
+Description=Report Saqi translation throughput and health
+
+[Service]
+Type=oneshot
+User=saqi
+Group=saqi
+SupplementaryGroups=systemd-journal
+ExecStart=/usr/bin/python3 /usr/local/libexec/saqi/translation-health.py
+TimeoutStartSec=60
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only

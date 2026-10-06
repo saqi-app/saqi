@@ -1,5 +1,5 @@
 [Unit]
-Description=Saqi GPT-6.1 Sol High poem translator
+Description=Saqi GPT-6.1 Sol xhigh poem translator
 After=network-online.target
 Wants=network-online.target
 
