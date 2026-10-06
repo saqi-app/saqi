@@ -16,7 +16,7 @@ const SafeLineSchema = z
   .max(5_000)
   .refine((line) => !UnsafeControl.test(line));
 const GeneratedFailure =
-  /(?:roses are red|unable to translate|cannot translate|can't translate|i(?:'| a)m sorry.{0,80}translat|as an ai\b|translation guidelines|translate the following|provide (?:a )?summary instead)/iu;
+  /(?:unable to translate|cannot translate|can't translate|i(?:'| a)m sorry.{0,80}translat|as an ai\b|translation guidelines|translate the following|provide (?:a )?summary instead)/iu;
 const TranslatedLineSchema = SafeLineSchema.refine(
   (line) => !GeneratedFailure.test(line)
 );
