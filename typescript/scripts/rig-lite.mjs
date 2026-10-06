@@ -4,14 +4,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
-import { readQuota } from "./rig-quota.mjs";
 
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
-const model = process.env.SAQI_RIG_MODEL ?? "gpt-6-sol";
+const model = process.env.SAQI_RIG_MODEL ?? "gpt-6.1-sol";
 const clientId = process.env.CF_ACCESS_CLIENT_ID;
 const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 if (!clientId || !clientSecret)
@@ -50,13 +50,6 @@ async function main() {
       return;
     }
   }
-  const quota = await readQuota();
-  if (!quota.allowed) {
-    process.stdout.write(
-      `Waiting for Codex quota: ${quota.reason}${quota.resetsAt ? `; reset ${new Date(quota.resetsAt * 1000).toISOString()}` : ""}.\n`,
-    );
-    return;
-  }
   const token = randomUUID();
   const claimRequest = { action: "claim-poem", token };
   if (preferredPoemId) claimRequest.poemId = preferredPoemId;
@@ -76,7 +69,7 @@ async function main() {
   const attemptId = randomUUID();
   const inputHash = createHash("sha256").update(prompt).digest("hex");
   process.stdout.write(
-    `Model: ${model}; reasoning: medium; fields: ${(source.required ?? ["translation", "wordMeanings"]).join(", ")}\n`,
+    `Model: ${model}; reasoning: high; fields: ${(source.required ?? ["translation", "wordMeanings"]).join(", ")}\n`,
   );
   const dispatched = await request({
     action: "dispatch",
@@ -86,7 +79,7 @@ async function main() {
     attemptId,
     inputHash,
     model,
-    reasoningEffort: "medium",
+    reasoningEffort: "high",
   });
   process.stdout.write(
     `Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`,
@@ -326,7 +319,9 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
     "-c",
     'approval_policy="never"',
     "-c",
-    'model_reasoning_effort="medium"',
+    'model_reasoning_effort="high"',
+    "-c",
+    'service_tier="default"',
     "-c",
     'web_search="disabled"',
     "--disable",
@@ -341,7 +336,25 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
   ];
   const child = spawn("codex", args, { stdio: ["pipe", "pipe", "pipe"] });
   let diagnostic = "";
-  child.stdout.resume();
+  const events = createInterface({ input: child.stdout });
+  events.on("line", (line) => {
+    try {
+      const event = JSON.parse(line);
+      if (event.type === "turn.completed" && event.usage) {
+        const usage = Object.fromEntries(
+          [
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "reasoning_output_tokens",
+          ].map((key) => [key, event.usage[key]]),
+        );
+        process.stdout.write(`Codex usage: ${JSON.stringify(usage)}\n`);
+      }
+    } catch {
+      // Non-JSON diagnostics must never expose prompt or generated content.
+    }
+  });
   child.stderr.on("data", (chunk) => {
     if (diagnostic.length < 1_000)
       diagnostic += chunk.toString("utf8").slice(0, 1_000 - diagnostic.length);

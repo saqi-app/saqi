@@ -1,4 +1,5 @@
 import type { Fetcher } from "@cloudflare/workers-types";
+import { z } from "zod";
 
 import type { CloudflareEnv } from "./cloudflare";
 
@@ -10,7 +11,7 @@ type PurgeTransport = (
     headers: Record<string, string>;
     method: "POST";
   }
-) => Promise<{ status: number }>;
+) => Promise<{ status: number; json?: () => Promise<unknown> }>;
 
 export interface PublicCacheConfig {
   readonly publicOrigin: string;
@@ -33,9 +34,21 @@ export interface PublishedPoemRoute {
 }
 
 export class PublicCacheInvalidationError extends Error {
-  constructor(code: string, options?: ErrorOptions) {
-    super(code, options);
+  readonly details?: {
+    status: number;
+    errors?: { code: number; message: string }[];
+  };
+
+  constructor(
+    code: string,
+    details?: {
+      status: number;
+      errors?: { code: number; message: string }[];
+    }
+  ) {
+    super(code);
     this.name = "PublicCacheInvalidationError";
+    if (details) this.details = details;
   }
 }
 
@@ -103,7 +116,7 @@ async function sendCachePurge(
   body: { readonly all: true } | PublishedPoemRoute,
   transport: PurgeTransport
 ): Promise<void> {
-  let response: { status: number };
+  let response: Awaited<ReturnType<PurgeTransport>>;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     response = await Promise.race([
@@ -128,6 +141,21 @@ async function sendCachePurge(
     clearTimeout(timeout);
   }
   if (response.status !== 204) {
-    throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED");
+    // Only the public Worker's bounded error contract may leave this boundary.
+    // Never forward arbitrary response text, headers, or credentials.
+    const parsed = PurgeFailureSchema.safeParse(
+      await response.json?.().catch(() => null)
+    );
+    throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED", {
+      status: response.status,
+      ...(parsed.success ? { errors: parsed.data.errors } : {}),
+    });
   }
 }
+
+const PurgeFailureSchema = z.object({
+  code: z.literal("PUBLIC_CACHE_PURGE_FAILED"),
+  errors: z
+    .array(z.object({ code: z.number().int(), message: z.string().max(300) }))
+    .max(10),
+});

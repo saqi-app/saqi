@@ -88,7 +88,9 @@ describe("public cache invalidation", () => {
         transport
       )
     ).rejects.toThrow(
-      new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED")
+      new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED", {
+        status: 503,
+      })
     );
     await expect(
       purgePublishedPoem(
@@ -97,6 +99,47 @@ describe("public cache invalidation", () => {
         transport
       )
     ).rejects.not.toThrow(SECRET);
+  });
+
+  it("reports bounded public Worker errors and discards arbitrary response bodies", async () => {
+    const transport = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          code: "PUBLIC_CACHE_PURGE_FAILED",
+          errors: [{ code: 1001, message: "Cache purge denied" }],
+          secret: SECRET,
+        },
+        { status: 503 }
+      )
+    );
+    const config = {
+      publicSite: PUBLIC_SITE,
+      publicOrigin: "https://saqi.app",
+      purgeSecret: SECRET,
+    };
+    await expect(
+      purgePublishedPoem(
+        config,
+        { authorSlug: "author-1", poemId: "poem-1" },
+        transport
+      )
+    ).rejects.toMatchObject({
+      message: "PUBLIC_CACHE_PURGE_REJECTED",
+      details: {
+        status: 503,
+        errors: [{ code: 1001, message: "Cache purge denied" }],
+      },
+    });
+    transport.mockResolvedValue(
+      Response.json({ secret: SECRET }, { status: 404 })
+    );
+    await expect(
+      purgePublishedPoem(
+        config,
+        { authorSlug: "author-1", poemId: "poem-1" },
+        transport
+      )
+    ).rejects.toMatchObject({ details: { status: 404 } });
   });
 
   it("requests one corpus-wide purge", async () => {

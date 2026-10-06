@@ -1,0 +1,11 @@
+[Unit]
+Description=Continue Saqi translations 30 seconds after each completed invocation
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=30s
+AccuracySec=1s
+Unit=saqi-translate.service
+
+[Install]
+WantedBy=timers.target

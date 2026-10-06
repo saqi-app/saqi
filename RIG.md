@@ -2,6 +2,8 @@
 
 Production D1 is the only queue: two application tables, author and poem. There is no local SQLite, scheduler database, event ledger, or model registry. Current translations and word meanings publish atomically on the poem row.
 
+For the private Linux Codex host and systemd runner, see [the VM guide](RIG-VM.md).
+
 ## Background translation
 
 From `typescript`, install dependencies and run `yarn build:api` and `yarn workspace @saqi/source-collector build`. From the repository root:
@@ -12,7 +14,7 @@ python3 typescript/scripts/rig-background.py status
 python3 typescript/scripts/rig-background.py stop
 ```
 
-launchd runs one translation task every 30 seconds, never overlapping itself. Long tasks finish before another starts. New calls use GPT-6 Sol at medium reasoning. Before claiming a new poem, the rig reads Codex quota and waits when any reported window has 80% or more used, or quota cannot be verified; recovery and publication of an existing result still proceed. This preserves a practical 20% admission reserve, although an in-flight call or other Codex use can cross the threshold. The job resumes at login; the Mac must be awake and signed in. Stop removes its login entry and terminates the current task. Do not run manual copies alongside it. One-off command: `SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs translate [POEM_ID]`.
+launchd runs one translation task every 30 seconds, never overlapping itself. Long tasks finish before another starts. New calls use GPT-6.1 Sol at high reasoning. The rig has no quota reserve or local spending cap; Codex uses included allowance and available credits until account limits prevent further calls. Recovery and publication of existing results still proceed. The job resumes at login; the Mac must be awake and signed in. Stop removes its login entry and terminates the current task. Do not run manual copies alongside it. One-off command: `SAQI_RIG_ACTIVE=1 node typescript/scripts/rig-local.mjs translate [POEM_ID]`.
 
 Credentials remain in this Mac's Keychain under account `saqi-publication-access-v2`. Other machines can provide `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` through their secret manager. Never put credentials in arguments or Git. One unfinished invocation may leave a private result in `~/Library/Application Support/Saqi/results`; it is deleted after acknowledgement. Results written to the old temporary location remain recoverable.
 

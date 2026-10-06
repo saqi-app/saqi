@@ -10,21 +10,6 @@ import { test } from "node:test";
 
 const script = new URL("rig-lite.mjs", import.meta.url);
 const localScript = new URL("rig-local.mjs", import.meta.url);
-const quotaResponder = String.raw`
-if (process.argv[2] === "app-server") {
-  let input = "";
-  process.stdin.on("data", (chunk) => {
-    input += chunk;
-    let end;
-    while ((end = input.indexOf("\n")) >= 0) {
-      const message = JSON.parse(input.slice(0, end)); input = input.slice(end + 1);
-      if (message.id) process.stdout.write(JSON.stringify({ id: message.id, result: message.id === 1 ? {} : {
-        ordinaryUsageAllowed: true, rateLimits: { primary: { usedPercent: Number(process.env.SAQI_TEST_QUOTA ?? 10) } }
-      } }) + "\n");
-    }
-  });
-} else
-`;
 
 test(
   "killing the runner before acknowledgement recovers the exact result without another invocation",
@@ -39,10 +24,12 @@ test(
     await writeFile(
       join(directory, "codex"),
       String.raw`#!/usr/bin/env node
-${quotaResponder} {
+{
 const fs = require("node:fs");
-require("node:assert/strict").equal(process.argv[process.argv.indexOf("--model") + 1], "gpt-6-sol");
-require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="medium"'));
+require("node:assert/strict").equal(process.argv[process.argv.indexOf("--model") + 1], "gpt-6.1-sol");
+require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="high"'));
+require("node:assert/strict").ok(process.argv.includes('service_tier="default"'));
+process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:100,cached_input_tokens:40,output_tokens:200}}) + "\n");
 fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
 fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify({ ...output, wordMeanings: { line_1: ["line"] } }))});
 process.stdin.resume();
@@ -281,18 +268,13 @@ test("a targeted smoke run sends only the requested poem ID to the D1 claim", as
   }
 });
 
-async function exerciseUnknown(
-  attemptId,
-  entry = script,
-  args = [],
-  quota = "10",
-) {
+async function exerciseUnknown(attemptId, entry = script, args = []) {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-test-"));
   const markerPath = join(directory, "codex-called");
   const fakeCodex = join(directory, "codex");
   await writeFile(
     fakeCodex,
-    `#!/usr/bin/env node\n${quotaResponder} { require("node:fs").writeFileSync(process.env.SAQI_TEST_CODEX_MARKER, "called"); process.exit(97); }\n`,
+    `#!/usr/bin/env node\n{ require("node:fs").writeFileSync(process.env.SAQI_TEST_CODEX_MARKER, "called"); process.exit(97); }\n`,
     { mode: 0o700 },
   );
   const actions = [];
@@ -345,7 +327,6 @@ async function exerciseUnknown(
         SAQI_RIG_ACTIVE: "1",
         SAQI_RIG_ENDPOINT: `http://127.0.0.1:${port}/rig`,
         SAQI_TEST_CODEX_MARKER: markerPath,
-        SAQI_TEST_QUOTA: quota,
       },
       entry,
       args,
@@ -365,47 +346,27 @@ async function exerciseUnknown(
 }
 
 async function runScript(environment, entry = script, args = []) {
-  let quotaDirectory;
-  let runEnvironment = environment;
-  if (!environment.PATH) {
-    quotaDirectory = await mkdtemp(join(tmpdir(), "saqi-quota-test-"));
-    await writeFile(
-      join(quotaDirectory, "codex"),
-      `#!/usr/bin/env node\n${quotaResponder} { process.exit(97); }`,
-      { mode: 0o700 },
-    );
-    runEnvironment = {
-      ...environment,
-      PATH: `${quotaDirectory}${delimiter}${process.env.PATH ?? ""}`,
-    };
-  }
-  try {
-    return await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [entry.pathname, ...args], {
-        env: { ...process.env, ...runEnvironment },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-      });
-      child.on("error", reject);
-      child.on("close", (code) => resolve({ code, stdout, stderr }));
+  return await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [entry.pathname, ...args], {
+      env: { ...process.env, ...environment },
+      stdio: ["ignore", "pipe", "pipe"],
     });
-  } finally {
-    if (quotaDirectory)
-      await rm(quotaDirectory, { recursive: true, force: true });
-  }
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
 }
 
-test("quota reserve prevents claiming any new poem while unresolved work stays fenced", async () => {
-  const run = await exerciseUnknown(randomUUID(), script, [], "82");
+test("new work is claimed without a quota check while unresolved work stays fenced", async () => {
+  const run = await exerciseUnknown(randomUUID());
   assert.equal(run.code, 0, run.stderr);
-  assert.match(run.stdout, /Waiting for Codex quota: Quota reserve: 82% used/u);
-  assert.deepEqual(run.actions, ["purge-cache"]);
+  assert.deepEqual(run.actions, ["purge-cache", "claim-poem"]);
   assert.equal(run.codexCalled, false);
 });

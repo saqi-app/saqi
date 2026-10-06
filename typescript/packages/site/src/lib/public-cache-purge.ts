@@ -13,7 +13,12 @@ const NO_STORE = {
 export async function handlePublicCachePurge(
   request: Request,
   secret: string | undefined,
-  purge: (tags: string[]) => Promise<{ success: boolean }>,
+  purge: (
+    tags: string[],
+  ) => Promise<{
+    success: boolean;
+    errors?: { code: number; message: string }[];
+  }>,
 ): Promise<Response | undefined> {
   if (new URL(request.url).pathname !== PURGE_PATH) return undefined;
   if (
@@ -37,10 +42,24 @@ export async function handlePublicCachePurge(
         ? ["saqi-corpus"]
         : publicationCacheTags(route.authorSlug, route.poemId),
     );
-    if (!result.success)
-      return new Response(null, { status: 503, headers: NO_STORE });
-  } catch {
-    return new Response(null, { status: 503, headers: NO_STORE });
+    if (!result.success) {
+      const errors = (result.errors ?? [])
+        .slice(0, 10)
+        .map(({ code, message }) => ({ code, message: message.slice(0, 300) }));
+      console.error("[public] Cache purge rejected", { errors });
+      return Response.json(
+        { code: "PUBLIC_CACHE_PURGE_FAILED", errors },
+        { status: 503, headers: NO_STORE },
+      );
+    }
+  } catch (error) {
+    console.error("[public] Cache purge unavailable", {
+      message: error instanceof Error ? error.message : "UNKNOWN",
+    });
+    return Response.json(
+      { code: "PUBLIC_CACHE_PURGE_FAILED", errors: [] },
+      { status: 503, headers: NO_STORE },
+    );
   }
   return new Response(null, { status: 204, headers: NO_STORE });
 }

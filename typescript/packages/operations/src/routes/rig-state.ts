@@ -9,6 +9,7 @@ import {
 } from "../lib/operations-boundary";
 import {
   publicCacheConfig,
+  PublicCacheInvalidationError,
   purgePublicCorpus,
   purgePublishedPoem,
 } from "../lib/public-cache";
@@ -198,6 +199,16 @@ export async function post(
     console.error("[ops] Rig state rejected", {
       code: error instanceof Error ? error.message : "UNKNOWN",
     });
+    if (error instanceof PublicCacheInvalidationError) {
+      return Response.json(
+        {
+          ok: false,
+          code: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
+    }
     return failure(503, "RIG_STATE_UNAVAILABLE");
   }
 }

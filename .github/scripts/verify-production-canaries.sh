@@ -93,6 +93,16 @@ curl_probe 'authenticated rig state' --fail --retry 2 --retry-all-errors \
   https://ops.saqi.app/api/rig/state \
   | node -e 'let body=""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const parsed = JSON.parse(body); if (parsed.ok !== true || !("state" in parsed)) process.exit(1); console.error("RIG_STATE_OK: canonical D1 queue is readable"); });'
 
+curl_probe 'authenticated rig cache purge' --fail-with-body \
+  "${access_headers[@]}" \
+  --header 'Content-Type: application/json' \
+  --header 'Origin: https://ops.saqi.app' \
+  --header 'Sec-Fetch-Mode: cors' \
+  --header 'Sec-Fetch-Site: same-origin' \
+  --data '{"action":"purge-cache"}' \
+  https://ops.saqi.app/api/rig/state \
+  | node -e 'let body=""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const parsed = JSON.parse(body); if (parsed.ok !== true) { console.error(JSON.stringify(parsed)); process.exit(1); } console.error("RIG_CACHE_PURGE_OK: production write path verified"); });'
+
 test "$(curl_probe 'unauthenticated operations boundary' \
   --output /dev/null --write-out '%{http_code}' https://ops.saqi.app/)" = '403'
 

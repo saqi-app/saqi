@@ -70,3 +70,32 @@ test("corpus purge clears only migration-marked cache flags after purge", async 
     expect.stringContaining("publication_hash IS NULL")
   );
 });
+
+test("cache configuration failures keep their actionable code", async () => {
+  const env = parseCloudflareEnv({
+    DB: { prepare: vi.fn() },
+    PUBLIC_SITE: { fetch: vi.fn() },
+    SAQI_PUBLIC_ORIGIN: "https://saqi.app",
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  const response = await post(
+    new Request("https://ops.saqi.app/api/rig/state", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host: "ops.saqi.app",
+        origin: "https://ops.saqi.app",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({ action: "purge-cache" }),
+    }),
+    env
+  );
+  expect(response.status).toBe(503);
+  await expect(response.json()).resolves.toEqual({
+    ok: false,
+    code: "PUBLIC_CACHE_CONFIG_INVALID",
+  });
+});

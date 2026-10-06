@@ -40,10 +40,7 @@ void describe("public Worker cache purge", () => {
       },
     );
     assert.equal(response?.status, 204);
-    assert.deepEqual(tags, [
-      "saqi-poem-id-1",
-      "saqi-author-poet",
-    ]);
+    assert.deepEqual(tags, ["saqi-poem-id-1", "saqi-author-poet"]);
   });
 
   void it("reports purge rejection so operations can retry", async () => {
@@ -57,9 +54,16 @@ void describe("public Worker cache purge", () => {
         body: JSON.stringify({ authorSlug: "poet", poemId: "id-1" }),
       }),
       SECRET,
-      async () => ({ success: false }),
+      async () => ({
+        success: false,
+        errors: [{ code: 1001, message: "Cache purge denied" }],
+      }),
     );
     assert.equal(response?.status, 503);
+    assert.deepEqual(await response.json(), {
+      code: "PUBLIC_CACHE_PURGE_FAILED",
+      errors: [{ code: 1001, message: "Cache purge denied" }],
+    });
   });
 
   void it("purges the corpus with one authenticated tag", async () => {
