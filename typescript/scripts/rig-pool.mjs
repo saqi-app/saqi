@@ -17,8 +17,8 @@ import { RigCodexServer } from "./rig-codex-server.mjs";
 import { translateNext } from "./rig-lite.mjs";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
-const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 20);
-if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 20)
+const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 40);
+if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 40)
   throw new Error("INVALID_POOL_CONCURRENCY");
 const directory =
   process.env.SAQI_RIG_RESULT_DIR ??

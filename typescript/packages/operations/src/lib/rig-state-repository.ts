@@ -94,7 +94,7 @@ export class RigStateRepository {
     maxConcurrent = 1
   ): Promise<null | RigStateRow> {
     TokenSchema.parse(token);
-    z.number().int().min(1).max(20).parse(maxConcurrent);
+    z.number().int().min(1).max(40).parse(maxConcurrent);
     if (maxConcurrent > 1) {
       const candidate =
         preferredPoemId ??
