@@ -42,6 +42,18 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["status"], "attention")
         self.assertEqual(len(report["issues"]), 3)
 
+    def test_pool_reports_concurrent_poems_without_flagging_the_disabled_legacy_timer(self):
+        snapshot = {"checkedAt": self.now.isoformat(), "concurrency": 10, "activePoems": [
+            {"worker": 1, "poemId": "abc", "arabicLines": 64, "startedAt": (self.now - timedelta(minutes=12)).isoformat()},
+            {"worker": 2, "poemId": "def", "arabicLines": 4, "startedAt": (self.now - timedelta(minutes=1)).isoformat()},
+        ]}
+        report = health.summarize([], self.now, "inactive", "inactive", "inactive", "active", snapshot)
+        self.assertEqual(report["status"], "busy")
+        self.assertEqual(report["issues"], [])
+        self.assertEqual(report["poolConcurrency"], 10)
+        self.assertEqual(len(report["activePoolPoems"]), 2)
+        self.assertEqual(report["activePoolPoems"][0]["elapsedMinutes"], 12)
+
 
 if __name__ == "__main__":
     unittest.main()

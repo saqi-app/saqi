@@ -1,10 +1,10 @@
-#!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { pathToFileURL } from "node:url";
 
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
@@ -30,36 +30,61 @@ async function main() {
     throw new Error(
       "Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
     );
-  const preferredPoemId = process.argv[2];
+  return translateNext(process.argv[2]);
+}
+
+export async function translateNext(
+  preferredPoemId,
+  {
+    maxConcurrent = 1,
+    ownedPoemId,
+    remember = async () => {
+      /* The standalone runner recovers from canonical D1 state. */
+    },
+    generate = runCodex,
+  } = {},
+) {
   if (process.env.SAQI_RIG_ACTIVE !== "1")
     throw new Error(
       "Rig inactive: complete publication parity and set SAQI_RIG_ACTIVE=1",
     );
   await request({ action: "purge-cache" });
-  const active = await current();
+  const active =
+    maxConcurrent === 1 || ownedPoemId ? await current(ownedPoemId) : null;
   if (active?.status === "dispatching") {
     await recover(active);
+    await remember(null);
     return;
   }
   if (active?.status === "unknown") {
-    if (await recoverIfResultExists(active)) return;
+    if (await recoverIfResultExists(active)) {
+      await remember(null);
+      return;
+    }
   }
   if (active?.status === "claimed") {
     const checkpoint = JSON.parse(active.checkpointJson ?? "{}");
     if (checkpoint.outputs?.generation) {
       await publish(active);
+      await remember(null);
       return;
     }
   }
   const token = randomUUID();
+  await remember(null);
   const claimRequest = { action: "claim-poem", token };
-  if (preferredPoemId) claimRequest.poemId = preferredPoemId;
+  if (maxConcurrent > 1) claimRequest.maxConcurrent = maxConcurrent;
+  const targeted =
+    preferredPoemId ??
+    (active?.status === "claimed" ? active.poemId : undefined);
+  if (targeted) claimRequest.poemId = targeted;
   const claimResponse = await request(claimRequest);
   const claim = claimResponse.state;
   if (!claim) {
     process.stdout.write("No poem ready; a prior claim may still be live.\n");
     return;
   }
+  await remember(claim.poemId);
   const sourceResponse = await request({
     action: "source",
     poemId: claim.poemId,
@@ -85,7 +110,7 @@ async function main() {
   process.stdout.write(
     `Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`,
   );
-  const output = await runCodex(
+  const output = await generate(
     prompt,
     attemptId,
     source.linesArabic,
@@ -100,6 +125,7 @@ async function main() {
   });
   await removeOutput(attemptId);
   await publish(acknowledged.state);
+  await remember(null);
 }
 
 async function retryUnknown() {
@@ -372,9 +398,14 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
   return output;
 }
 
-try {
-  await main();
-} catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.message : error}\n`);
-  process.exitCode = 1;
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  try {
+    await main();
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : error}\n`);
+    process.exitCode = 1;
+  }
 }
