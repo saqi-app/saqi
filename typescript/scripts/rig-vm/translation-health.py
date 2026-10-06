@@ -126,7 +126,7 @@ def unit_state(unit):
 
 def main():
     now = datetime.now(timezone.utc)
-    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
+    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
     snapshot_path = Path("/home/saqi/.local/state/saqi/results/pool-health.json")
     snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else None
     report = summarize(

@@ -418,6 +418,120 @@ test("an acknowledged invalid output is retained without starving the next poem"
   ).resolves.toMatchObject({ poemId: "poem-2" });
 });
 
+test("a retained valid translation containing as an aid can be published with its current version", async () => {
+  const { publisher, sqlite } = fixture();
+  const line = "preparing a well-rope as an aid to draw from it.";
+  const checkpoint = JSON.stringify({
+    model: "gpt-6.1-sol",
+    reasoningEffort: "xhigh",
+    sourceHash: "a".repeat(64),
+    outputs: {
+      generation: { translation: { lines: [line] }, wordMeanings: [["verse"]] },
+    },
+  });
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'blocked', rig_version = 4, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(checkpoint);
+  await expect(publisher.publish("poem-1", 3)).resolves.toBe(false);
+  expect(
+    sqlite
+      .prepare(
+        "SELECT rig_version AS version, rig_checkpoint_json AS checkpoint FROM poem WHERE id = 'poem-1'"
+      )
+      .get()
+  ).toEqual({ version: 4, checkpoint });
+  await expect(publisher.publish("poem-1", 4)).resolves.toBe(true);
+  const row = sqlite
+    .prepare(
+      "SELECT rig_status AS status, rig_version AS version, rig_checkpoint_json AS checkpoint, publication_json AS publication FROM poem WHERE id = 'poem-1'"
+    )
+    .get() as {
+    status: string;
+    version: number;
+    checkpoint: null;
+    publication: string;
+  };
+  expect(row).toMatchObject({
+    status: "complete",
+    version: 5,
+    checkpoint: null,
+  });
+  expect(JSON.parse(row.publication)).toMatchObject({
+    active: true,
+    fields: {
+      modelEnrichments: [
+        { lines: [line], model: "gpt-6.1-sol", reasoningEffort: "xhigh" },
+      ],
+    },
+  });
+  await expect(publisher.publish("poem-1", 4)).resolves.toBe(false);
+});
+
+test.each([
+  "As an AI, I cannot interpret this poem.",
+  "As an AI: here is a summary.",
+])(
+  "a genuine AI disclaimer stays blocked on explicit retry: %s",
+  async (line) => {
+    const { publisher, repository, sqlite } = fixture();
+    const checkpoint = JSON.stringify({
+      model: "gpt-6.1-sol",
+      sourceHash: "a".repeat(64),
+      outputs: {
+        generation: {
+          translation: { lines: [line] },
+          wordMeanings: [["verse"]],
+        },
+      },
+    });
+    sqlite
+      .prepare(
+        "UPDATE poem SET rig_status = 'blocked', rig_version = 4, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+      )
+      .run(checkpoint);
+    await expect(publisher.publish("poem-1", 4)).resolves.toBe("blocked");
+    expect(
+      sqlite
+        .prepare(
+          "SELECT rig_status AS status, rig_checkpoint_json AS checkpoint, publication_json AS publication FROM poem WHERE id = 'poem-1'"
+        )
+        .get()
+    ).toEqual({ status: "blocked", checkpoint, publication: null });
+    await expect(
+      repository.claimNextPoem("11111111-1111-4111-8111-111111111111", 100)
+    ).resolves.toMatchObject({ poemId: "poem-2" });
+  }
+);
+
+test("an unknown paid result cannot be published by the blocked-result recovery path", async () => {
+  const { publisher, sqlite } = fixture();
+  const checkpoint = JSON.stringify({
+    model: "gpt-6.1-sol",
+    sourceHash: "a".repeat(64),
+    outputs: {
+      generation: {
+        translation: { lines: ["A verse"] },
+        wordMeanings: [["verse"]],
+      },
+    },
+  });
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'unknown', rig_version = 4, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(checkpoint);
+  await expect(publisher.publish("poem-1", 4)).resolves.toBe(false);
+  expect(
+    sqlite
+      .prepare(
+        "SELECT rig_status AS status, rig_checkpoint_json AS checkpoint, publication_json AS publication FROM poem WHERE id = 'poem-1'"
+      )
+      .get()
+  ).toEqual({ status: "unknown", checkpoint, publication: null });
+});
+
 const INSIGHTS = {
   summary: "A reading",
   themes: ["Memory"],
