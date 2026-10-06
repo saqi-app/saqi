@@ -7,6 +7,7 @@ import {
   publishedPoemUrl,
   purgePublicCorpus,
   purgePublishedPoem,
+  purgePublishedPoems,
 } from "../public-cache";
 
 const SECRET = "b".repeat(64);
@@ -197,4 +198,32 @@ describe("public cache invalidation", () => {
       expect.objectContaining({ body: '{"all":true}' })
     );
   });
+});
+
+it("batches multiple publication routes in one authenticated purge without forwarding hashes", async () => {
+  const transport = vi
+    .fn()
+    .mockResolvedValue(new Response(null, { status: 204 }));
+  const poems = [
+    { authorSlug: "poet", poemId: "one" },
+    { authorSlug: "poet", poemId: "two" },
+  ];
+  await purgePublishedPoems(
+    {
+      publicSite: PUBLIC_SITE,
+      publicOrigin: "https://saqi.app",
+      purgeSecret: SECRET,
+    },
+    poems,
+    transport
+  );
+  expect(transport).toHaveBeenCalledExactlyOnceWith(
+    "https://saqi.app/internal/purge-publication-cache",
+    expect.objectContaining({ body: JSON.stringify({ poems }) })
+  );
+  expect(
+    PublicCachePurgeRequestSchema.safeParse({
+      poems: Array.from({ length: 51 }, () => poems[0]),
+    }).success
+  ).toBe(false);
 });

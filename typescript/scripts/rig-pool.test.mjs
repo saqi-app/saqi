@@ -50,6 +50,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       let claims = 0;
       let scheduling = 0;
       let failedPurge = false;
+      let cacheCalls = 0;
       const ready = Promise.withResolvers();
       const http = createServer(async (request, response) => {
         response.setHeader("content-type", "application/json");
@@ -69,6 +70,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         let state = states.get(body.poemId);
         switch (body.action) {
           case "purge-cache": {
+            cacheCalls += 1;
             if (!failedPurge) {
               failedPurge = true;
               response.statusCode = 503;
@@ -138,6 +140,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
             break;
           }
           case "publish": {
+            assert.equal(body.deferCachePurge, true);
             assert.equal(body.expectedVersion, 3);
             state.status = "complete";
             state.version = 4;
@@ -200,6 +203,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         assert.equal(publications, concurrency);
         assert.equal(scheduling, 0);
         assert.equal(failedPurge, true);
+        assert.ok(
+          cacheCalls <= 2,
+          "Cache maintenance must be independent of poem throughput",
+        );
         const health = JSON.parse(
           await readFile(join(directory, "pool-health.json"), "utf8"),
         );

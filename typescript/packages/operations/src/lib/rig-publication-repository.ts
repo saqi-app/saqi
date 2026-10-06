@@ -5,6 +5,9 @@ import { z } from "zod";
 import { PublicationSnapshotSchema } from "../../../site/src/lib/publication-snapshot";
 import { RequiredSql } from "./rig-requirements";
 
+const ClearCacheDirtySql = `UPDATE poem SET publication_cache_dirty = 0
+       WHERE id = ?1 AND publication_hash IS ?2 AND source_hash = ?3`;
+
 const UnsafeControl =
   // eslint-disable-next-line no-control-regex -- These exact control characters cannot be published.
   /[\u{0000}-\u{0008}\u{000b}\u{000c}\u{000e}-\u{001f}\u{007f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
@@ -132,16 +135,40 @@ export class RigPublicationRepository {
       .first<PendingPurgeRoute>();
   }
 
+  async pendingPurges(): Promise<PendingPurgeRoute[]> {
+    const result = await this.#database
+      .prepare(
+        `SELECT p.id AS poemId, p.publication_hash AS publicationHash,
+        p.source_hash AS sourceHash, a.slug AS authorSlug
+       FROM poem p INDEXED BY poem_publication_cache_dirty
+       JOIN author a ON a.id = p.author_id
+       WHERE p.publication_cache_dirty = 1
+       ORDER BY p.id LIMIT 50`
+      )
+      .all<PendingPurgeRoute>();
+    return result.results;
+  }
+
+  async clearCacheDirtyBatch(
+    rows: readonly PendingPurgeRoute[]
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await this.#database.batch(
+      rows.map((row) =>
+        this.#database
+          .prepare(ClearCacheDirtySql)
+          .bind(row.poemId, row.publicationHash, row.sourceHash)
+      )
+    );
+  }
+
   async clearCacheDirty(
     poemId: string,
     publicationHash: null | string,
     sourceHash: string
   ): Promise<boolean> {
     const result = await this.#database
-      .prepare(
-        `UPDATE poem SET publication_cache_dirty = 0
-       WHERE id = ?1 AND publication_hash IS ?2 AND source_hash = ?3`
-      )
+      .prepare(ClearCacheDirtySql)
       .bind(poemId, publicationHash, sourceHash)
       .run();
     return result.meta.changes === 1;

@@ -13,6 +13,7 @@ import {
   PublicCacheInvalidationError,
   purgePublicCorpus,
   purgePublishedPoem,
+  purgePublishedPoems,
 } from "../lib/public-cache";
 import { RigPublicationRepository } from "../lib/rig-publication-repository";
 import { RigStateRepository } from "../lib/rig-state-repository";
@@ -58,6 +59,7 @@ const RequestSchema = z.discriminatedUnion("action", [
   }),
   z.strictObject({
     action: z.literal("publish"),
+    deferCachePurge: z.boolean().optional(),
     poemId: PoemIdSchema,
     expectedVersion: VersionSchema,
   }),
@@ -257,7 +259,7 @@ async function handlePublicationAction(
   >
 ): Promise<Response> {
   if (input.action === "purge-cache") {
-    const purged = await purgeDirtyPublication(env);
+    const purged = await purgeDirtyPublications(env);
     return purged !== "disabled"
       ? Response.json(
           { ok: true, purged: purged === "purged" },
@@ -273,8 +275,9 @@ async function handlePublicationAction(
   if (!changed) return failure(409, "RIG_PUBLICATION_CHANGED");
   let cachePurged = false;
   try {
-    cachePurged =
-      (await purgeDirtyPublication(env, input.poemId)) !== "disabled";
+    if (!input.deferCachePurge)
+      cachePurged =
+        (await purgeDirtyPublication(env, input.poemId)) !== "disabled";
   } catch {
     // The dirty bit persists so the next runner start retries the purge.
   }
@@ -286,6 +289,22 @@ async function handlePublicationAction(
     },
     { headers: NO_STORE_HEADERS }
   );
+}
+
+async function purgeDirtyPublications(
+  env: CloudflareEnv
+): Promise<"disabled" | "empty" | "purged"> {
+  const cache = publicCacheConfig(env);
+  if (cache.state === "disabled") return "disabled";
+  const repository = new RigPublicationRepository(env.DB);
+  const rows = await repository.pendingPurges();
+  if (!rows.length) return "empty";
+  await purgePublishedPoems(
+    cache.config,
+    rows.map(({ authorSlug, poemId }) => ({ authorSlug, poemId }))
+  );
+  await repository.clearCacheDirtyBatch(rows);
+  return "purged";
 }
 
 async function purgeDirtyPublication(

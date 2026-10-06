@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 
 import { parseCloudflareEnv } from "../lib/cloudflare";
+import { RigPublicationRepository } from "../lib/rig-publication-repository";
 import { get, post } from "./rig-state";
 
 test("inactive rig refuses mutation before reading D1", async () => {
@@ -302,3 +303,60 @@ test.each([
     );
   }
 );
+
+test("pooled publication can defer cache invalidation without dropping its dirty flag", async () => {
+  const publication = vi
+    .spyOn(RigPublicationRepository.prototype, "publish")
+    .mockResolvedValue(true);
+  const fetch = vi.fn();
+  const first = vi.fn().mockResolvedValue({
+    poemId: "poem-1",
+    status: "complete",
+    version: 4,
+    leaseToken: null,
+    leaseExpiresAt: null,
+    checkpointJson: null,
+  });
+  const prepare = vi
+    .fn()
+    .mockReturnValue({ bind: vi.fn().mockReturnValue({ first }) });
+  const env = parseCloudflareEnv({
+    DB: { prepare },
+    PUBLIC_SITE: { fetch },
+    SAQI_PUBLIC_CACHE_PURGE_SECRET: "a".repeat(64),
+    SAQI_PUBLIC_ORIGIN: "https://saqi.app",
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  try {
+    const response = await post(
+      new Request("https://ops.saqi.app/api/rig/state", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "ops.saqi.app",
+          origin: "https://ops.saqi.app",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+        },
+        body: JSON.stringify({
+          action: "publish",
+          poemId: "poem-1",
+          expectedVersion: 3,
+          deferCachePurge: true,
+        }),
+      }),
+      env
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      cachePending: true,
+      state: { status: "complete" },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(prepare).toHaveBeenCalledOnce();
+  } finally {
+    publication.mockRestore();
+  }
+});
