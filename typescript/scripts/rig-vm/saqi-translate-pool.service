@@ -1,5 +1,5 @@
 [Unit]
-Description=Saqi twenty-worker GPT-6.1 Sol xhigh translation pool
+Description=Saqi twenty-worker GPT-6.1 Sol xhigh Fast translation pool
 After=network-online.target saqi-codex-login.service
 Wants=network-online.target
 

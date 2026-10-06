@@ -348,7 +348,7 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
     "-c",
     `model_reasoning_effort="${reasoningEffort}"`,
     "-c",
-    'service_tier="default"',
+    'service_tier="fast"',
     "-c",
     'web_search="disabled"',
     "--disable",

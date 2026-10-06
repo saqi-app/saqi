@@ -44,7 +44,7 @@ process.on("SIGINT", () => {
 const server = new RigCodexServer();
 await server.initialize();
 process.stdout.write(
-  `Translation pool started: ${concurrency} workers; gpt-6.1-sol xhigh; standard speed.\n`,
+  `Translation pool started: ${concurrency} workers; gpt-6.1-sol xhigh; Fast speed.\n`,
 );
 const health = setInterval(
   () =>
@@ -123,6 +123,7 @@ async function worker(id) {
             arabicLines: lines.length,
             model: "gpt-6.1-sol",
             reasoningEffort: "xhigh",
+            serviceTier: "priority",
             startedAt: new Date().toISOString(),
           });
           await snapshot();
@@ -134,7 +135,7 @@ async function worker(id) {
             );
             const usage = metrics.usage;
             process.stdout.write(
-              `Codex usage: ${JSON.stringify(usage ? { input_tokens: usage.inputTokens, cached_input_tokens: usage.cachedInputTokens, output_tokens: usage.outputTokens, reasoning_output_tokens: usage.reasoningOutputTokens } : {})}\n`,
+              `Codex usage: ${JSON.stringify(usage ? { service_tier: "priority", input_tokens: usage.inputTokens, cached_input_tokens: usage.cachedInputTokens, output_tokens: usage.outputTokens, reasoning_output_tokens: usage.reasoningOutputTokens } : {})}\n`,
             );
             process.stdout.write(
               `Codex timing: ${JSON.stringify({ worker: id, poemId: ownedPoemId, ...metrics, usage: undefined })}\n`,
@@ -151,6 +152,7 @@ async function worker(id) {
                   poemId: ownedPoemId,
                   model: "gpt-6.1-sol",
                   reasoningEffort: "xhigh",
+                  serviceTier: "priority",
                   linesArabic: lines,
                   output,
                 }),

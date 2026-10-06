@@ -26,12 +26,13 @@ if ! test -e /home/saqi/.codex/config.toml; then
   cat >/home/saqi/.codex/config.toml <<'CONFIG'
 model = "gpt-6.1-sol"
 model_reasoning_effort = "xhigh"
-service_tier = "default"
+service_tier = "fast"
 cli_auth_credentials_store = "file"
 forced_login_method = "chatgpt"
 approval_policy = "never"
 sandbox_mode = "read-only"
 [features]
+fast_mode = true
 multi_agent = false
 shell_tool = false
 apps = false
