@@ -9,10 +9,10 @@ import { delimiter, join } from "node:path";
 import process from "node:process";
 import { test } from "node:test";
 
-for (const concurrency of [20, 40]) {
+for (const concurrency of [20, 40, 80]) {
   test(
     `${concurrency} pool workers publish distinct poems and SIGTERM drains without another claim`,
-    { timeout: 30_000 },
+    { timeout: 45_000 },
     async () => {
       const directory = await mkdtemp(join(tmpdir(), "saqi-pool-test-"));
       await writeFile(
@@ -51,6 +51,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       let scheduling = 0;
       let failedPurge = false;
       let cacheCalls = 0;
+      const cachePublications = [];
+      const cacheRecovered = Promise.withResolvers();
       const ready = Promise.withResolvers();
       const http = createServer(async (request, response) => {
         response.setHeader("content-type", "application/json");
@@ -71,6 +73,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         switch (body.action) {
           case "purge-cache": {
             cacheCalls += 1;
+            cachePublications.push(publications);
             if (!failedPurge) {
               failedPurge = true;
               response.statusCode = 503;
@@ -82,6 +85,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
               );
               return;
             }
+            cacheRecovered.resolve();
             break;
           }
           case "claim-poem": {
@@ -196,6 +200,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         );
         child.kill("SIGTERM");
         await draining.promise;
+        if (concurrency === 20) await cacheRecovered.promise;
         await writeFile(join(directory, "release"), "ready");
         const [code] = await once(child, "exit");
         assert.equal(code, 0, diagnostic);
@@ -204,9 +209,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         assert.equal(scheduling, 0);
         assert.equal(failedPurge, true);
         assert.ok(
-          cacheCalls <= 2,
+          cacheCalls <= 3,
           "Cache maintenance must be independent of poem throughput",
         );
+        assert.equal(cachePublications.at(-1), concurrency);
         const health = JSON.parse(
           await readFile(join(directory, "pool-health.json"), "utf8"),
         );

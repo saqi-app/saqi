@@ -26,7 +26,7 @@ const RequestSchema = z.discriminatedUnion("action", [
     action: z.literal("claim-poem"),
     token: TokenSchema,
     poemId: PoemIdSchema.optional(),
-    maxConcurrent: z.number().int().min(1).max(40).optional(),
+    maxConcurrent: z.number().int().min(1).max(80).optional(),
   }),
   z.strictObject({
     action: z.literal("source"),
