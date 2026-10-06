@@ -15,10 +15,10 @@ export async function handlePublicCachePurge(
   secret: string | undefined,
   purge: (
     tags: string[],
-  ) => Promise<{
-    success: boolean;
-    errors?: { code: number; message: string }[];
-  }>,
+  ) => Promise<
+    | { success: true }
+    | { success: false; errors?: { code: number; message: string }[] }
+  >,
 ): Promise<Response | undefined> {
   if (new URL(request.url).pathname !== PURGE_PATH) return undefined;
   if (

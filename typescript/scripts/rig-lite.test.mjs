@@ -146,7 +146,7 @@ test("a durable Codex result is acknowledged and published after restart without
   };
   await writeFile(outputPath, JSON.stringify(output));
   try {
-    const run = await exerciseUnknown(attemptId, script, [], "82");
+    const run = await exerciseUnknown(attemptId);
     assert.equal(run.code, 0, run.stderr);
     assert.deepEqual(run.actions, ["purge-cache", "acknowledge", "publish"]);
     assert.equal(run.codexCalled, false);
@@ -347,7 +347,7 @@ async function exerciseUnknown(attemptId, entry = script, args = []) {
 }
 
 async function runScript(environment, entry = script, args = []) {
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entry.pathname, ...args], {
       env: { ...process.env, ...environment },
       stdio: ["ignore", "pipe", "pipe"],

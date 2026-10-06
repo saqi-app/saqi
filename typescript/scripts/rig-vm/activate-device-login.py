@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Activate a staged Codex login at a translation boundary without SSH."""
 
 import base64
 import json
