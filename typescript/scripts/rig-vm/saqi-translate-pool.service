@@ -1,0 +1,25 @@
+[Unit]
+Description=Saqi ten-worker GPT-6.1 Sol xhigh translation pool
+After=network-online.target saqi-codex-login.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=saqi
+Group=saqi
+WorkingDirectory=/home/saqi/work/saqi
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=SAQI_RIG_ACTIVE=1
+Environment=SAQI_RIG_CONCURRENCY=10
+Environment=SAQI_RIG_RESULT_DIR=/home/saqi/.local/state/saqi/results
+EnvironmentFile=/home/saqi/.config/saqi/access.env
+ExecStart=/usr/local/bin/node /home/saqi/work/saqi/typescript/scripts/rig-pool.mjs
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=infinity
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

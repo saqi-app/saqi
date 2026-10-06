@@ -90,9 +90,20 @@ export class RigStateRepository {
   async claimNextPoem(
     token: string,
     now: number,
-    preferredPoemId?: string
+    preferredPoemId?: string,
+    maxConcurrent = 1
   ): Promise<null | RigStateRow> {
     TokenSchema.parse(token);
+    z.number().int().min(1).max(10).parse(maxConcurrent);
+    if (maxConcurrent > 1) {
+      const candidate =
+        preferredPoemId ??
+        (await this.#nextRetryPoem()) ??
+        (await this.#nextDuePoem(now));
+      return candidate
+        ? this.#claimPoem(candidate, token, now, maxConcurrent)
+        : null;
+    }
     const current = await this.currentEnrichment();
     // An unknown result stays on its own poem for exact recovery or review.
     // It cannot be claimed again, but it must not freeze unrelated poems.
@@ -278,7 +289,8 @@ export class RigStateRepository {
   async #claimPoem(
     poemId: string,
     token: string,
-    now: number
+    now: number,
+    maxConcurrent = 1
   ): Promise<null | RigStateRow> {
     const claimed = await this.#database
       .prepare(
@@ -298,15 +310,16 @@ export class RigStateRepository {
            AND (rig_status IS NULL OR rig_status IN ('retry', 'complete')
              OR (rig_status = 'claimed' AND
                (rig_lease_expires_at IS NULL OR rig_lease_expires_at <= ?2)))
-           AND NOT EXISTS (
-             SELECT 1 FROM poem active
-             WHERE active.rig_status = 'dispatching'
-               OR (active.rig_status = 'claimed' AND active.id <> poem.id
-                 AND active.rig_lease_expires_at > ?2)
-           )
+           AND (
+             SELECT count(*) FROM poem active INDEXED BY poem_rig_active
+             WHERE active.rig_status IN ('claimed', 'dispatching', 'unknown')
+               AND (active.rig_status = 'dispatching'
+                 OR (active.rig_status = 'claimed' AND active.id <> poem.id
+                   AND active.rig_lease_expires_at > ?2))
+           ) < ?4
          RETURNING id`
       )
-      .bind(token, now, poemId)
+      .bind(token, now, poemId, maxConcurrent)
       .first<{ id: string }>();
     return claimed ? this.read(claimed.id) : null;
   }

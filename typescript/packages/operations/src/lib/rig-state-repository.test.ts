@@ -568,3 +568,78 @@ test("gloss-only publication preserves English and drops legacy insights", async
   expect(published.insights).toBeUndefined();
   expect(published.modelEnrichments).toHaveLength(1);
 });
+
+test("concurrent claims atomically enforce ten slots and distinct poems", async () => {
+  const { repository, sqlite } = fixture();
+  for (let index = 3; index <= 25; index += 1) {
+    sqlite
+      .prepare(
+        `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,source_hash)
+      VALUES(?,0,1,'author-1','قصيدة','{"content":["بيت"]}',?)`
+      )
+      .run(`poem-${String(index)}`, "c".repeat(64));
+  }
+  const claimed = new Set<string>();
+  for (let round = 0; round < 15; round += 1) {
+    const results = await Promise.all(
+      Array.from({ length: 15 }, (_, index) =>
+        repository.claimNextPoem(
+          `11111111-1111-4111-8111-${String(round * 15 + index).padStart(12, "0")}`,
+          100,
+          undefined,
+          10
+        )
+      )
+    );
+    for (const result of results) {
+      if (result) {
+        expect(claimed.has(result.poemId)).toBe(false);
+        claimed.add(result.poemId);
+      }
+    }
+  }
+  expect(claimed.size).toBe(10);
+  expect(
+    sqlite
+      .prepare(
+        "SELECT count(*) AS count FROM poem WHERE rig_status = 'claimed'"
+      )
+      .get()
+  ).toEqual({ count: 10 });
+});
+
+test("ten-worker mode cannot duplicate a targeted poem or reclaim dispatched work", async () => {
+  const { repository, sqlite } = fixture();
+  const results = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      repository.claimNextPoem(
+        `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`,
+        100,
+        "poem-1",
+        10
+      )
+    )
+  );
+  expect(results.filter((result) => result !== null)).toHaveLength(1);
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'dispatching', rig_lease_expires_at = 200 WHERE id = 'poem-1'"
+    )
+    .run();
+  await expect(
+    repository.claimNextPoem(
+      "22222222-2222-4222-8222-222222222222",
+      201,
+      "poem-1",
+      10
+    )
+  ).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(
+      "22222222-2222-4222-8222-222222222222",
+      201,
+      undefined,
+      10
+    )
+  ).resolves.toMatchObject({ poemId: "poem-2" });
+});

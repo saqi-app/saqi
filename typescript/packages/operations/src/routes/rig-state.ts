@@ -24,6 +24,7 @@ const RequestSchema = z.discriminatedUnion("action", [
     action: z.literal("claim-poem"),
     token: TokenSchema,
     poemId: PoemIdSchema.optional(),
+    maxConcurrent: z.number().int().min(1).max(10).optional(),
   }),
   z.strictObject({
     action: z.literal("source"),
@@ -117,7 +118,8 @@ export async function post(
         const claimed = await state.claimNextPoem(
           input.token,
           now,
-          input.poemId
+          input.poemId,
+          input.maxConcurrent
         );
         return Response.json(
           { ok: true, state: claimed },

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import json
+from pathlib import Path
 import re
 import statistics
 import subprocess
@@ -17,7 +18,8 @@ def publication_history(records, now):
         match = re.fullmatch(r"Translating ([0-9a-f-]+): (\d+) Arabic lines \(([^)]+)\)", message)
         if match:
             invocation = {"poemId": match[1], "arabicLines": int(match[2]), "model": match[3], "startedAt": timestamp}
-            history["latest"] = invocation
+            if record.get("_SYSTEMD_UNIT") != "saqi-translate-pool.service":
+                history["latest"] = invocation
             history["starts"][match[1]] = invocation
         if re.fullmatch(r"Published [0-9a-f-]+", message):
             history["completed"][message.split()[1]] = timestamp
@@ -54,23 +56,41 @@ def flow_health(current, failures, units):
         issues.append("translation service failures in the last 20 minutes")
     if current is not None and current["elapsedMinutes"] >= 60:
         issues.append("current poem has been running for at least 60 minutes; inspect before retrying")
-    if units["timer"] != "active" and units["login"] not in BUSY_STATES:
+    if units["timer"] != "active" and units["login"] not in BUSY_STATES and units.get("pool") != "active":
         issues.append("translation timer is not active")
+    if units.get("pool") == "failed":
+        issues.append("translation pool is failed")
     if units["service"] == "failed":
         issues.append("translation service is failed")
     if issues:
         return "attention", issues
     if units["login"] in BUSY_STATES:
         return "maintenance", issues
-    if units["service"] in BUSY_STATES:
+    if units["service"] in BUSY_STATES or units.get("pool") == "active":
         return "busy", issues
     return "idle", issues
 
 
-def summarize(records, now, service, timer, login):
+def summarize(records, now, service, timer, login, pool="inactive", snapshot=None):
     history = publication_history(records, now)
     current = current_invocation(history["latest"], now, service)
-    status, issues = flow_health(current, history["failures"], {"service": service, "timer": timer, "login": login})
+    status, issues = flow_health(current, history["failures"], {"service": service, "timer": timer, "login": login, "pool": pool})
+    active = []
+    if pool == "active" and not snapshot:
+        issues.append("translation pool snapshot is missing")
+        status = "attention"
+    if pool == "active" and snapshot:
+        for invocation in snapshot.get("activePoems", []):
+            started = datetime.fromisoformat(invocation["startedAt"])
+            active.append({**invocation, "elapsedMinutes": round((now - started).total_seconds() / 60, 1)})
+        if now - datetime.fromisoformat(snapshot["checkedAt"]) > timedelta(seconds=60):
+            issues.append("translation pool snapshot is stale")
+        if any(item["elapsedMinutes"] >= 60 for item in active):
+            issues.append("a pool poem has been running for at least 60 minutes; inspect before retrying")
+        if snapshot.get("pausedWorkers"):
+            issues.append("translation workers require recovery; inspect their metadata")
+        if issues:
+            status = "attention"
     return {
         "checkedAt": now.isoformat(),
         "status": status,
@@ -80,6 +100,10 @@ def summarize(records, now, service, timer, login):
         "translationService": service,
         "translationTimer": timer,
         "loginActivation": login,
+        "poolService": pool,
+        "poolConcurrency": snapshot.get("concurrency") if snapshot else None,
+        "activePoolPoems": active,
+        "pausedWorkers": snapshot.get("pausedWorkers", []) if snapshot else [],
     }
 
 
@@ -89,13 +113,17 @@ def unit_state(unit):
 
 def main():
     now = datetime.now(timezone.utc)
-    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
+    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
+    snapshot_path = Path("/home/saqi/.local/state/saqi/results/pool-health.json")
+    snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else None
     report = summarize(
         [json.loads(line) for line in journal.splitlines()],
         now,
         unit_state("saqi-translate.service"),
         unit_state("saqi-translate.timer"),
         unit_state("saqi-codex-login.service"),
+        unit_state("saqi-translate-pool.service"),
+        snapshot,
     )
     print(json.dumps(report), flush=True)
     if report["issues"]:
