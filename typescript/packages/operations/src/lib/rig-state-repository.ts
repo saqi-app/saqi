@@ -99,7 +99,7 @@ export class RigStateRepository {
       const candidate =
         preferredPoemId ??
         (await this.#nextRetryPoem()) ??
-        (await this.#nextDuePoem(now));
+        (await this.#nextDuePoem(now, maxConcurrent));
       return candidate
         ? this.#claimPoem(candidate, token, now, maxConcurrent)
         : null;
@@ -266,7 +266,7 @@ export class RigStateRepository {
     return candidate?.id ?? null;
   }
 
-  async #nextDuePoem(now: number): Promise<null | string> {
+  async #nextDuePoem(now: number, maxConcurrent = 1): Promise<null | string> {
     const candidate = await this.#database
       .prepare(
         `SELECT p.id FROM poem p
@@ -279,9 +279,11 @@ export class RigStateRepository {
              OR (p.rig_status = 'claimed'
                AND (p.rig_lease_expires_at IS NULL
                  OR p.rig_lease_expires_at <= ?1)))
+         AND (?2 = 1 OR p.rig_status IS NOT 'claimed'
+           OR json_extract(p.rig_checkpoint_json, '$.phase') = 'generation')
          ORDER BY ${EnrichmentPrioritySql}, p.id LIMIT 1`
       )
-      .bind(now)
+      .bind(now, maxConcurrent)
       .first<{ id: string }>();
     return candidate?.id ?? null;
   }
@@ -310,6 +312,8 @@ export class RigStateRepository {
            AND (rig_status IS NULL OR rig_status IN ('retry', 'complete')
              OR (rig_status = 'claimed' AND
                (rig_lease_expires_at IS NULL OR rig_lease_expires_at <= ?2)))
+           AND (?4 = 1 OR rig_status IS NOT 'claimed'
+             OR json_extract(rig_checkpoint_json, '$.phase') = 'generation')
            AND (
              SELECT count(*) FROM poem active INDEXED BY poem_rig_active
              WHERE active.rig_status IN ('claimed', 'dispatching', 'unknown')
