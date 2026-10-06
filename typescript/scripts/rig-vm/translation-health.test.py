@@ -31,6 +31,15 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["status"], "idle")
         self.assertNotIn("private", str(report))
 
+    def test_explicit_publication_repair_counts_without_a_second_paid_generation(self):
+        repaired = self.record(1, "Published abc (cache purge pending)")
+        repaired["_SYSTEMD_UNIT"] = "saqi-publication-repair.service"
+        records = [self.record(30, "Translating abc: 184 Arabic lines (gpt-6.1-sol)"), repaired]
+        report = health.summarize(records, self.now, "inactive", "inactive", "inactive")
+        self.assertEqual(report["publishedLast20Minutes"], 1)
+        self.assertEqual(report["arabicLinesPublishedLastHour"], 184)
+        self.assertEqual(report["publishedLast24Hours"], 1)
+
     def test_login_handoff_pause_is_maintenance_and_does_not_raise_a_timer_alarm(self):
         report = health.summarize([self.record(30, "Translating abc: 270 Arabic lines (gpt-6.1-sol)")], self.now, "activating", "inactive", "activating")
         self.assertEqual(report["status"], "maintenance")

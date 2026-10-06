@@ -16,7 +16,7 @@ const SafeLineSchema = z
   .max(5_000)
   .refine((line) => !UnsafeControl.test(line));
 const GeneratedFailure =
-  /(?:roses are red|unable to translate|cannot translate|can't translate|i(?:'| a)m sorry.{0,80}translat|as an ai|translation guidelines|translate the following|provide (?:a )?summary instead)/iu;
+  /(?:roses are red|unable to translate|cannot translate|can't translate|i(?:'| a)m sorry.{0,80}translat|as an ai\b|translation guidelines|translate the following|provide (?:a )?summary instead)/iu;
 const TranslatedLineSchema = SafeLineSchema.refine(
   (line) => !GeneratedFailure.test(line)
 );
@@ -53,7 +53,7 @@ const SourceSchema = z.object({
 const PublishRowSchema = z.object({
   publicationJson: z.string().nullable(),
   publicationHash: z.string().nullable(),
-  status: z.literal("claimed"),
+  status: z.enum(["claimed", "blocked"]),
   checkpointJson: z.string(),
   contentArabic: z.string(),
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -222,7 +222,7 @@ export class RigPublicationRepository {
           `UPDATE poem
         SET rig_status = 'blocked', rig_version = rig_version + 1,
             rig_lease_token = NULL, rig_lease_expires_at = NULL
-        WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
+        WHERE id = ?1 AND rig_status IN ('claimed', 'blocked') AND rig_version = ?2
           AND rig_checkpoint_json IS NOT NULL`
         )
         .bind(poemId, expectedVersion)
@@ -259,7 +259,7 @@ export class RigPublicationRepository {
           `UPDATE poem SET rig_status = 'retry',
         rig_version = rig_version + 1, rig_lease_token = NULL,
         rig_lease_expires_at = NULL
-        WHERE id = ?1 AND rig_status = 'claimed' AND rig_version = ?2
+        WHERE id = ?1 AND rig_status IN ('claimed', 'blocked') AND rig_version = ?2
           AND rig_checkpoint_json = ?3`
         )
         .bind(poemId, expectedVersion, row.checkpointJson)
@@ -317,7 +317,7 @@ export class RigPublicationRepository {
            rig_version = rig_version + 1,
            rig_checkpoint_json = NULL, rig_lease_token = NULL,
            rig_lease_expires_at = NULL
-       WHERE id = ?4 AND rig_status = 'claimed' AND rig_version = ?5
+       WHERE id = ?4 AND rig_status IN ('claimed', 'blocked') AND rig_version = ?5
          AND source_hash = ?2 AND rig_checkpoint_json = ?6
          AND publication_hash IS ?7`
       )
