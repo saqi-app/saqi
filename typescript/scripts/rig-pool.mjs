@@ -36,13 +36,6 @@ const sampledWindows = new Set();
 let stopping = false;
 let scheduling = Promise.resolve();
 
-async function acquireScheduling() {
-  const previous = scheduling;
-  const next = Promise.withResolvers();
-  scheduling = next.promise;
-  await previous;
-  return next.resolve;
-}
 process.on("SIGTERM", () => {
   stopping = true;
   process.stdout.write("Pool draining; no new poems will be claimed.\n");
@@ -202,4 +195,12 @@ async function worker(id) {
     // eslint-disable-next-line no-await-in-loop -- Backoff is per worker and must not create overlapping invocations.
     await delay(5_000);
   }
+}
+
+async function acquireScheduling() {
+  const previous = scheduling;
+  const next = Promise.withResolvers();
+  scheduling = next.promise;
+  await previous;
+  return next.resolve;
 }
