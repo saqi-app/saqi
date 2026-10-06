@@ -19,7 +19,7 @@ function fixture() {
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(`
     CREATE TABLE author(id TEXT PRIMARY KEY, name_arabic TEXT NOT NULL,
-      hidden INTEGER NOT NULL DEFAULT 0);
+      hidden INTEGER NOT NULL DEFAULT 0, slug TEXT NOT NULL DEFAULT 'poet');
     CREATE TABLE poem(id TEXT PRIMARY KEY, hidden INTEGER NOT NULL,
       publishable INTEGER NOT NULL, author_id TEXT,
       name_arabic TEXT NOT NULL, content_arabic TEXT NOT NULL);
@@ -569,44 +569,47 @@ test("gloss-only publication preserves English and drops legacy insights", async
   expect(published.modelEnrichments).toHaveLength(1);
 });
 
-test("concurrent claims atomically enforce ten slots and distinct poems", async () => {
-  const { repository, sqlite } = fixture();
-  for (let index = 3; index <= 25; index += 1) {
-    sqlite
-      .prepare(
-        `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,source_hash)
+test.each([10, 20])(
+  "concurrent claims atomically enforce %i slots and distinct poems",
+  async (maxConcurrent) => {
+    const { repository, sqlite } = fixture();
+    for (let index = 3; index <= 25; index += 1) {
+      sqlite
+        .prepare(
+          `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,source_hash)
       VALUES(?,0,1,'author-1','قصيدة','{"content":["بيت"]}',?)`
-      )
-      .run(`poem-${String(index)}`, "c".repeat(64));
-  }
-  const claimed = new Set<string>();
-  for (let round = 0; round < 15; round += 1) {
-    const results = await Promise.all(
-      Array.from({ length: 15 }, (_, index) =>
-        repository.claimNextPoem(
-          `11111111-1111-4111-8111-${String(round * 15 + index).padStart(12, "0")}`,
-          100,
-          undefined,
-          10
         )
-      )
-    );
-    for (const result of results) {
-      if (result) {
-        expect(claimed.has(result.poemId)).toBe(false);
-        claimed.add(result.poemId);
+        .run(`poem-${String(index)}`, "c".repeat(64));
+    }
+    const claimed = new Set<string>();
+    for (let round = 0; round < maxConcurrent + 5; round += 1) {
+      const results = await Promise.all(
+        Array.from({ length: maxConcurrent + 5 }, (_, index) =>
+          repository.claimNextPoem(
+            `11111111-1111-4111-8111-${String(round * (maxConcurrent + 5) + index).padStart(12, "0")}`,
+            100,
+            undefined,
+            maxConcurrent
+          )
+        )
+      );
+      for (const result of results) {
+        if (result) {
+          expect(claimed.has(result.poemId)).toBe(false);
+          claimed.add(result.poemId);
+        }
       }
     }
+    expect(claimed.size).toBe(maxConcurrent);
+    expect(
+      sqlite
+        .prepare(
+          "SELECT count(*) AS count FROM poem WHERE rig_status = 'claimed'"
+        )
+        .get()
+    ).toEqual({ count: maxConcurrent });
   }
-  expect(claimed.size).toBe(10);
-  expect(
-    sqlite
-      .prepare(
-        "SELECT count(*) AS count FROM poem WHERE rig_status = 'claimed'"
-      )
-      .get()
-  ).toEqual({ count: 10 });
-});
+);
 
 test("ten-worker mode cannot duplicate a targeted poem or reclaim dispatched work", async () => {
   const { repository, sqlite } = fixture();
@@ -674,4 +677,66 @@ test("concurrent claims leave acknowledged output with its publisher", async () 
     checkpointJson: checkpoint,
   });
   await expect(publisher.publish("poem-1", 3)).resolves.toBe(true);
+});
+
+test("publication verification reads the actual snapshot and cache state", async () => {
+  const { publisher, sqlite } = fixture();
+  await expect(publisher.readPublication("poem-1")).resolves.toBeNull();
+  const checkpoint = JSON.stringify({
+    phase: "publish",
+    sourceHash: "a".repeat(64),
+    model: "gpt-6.1-sol",
+    reasoningEffort: "xhigh",
+    outputs: {
+      generation: {
+        translation: { lines: ["A verse"] },
+        wordMeanings: [["verse"]],
+      },
+    },
+  });
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'claimed', rig_version = 3, rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(checkpoint);
+  await expect(publisher.publish("poem-1", 3)).resolves.toBe(true);
+  const published = await publisher.readPublication("poem-1");
+  expect(published).toMatchObject({
+    authorSlug: "poet",
+    sourceHash: "a".repeat(64),
+    publicationSourceHash: "a".repeat(64),
+    cacheDirty: 1,
+    snapshot: {
+      active: true,
+      fields: {
+        modelEnrichments: [
+          {
+            modelKey: "saqi-current",
+            model: "gpt-6.1-sol",
+            reasoningEffort: "xhigh",
+            lines: ["A verse"],
+          },
+        ],
+        wordGlosses: {
+          sourceHash: "a".repeat(64),
+          meanings: {
+            lines: [
+              { lineIndex: 0, segments: [{ kind: "word", meaning: "verse" }] },
+            ],
+          },
+        },
+      },
+    },
+  });
+  expect(published?.publicationHash).toMatch(/^[a-f0-9]{64}$/);
+  await expect(
+    publisher.clearCacheDirty(
+      "poem-1",
+      published!.publicationHash,
+      "a".repeat(64)
+    )
+  ).resolves.toBe(true);
+  await expect(publisher.readPublication("poem-1")).resolves.toMatchObject({
+    cacheDirty: 0,
+  });
 });

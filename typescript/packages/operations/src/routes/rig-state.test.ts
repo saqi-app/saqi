@@ -1,7 +1,7 @@
 import { expect, test, vi } from "vitest";
 
 import { parseCloudflareEnv } from "../lib/cloudflare";
-import { post } from "./rig-state";
+import { get, post } from "./rig-state";
 
 test("inactive rig refuses mutation before reading D1", async () => {
   const prepare = vi.fn();
@@ -99,3 +99,205 @@ test("cache configuration failures keep their actionable code", async () => {
     code: "PUBLIC_CACHE_CONFIG_INVALID",
   });
 });
+
+test.each([false, true])(
+  "publication verification is an opt-in canonical read (%s)",
+  async (includePublication) => {
+    const prepare = vi.fn((sql: string) => {
+      const first = vi.fn().mockResolvedValue(
+        sql.includes("publication_source_hash")
+          ? {
+              authorSlug: "poet",
+              sourceHash: "a".repeat(64),
+              publicationSourceHash: "a".repeat(64),
+              publicationHash: "b".repeat(64),
+              cacheDirty: 0,
+              publicationJson: JSON.stringify({
+                schemaVersion: 2,
+                active: true,
+                fields: {},
+              }),
+            }
+          : {
+              poemId: "poem-1",
+              status: "complete",
+              version: 4,
+              leaseToken: null,
+              leaseExpiresAt: null,
+              checkpointJson: null,
+            }
+      );
+      return { bind: vi.fn().mockReturnValue({ first }) };
+    });
+    const env = parseCloudflareEnv({
+      DB: { prepare },
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+    });
+    const response = await get(
+      new Request(
+        `https://ops.saqi.app/api/rig/state?poemId=poem-1${
+          includePublication ? "&publication=1" : ""
+        }`
+      ),
+      env
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ state: { status: "complete" } });
+    if (includePublication)
+      expect(body).toMatchObject({
+        publication: {
+          authorSlug: "poet",
+          cacheDirty: 0,
+          snapshot: { active: true },
+        },
+      });
+    else expect(body).not.toHaveProperty("publication");
+    expect(prepare).toHaveBeenCalledTimes(includePublication ? 2 : 1);
+  }
+);
+
+test.each([
+  [20, 200],
+  [21, 400],
+])(
+  "concurrent claim limit %i returns HTTP %i",
+  async (maxConcurrent, expectedStatus) => {
+    const first = vi.fn().mockResolvedValue(null);
+    const prepare = vi
+      .fn()
+      .mockReturnValue({ bind: vi.fn().mockReturnValue({ first }), first });
+    const env = parseCloudflareEnv({
+      DB: { prepare },
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+    });
+    const response = await post(
+      new Request("https://ops.saqi.app/api/rig/state", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "ops.saqi.app",
+          origin: "https://ops.saqi.app",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+        },
+        body: JSON.stringify({
+          action: "claim-poem",
+          token: crypto.randomUUID(),
+          maxConcurrent,
+        }),
+      }),
+      env
+    );
+    expect(response.status).toBe(expectedStatus);
+    if (expectedStatus === 400) expect(prepare).not.toHaveBeenCalled();
+  }
+);
+
+test.each([
+  [true, false],
+  [false, false],
+  [true, true],
+  [false, true],
+])(
+  "publication check tests deployed escaped content (fresh=%s, legacy=%s)",
+  async (freshPage, legacyTranslation) => {
+    const snapshot = {
+      schemaVersion: 2,
+      active: true,
+      fields: {
+        ...(legacyTranslation
+          ? { linesEnglish: ["Bread & wine"], linesEnglishModel: "claude-2" }
+          : {
+              modelEnrichments: [
+                {
+                  lines: ["Bread & wine"],
+                  model: "gpt-6.1-sol",
+                  modelKey: "saqi-current",
+                  reasoningEffort: "xhigh",
+                  vendorKey: "openai",
+                },
+              ],
+            }),
+        wordGlosses: {
+          sourceHash: "a".repeat(64),
+          model: "gpt-6.1-sol",
+          meanings: {
+            tokenizerVersion: "saqi-orthographic-v1",
+            lines: [
+              {
+                lineIndex: 0,
+                segments: [
+                  {
+                    kind: "word",
+                    surface: "خبز",
+                    tokenIndex: 0,
+                    meaning: 'bread "loaf"',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn().mockReturnValue({
+        first: vi.fn().mockResolvedValue(
+          sql.includes("publication_source_hash")
+            ? {
+                authorSlug: "poet",
+                sourceHash: "a".repeat(64),
+                publicationSourceHash: "a".repeat(64),
+                publicationHash: "b".repeat(64),
+                cacheDirty: 0,
+                publicationJson: JSON.stringify(snapshot),
+              }
+            : {
+                poemId: "poem-1",
+                status: "complete",
+                version: 4,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                checkpointJson: null,
+              }
+        ),
+      }),
+    }));
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          freshPage
+            ? '<p>Bread &amp; wine</p><button data-word-meaning="bread &quot;loaf&quot;">خبز</button>'
+            : "<p>Old translation</p>",
+          { status: 200 }
+        )
+      );
+    const env = parseCloudflareEnv({
+      DB: { prepare },
+      PUBLIC_SITE: { fetch },
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+    });
+    const response = await get(
+      new Request(
+        "https://ops.saqi.app/api/rig/state?poemId=poem-1&publication=1"
+      ),
+      env
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      publicPage: {
+        status: 200,
+        translationMatches: freshPage,
+        wordMeaningsMatch: freshPage,
+      },
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://saqi.app/author/poet/poem/poem-1"
+    );
+  }
+);

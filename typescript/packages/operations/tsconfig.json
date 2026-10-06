@@ -11,7 +11,8 @@
     "src/**/*.ts",
     "vitest.config.ts",
     "../site/src/lib/publication-snapshot.ts",
-    "../site/src/lib/snapshot-contract.ts"
+    "../site/src/lib/snapshot-contract.ts",
+    "../site/src/lib/poem-translations.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "references": [
