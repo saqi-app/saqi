@@ -48,6 +48,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       let dispatches = 0;
       let publications = 0;
       let claims = 0;
+      let scheduling = 0;
+      let failedPurge = false;
       const ready = Promise.withResolvers();
       const http = createServer(async (request, response) => {
         response.setHeader("content-type", "application/json");
@@ -66,7 +68,27 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         );
         let state = states.get(body.poemId);
         switch (body.action) {
+          case "purge-cache": {
+            if (!failedPurge) {
+              failedPurge = true;
+              response.statusCode = 503;
+              response.end(
+                JSON.stringify({
+                  ok: false,
+                  code: "TEST_TRANSIENT_QUEUE_ERROR",
+                }),
+              );
+              return;
+            }
+            break;
+          }
           case "claim-poem": {
+            scheduling += 1;
+            assert.equal(
+              scheduling,
+              1,
+              "Queue setup must be serial while model turns run concurrently",
+            );
             assert.equal(body.maxConcurrent, concurrency);
             claims += 1;
             state = {
@@ -93,6 +115,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
             return;
           }
           case "dispatch": {
+            scheduling -= 1;
             assert.equal(body.reasoningEffort, "xhigh");
             state.status = "dispatching";
             state.version = 2;
@@ -175,6 +198,8 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         assert.equal(code, 0, diagnostic);
         assert.equal(claims, concurrency);
         assert.equal(publications, concurrency);
+        assert.equal(scheduling, 0);
+        assert.equal(failedPurge, true);
         const health = JSON.parse(
           await readFile(join(directory, "pool-health.json"), "utf8"),
         );
