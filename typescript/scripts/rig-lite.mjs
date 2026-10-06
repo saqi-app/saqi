@@ -12,6 +12,7 @@ import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
 const model = process.env.SAQI_RIG_MODEL ?? "gpt-6.1-sol";
+const reasoningEffort = "xhigh";
 const clientId = process.env.CF_ACCESS_CLIENT_ID;
 const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 if (!clientId || !clientSecret)
@@ -69,7 +70,7 @@ async function main() {
   const attemptId = randomUUID();
   const inputHash = createHash("sha256").update(prompt).digest("hex");
   process.stdout.write(
-    `Model: ${model}; reasoning: high; fields: ${(source.required ?? ["translation", "wordMeanings"]).join(", ")}\n`,
+    `Model: ${model}; reasoning: ${reasoningEffort}; fields: ${(source.required ?? ["translation", "wordMeanings"]).join(", ")}\n`,
   );
   const dispatched = await request({
     action: "dispatch",
@@ -79,7 +80,7 @@ async function main() {
     attemptId,
     inputHash,
     model,
-    reasoningEffort: "high",
+    reasoningEffort,
   });
   process.stdout.write(
     `Translating ${claim.poemId}: ${source.linesArabic.length} Arabic lines (${model})\n`,
@@ -319,7 +320,7 @@ async function runWithSchema(prompt, attemptId, invocationSchema) {
     "-c",
     'approval_policy="never"',
     "-c",
-    'model_reasoning_effort="high"',
+    `model_reasoning_effort="${reasoningEffort}"`,
     "-c",
     'service_tier="default"',
     "-c",

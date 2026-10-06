@@ -150,10 +150,14 @@ async function sendCachePurge(
     const parsed = PurgeFailureSchema.safeParse(
       await response.json?.().catch(() => null)
     );
-    throw new PublicCacheInvalidationError("PUBLIC_CACHE_PURGE_REJECTED", {
+    const details: NonNullable<PublicCacheInvalidationError["details"]> = {
       status: response.status,
-      ...(parsed.success ? { errors: parsed.data.errors } : {}),
-    });
+    };
+    if (parsed.success) details.errors = parsed.data.errors;
+    throw new PublicCacheInvalidationError(
+      "PUBLIC_CACHE_PURGE_REJECTED",
+      details
+    );
   }
 }
 

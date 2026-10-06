@@ -1,9 +1,9 @@
 [Unit]
-Description=Continue Saqi translations 30 seconds after each completed invocation
+Description=Continue Saqi translations 5 seconds after each completed invocation
 
 [Timer]
 OnBootSec=30s
-OnUnitInactiveSec=30s
+OnUnitInactiveSec=5s
 AccuracySec=1s
 Unit=saqi-translate.service
 

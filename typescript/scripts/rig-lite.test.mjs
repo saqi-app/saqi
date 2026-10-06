@@ -27,7 +27,7 @@ test(
 {
 const fs = require("node:fs");
 require("node:assert/strict").equal(process.argv[process.argv.indexOf("--model") + 1], "gpt-6.1-sol");
-require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="high"'));
+require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="xhigh"'));
 require("node:assert/strict").ok(process.argv.includes('service_tier="default"'));
 process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:100,cached_input_tokens:40,output_tokens:200}}) + "\n");
 fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
@@ -68,6 +68,7 @@ process.stdin.resume();
           );
           return;
         case "dispatch":
+          assert.equal(body.reasoningEffort, "xhigh");
           attemptId = body.attemptId;
           state = {
             poemId: "crash-poem",
@@ -145,7 +146,7 @@ test("a durable Codex result is acknowledged and published after restart without
   };
   await writeFile(outputPath, JSON.stringify(output));
   try {
-    const run = await exerciseUnknown(attemptId, script, [], "82");
+    const run = await exerciseUnknown(attemptId);
     assert.equal(run.code, 0, run.stderr);
     assert.deepEqual(run.actions, ["purge-cache", "acknowledge", "publish"]);
     assert.equal(run.codexCalled, false);
@@ -346,7 +347,7 @@ async function exerciseUnknown(attemptId, entry = script, args = []) {
 }
 
 async function runScript(environment, entry = script, args = []) {
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entry.pathname, ...args], {
       env: { ...process.env, ...environment },
       stdio: ["ignore", "pipe", "pipe"],

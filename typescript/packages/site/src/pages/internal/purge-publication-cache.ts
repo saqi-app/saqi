@@ -12,5 +12,9 @@ export const POST: APIRoute = async ({ request }) =>
   (await handlePublicCachePurge(
     request,
     PurgeSecretSchema.parse(env).SAQI_PUBLIC_CACHE_PURGE_SECRET,
-    (tags) => cache.purge({ tags }),
+    async (tags) => {
+      const result = await cache.purge({ tags });
+      if (result.success) return { success: true };
+      return { success: false, errors: result.errors };
+    },
   )) ?? new Response(null, { status: 404 });

@@ -6,7 +6,7 @@ apt-get install -y ca-certificates curl git tmux python3 xz-utils unattended-upg
 if ! id saqi >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash saqi
 fi
-install -d -m 0700 -o saqi -g saqi /home/saqi/.codex /home/saqi/.local/state/saqi/results
+install -d -m 0700 -o saqi -g saqi /home/saqi/.codex /home/saqi/.config/saqi /home/saqi/.local/state/saqi/results
 install -d -m 0755 -o saqi -g saqi /home/saqi/work
 if ! test -x /opt/node-v24.21.0-linux-x64/bin/node; then
   task_dir=$(mktemp -d)
@@ -25,7 +25,7 @@ fi
 if ! test -e /home/saqi/.codex/config.toml; then
   cat >/home/saqi/.codex/config.toml <<'CONFIG'
 model = "gpt-6.1-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 service_tier = "default"
 cli_auth_credentials_store = "file"
 forced_login_method = "chatgpt"
