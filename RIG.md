@@ -2,9 +2,11 @@
 
 Production D1 is the only queue: two application tables, author and poem. There is no local SQLite, scheduler database, event ledger, or model registry. Current translations and word meanings publish atomically on the poem row.
 
-For the private Linux Codex host and systemd runner, see [the VM guide](RIG-VM.md).
+For the current Linux Codex host and systemd runner, see [the VM guide](RIG-VM.md).
 
 ## Background translation
+
+Production translation runs on the GCP VM described in [RIG-VM.md](RIG-VM.md). Its timer is enabled; the Mac translator is disabled. The commands below are for switching back to local translation after stopping the VM timer. Collection in personal Chrome remains independent.
 
 From `typescript`, install dependencies and run `yarn build:api` and `yarn workspace @saqi/source-collector build`. From the repository root:
 

@@ -2,7 +2,7 @@
 
 [Saqi](https://saqi.app) is an Arabic poetry reader with English translations and word-by-word meanings. This repository contains the public Astro site, the Cloudflare Operations Worker, the source parser and personal Chrome collector, and the macOS rig that produces translations.
 
-The live corpus has two application tables in Cloudflare D1: `author` and `poem`. Current Arabic text, published English output, source identity, and the small durable translation state live on those rows. The collector uses the owner's ordinary Chrome session and a local native bridge; the Mac does not keep a crawler SQLite database. Codex generation runs locally and can be stopped independently of collection.
+The live corpus has two application tables in Cloudflare D1: `author` and `poem`. Current Arabic text, published English output, source identity, and the small durable translation state live on those rows. The collector uses the owner's ordinary Chrome session and a local native bridge; the Mac does not keep a crawler SQLite database. Codex generation runs on the dedicated [GCP VM](RIG-VM.md), with a local macOS runner available, and can be stopped independently of collection.
 
 ## Explore the code
 
