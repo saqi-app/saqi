@@ -108,6 +108,14 @@ export async function purgePublishedPoem(
   return url;
 }
 
+export async function purgePublishedPoems(
+  config: PublicCacheConfig,
+  poems: readonly PublishedPoemRoute[],
+  transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
+): Promise<void> {
+  await sendCachePurge(config, { poems }, transport);
+}
+
 export async function purgePublicCorpus(
   config: PublicCacheConfig,
   transport: PurgeTransport = (url, init) => config.publicSite.fetch(url, init)
@@ -117,7 +125,10 @@ export async function purgePublicCorpus(
 
 async function sendCachePurge(
   config: PublicCacheConfig,
-  body: { readonly all: true } | PublishedPoemRoute,
+  body:
+    | { readonly all: true }
+    | { readonly poems: readonly PublishedPoemRoute[] }
+    | PublishedPoemRoute,
   transport: PurgeTransport
 ): Promise<void> {
   let response: Awaited<ReturnType<PurgeTransport>>;

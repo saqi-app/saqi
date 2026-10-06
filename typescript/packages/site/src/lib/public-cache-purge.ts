@@ -40,7 +40,13 @@ export async function handlePublicCachePurge(
     const result = await purge(
       "all" in route
         ? ["saqi-corpus"]
-        : publicationCacheTags(route.authorSlug, route.poemId),
+        : [
+            ...new Set(
+              ("poems" in route ? route.poems : [route]).flatMap((poem) =>
+                publicationCacheTags(poem.authorSlug, poem.poemId),
+              ),
+            ),
+          ],
     );
     if (!result.success) {
       const errors = (result.errors ?? [])
@@ -77,7 +83,7 @@ function authorized(
 async function readRoute(
   request: Request,
 ): Promise<ReturnType<typeof PublicCachePurgeRequestSchema.parse>> {
-  if (Number(request.headers.get("content-length")) > 1024) {
+  if (Number(request.headers.get("content-length")) > 64_000) {
     throw new Error("Purge request is too large");
   }
   const reader = request.body?.getReader();
@@ -87,7 +93,7 @@ async function readRoute(
   let next = await reader.read();
   while (!next.done) {
     size += next.value.byteLength;
-    if (size > 1024) {
+    if (size > 64_000) {
       // eslint-disable-next-line no-await-in-loop -- Cancel the current reader before rejecting oversized bodies.
       await reader.cancel();
       throw new Error("Purge request is too large");

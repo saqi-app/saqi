@@ -21,7 +21,7 @@ def publication_history(records, now):
             if record.get("_SYSTEMD_UNIT") != "saqi-translate-pool.service":
                 history["latest"] = invocation
             history["starts"][match[1]] = invocation
-        if re.fullmatch(r"Published [0-9a-f-]+", message):
+        if re.fullmatch(r"Published [0-9a-f-]+(?: \(cache purge pending\))?", message):
             history["completed"][message.split()[1]] = timestamp
         if timestamp >= now - timedelta(minutes=20) and "Failed with result" in message:
             history["failures"] += 1
@@ -75,22 +75,11 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
     history = publication_history(records, now)
     current = current_invocation(history["latest"], now, service)
     status, issues = flow_health(current, history["failures"], {"service": service, "timer": timer, "login": login, "pool": pool})
-    active = []
-    if pool in BUSY_STATES and not snapshot:
-        issues.append("translation pool snapshot is missing")
+    active, pool_issues = pool_health(pool, snapshot, now)
+    issues.extend(pool_issues)
+    if issues:
         status = "attention"
-    if pool in BUSY_STATES and snapshot:
-        for invocation in snapshot.get("activePoems", []):
-            started = datetime.fromisoformat(invocation["startedAt"])
-            active.append({**invocation, "elapsedMinutes": round((now - started).total_seconds() / 60, 1)})
-        if now - datetime.fromisoformat(snapshot["checkedAt"]) > timedelta(seconds=60):
-            issues.append("translation pool snapshot is stale")
-        if any(item["elapsedMinutes"] >= 60 for item in active):
-            issues.append("a pool poem has been running for at least 60 minutes; inspect before retrying")
-        if snapshot.get("pausedWorkers"):
-            issues.append("translation workers require recovery; inspect their metadata")
-        if issues:
-            status = "attention"
+    pool_snapshot = snapshot or {}
     return {
         "checkedAt": now.isoformat(),
         "status": status,
@@ -101,11 +90,34 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
         "translationTimer": timer,
         "loginActivation": login,
         "poolService": pool,
-        "poolConcurrency": snapshot.get("concurrency") if snapshot else None,
-        "poolDraining": pool == "deactivating" and bool(snapshot and snapshot.get("stopping")),
+        "poolConcurrency": pool_snapshot.get("concurrency"),
+        "cacheMaintenanceError": pool_snapshot.get("cacheMaintenanceError"),
+        "poolDraining": pool == "deactivating" and bool(pool_snapshot.get("stopping")),
         "activePoolPoems": active,
-        "pausedWorkers": snapshot.get("pausedWorkers", []) if snapshot else [],
+        "pausedWorkers": pool_snapshot.get("pausedWorkers", []),
     }
+
+
+
+def pool_health(pool, snapshot, now):
+    if pool not in BUSY_STATES:
+        return [], []
+    if not snapshot:
+        return [], ["translation pool snapshot is missing"]
+    active = []
+    for invocation in snapshot.get("activePoems", []):
+        started = datetime.fromisoformat(invocation["startedAt"])
+        active.append({**invocation, "elapsedMinutes": round((now - started).total_seconds() / 60, 1)})
+    issues = []
+    if now - datetime.fromisoformat(snapshot["checkedAt"]) > timedelta(seconds=60):
+        issues.append("translation pool snapshot is stale")
+    if any(item["elapsedMinutes"] >= 60 for item in active):
+        issues.append("a pool poem has been running for at least 60 minutes; inspect before retrying")
+    if snapshot.get("cacheMaintenanceError"):
+        issues.append("public cache maintenance requires recovery; inspect pending purges")
+    if snapshot.get("pausedWorkers"):
+        issues.append("translation workers require recovery; inspect their metadata")
+    return active, issues
 
 
 def unit_state(unit):

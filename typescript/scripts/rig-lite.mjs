@@ -37,6 +37,7 @@ export async function translateNext(
   preferredPoemId,
   {
     maxConcurrent = 1,
+    deferCachePurge = false,
     ownedPoemId,
     remember = async () => {
       /* The standalone runner recovers from canonical D1 state. */
@@ -48,16 +49,16 @@ export async function translateNext(
     throw new Error(
       "Rig inactive: complete publication parity and set SAQI_RIG_ACTIVE=1",
     );
-  await request({ action: "purge-cache" });
+  if (!deferCachePurge) await purgeCache();
   const active =
     maxConcurrent === 1 || ownedPoemId ? await current(ownedPoemId) : null;
   if (active?.status === "dispatching") {
-    await recover(active);
+    await recover(active, deferCachePurge);
     await remember(null);
     return;
   }
   if (active?.status === "unknown") {
-    if (await recoverIfResultExists(active)) {
+    if (await recoverIfResultExists(active, deferCachePurge)) {
       await remember(null);
       return;
     }
@@ -65,7 +66,7 @@ export async function translateNext(
   if (active?.status === "claimed") {
     const checkpoint = JSON.parse(active.checkpointJson ?? "{}");
     if (checkpoint.outputs?.generation) {
-      await publish(active);
+      await publish(active, deferCachePurge);
       await remember(null);
       return;
     }
@@ -124,7 +125,7 @@ export async function translateNext(
     output,
   });
   await removeOutput(attemptId);
-  await publish(acknowledged.state);
+  await publish(acknowledged.state, deferCachePurge);
   await remember(null);
 }
 
@@ -169,6 +170,10 @@ async function removeOutput(attemptId) {
       }),
     ),
   );
+}
+
+export async function purgeCache() {
+  return request({ action: "purge-cache" });
 }
 
 async function request(body) {
@@ -233,7 +238,7 @@ async function readOutputFile(path, attemptId) {
   return normalizeWordMeanings(JSON.parse(await readFile(path, "utf8")));
 }
 
-async function recover(state) {
+async function recover(state, deferCachePurge = false) {
   const checkpoint = JSON.parse(state.checkpointJson ?? "{}");
   const attemptId = checkpoint.invocation?.attemptId;
   if (!attemptId) throw new Error("Active invocation has no attempt ID");
@@ -247,7 +252,7 @@ async function recover(state) {
       output,
     });
     await removeOutput(attemptId);
-    await publish(acknowledged.state);
+    await publish(acknowledged.state, deferCachePurge);
     return true;
   }
   if (
@@ -262,12 +267,12 @@ async function recover(state) {
   );
 }
 
-async function recoverIfResultExists(state) {
+async function recoverIfResultExists(state, deferCachePurge = false) {
   const attemptId = JSON.parse(state.checkpointJson ?? "{}").invocation
     ?.attemptId;
   if (!attemptId) throw new Error("Unknown invocation has no attempt ID");
   if (await readOutput(attemptId)) {
-    await recover(state);
+    await recover(state, deferCachePurge);
     return true;
   }
   process.stdout.write(
@@ -276,14 +281,16 @@ async function recoverIfResultExists(state) {
   return false;
 }
 
-async function publish(state) {
+async function publish(state, deferCachePurge = false) {
   if (state?.status !== "claimed")
     throw new Error("Publication requires an acknowledged result");
-  const result = await request({
+  const body = {
     action: "publish",
     poemId: state.poemId,
     expectedVersion: state.version,
-  });
+  };
+  if (deferCachePurge) body.deferCachePurge = true;
+  const result = await request(body);
   process.stdout.write(
     `Published ${state.poemId}${result.cachePending ? " (cache purge pending)" : ""}\n`,
   );

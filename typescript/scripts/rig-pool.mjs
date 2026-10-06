@@ -14,7 +14,7 @@ import { clearInterval, setInterval } from "node:timers";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { RigCodexServer } from "./rig-codex-server.mjs";
-import { translateNext } from "./rig-lite.mjs";
+import { purgeCache, translateNext } from "./rig-lite.mjs";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
 const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 40);
@@ -34,6 +34,9 @@ const active = new Map();
 const paused = new Map();
 const sampledWindows = new Set();
 let stopping = false;
+let cacheTask = Promise.resolve();
+let cacheRunning = false;
+let cacheMaintenanceError = null;
 let scheduling = Promise.resolve();
 
 process.on("SIGTERM", () => {
@@ -55,6 +58,8 @@ const health = setInterval(
     }),
   10_000,
 );
+const cacheTimer = setInterval(maintainCache, 15_000);
+maintainCache();
 let serverFailed = false;
 try {
   await Promise.all(
@@ -62,6 +67,8 @@ try {
   );
 } finally {
   clearInterval(health);
+  clearInterval(cacheTimer);
+  await cacheTask;
   serverFailed = !server.alive;
   server.close();
   await snapshot();
@@ -87,6 +94,7 @@ async function snapshot() {
       checkedAt: new Date().toISOString(),
       concurrency,
       stopping,
+      cacheMaintenanceError,
       activePoems: active.values().toArray(),
       pausedWorkers: paused.values().toArray(),
     }),
@@ -114,6 +122,7 @@ async function worker(id) {
       // eslint-disable-next-line no-await-in-loop -- Each worker persists and publishes its current poem before claiming another.
       await translateNext(undefined, {
         maxConcurrent: concurrency,
+        deferCachePurge: true,
         ownedPoemId,
         remember: async (poemId) => {
           if (poemId) await durableWrite(ticket, JSON.stringify({ poemId }));
@@ -126,6 +135,7 @@ async function worker(id) {
         generate: async (prompt, attemptId, lines, required) => {
           const outputPath = join(directory, `saqi-rig-${attemptId}.json`);
           await writeFile(outputPath, "", { mode: 0o600, flag: "wx" });
+          paused.delete(id);
           active.set(id, {
             worker: id,
             poemId: ownedPoemId,
@@ -210,4 +220,20 @@ function workerFailureCode(error) {
     error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ??
     "TRANSLATION_REQUIRES_RECOVERY"
   );
+}
+
+function maintainCache() {
+  if (cacheRunning || stopping) return;
+  cacheRunning = true;
+  cacheTask = purgeCache()
+    .then(() => {
+      cacheMaintenanceError = null;
+    })
+    .catch((error) => {
+      cacheMaintenanceError = workerFailureCode(error);
+      console.error(`Cache maintenance paused: ${cacheMaintenanceError}`);
+    })
+    .finally(() => {
+      cacheRunning = false;
+    });
 }

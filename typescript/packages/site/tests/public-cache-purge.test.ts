@@ -87,3 +87,63 @@ void describe("public Worker cache purge", () => {
     assert.deepEqual(tags, ["saqi-corpus"]);
   });
 });
+
+void it("purges fifty poems and shared author indexes in one bounded deduplicated request", async () => {
+  const poems = Array.from({ length: 50 }, (_, index) => ({
+    authorSlug: "poet",
+    poemId: `${String(index)}-${"a".repeat(90)}`,
+  }));
+  let tags: string[] = [];
+  const response = await handlePublicCachePurge(
+    new Request(URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${SECRET}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ poems }),
+    }),
+    SECRET,
+    async (requestedTags) => {
+      tags = requestedTags;
+      return { success: true };
+    },
+  );
+  assert.equal(response?.status, 204);
+  assert.deepEqual(
+    tags,
+    poems.flatMap((poem, index) =>
+      index === 0
+        ? [`saqi-poem-${poem.poemId}`, "saqi-author-poet"]
+        : [`saqi-poem-${poem.poemId}`],
+    ),
+  );
+});
+
+for (const count of [0, 51]) {
+  void it(`refuses a batch of ${String(count)} poems before purging`, async () => {
+    let calls = 0;
+    const response = await handlePublicCachePurge(
+      new Request(URL, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          poems: Array.from({ length: count }, () => ({
+            authorSlug: "poet",
+            poemId: "one",
+          })),
+        }),
+      }),
+      SECRET,
+      async () => {
+        calls += 1;
+        return { success: true };
+      },
+    );
+    assert.equal(response?.status, 400);
+    assert.equal(calls, 0);
+  });
+}

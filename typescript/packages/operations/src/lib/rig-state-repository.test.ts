@@ -70,6 +70,7 @@ function fixture() {
   const wrap = (query: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(query, parameters),
     first: async () => sqlite.prepare(query).get(numbered(values)) ?? null,
+    all: async () => ({ results: sqlite.prepare(query).all(numbered(values)) }),
     run: async () => {
       const result = sqlite.prepare(query).run(numbered(values));
       return { meta: { changes: result.changes } };
@@ -80,6 +81,8 @@ function fixture() {
   } as unknown as D1Database);
   const publisher = new RigPublicationRepository({
     prepare: wrap,
+    batch: async (statements: { run: () => Promise<unknown> }[]) =>
+      Promise.all(statements.map((statement) => statement.run())),
   } as unknown as D1Database);
   return { publisher, repository, sqlite };
 }
@@ -739,4 +742,41 @@ test("publication verification reads the actual snapshot and cache state", async
   await expect(publisher.readPublication("poem-1")).resolves.toMatchObject({
     cacheDirty: 0,
   });
+});
+
+test("cache batches are bounded and never clear republished or source-changed rows", async () => {
+  const { publisher, sqlite } = fixture();
+  for (let index = 3; index <= 60; index += 1) {
+    sqlite
+      .prepare(
+        `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,source_hash)
+      VALUES(?,0,1,'author-1','قصيدة','{"content":["بيت"]}',?)`
+      )
+      .run(`batch-${String(index).padStart(3, "0")}`, "a".repeat(64));
+  }
+  sqlite
+    .prepare(
+      "UPDATE poem SET publication_cache_dirty = 1, publication_hash = ?"
+    )
+    .run("a".repeat(64));
+  const rows = await publisher.pendingPurges();
+  expect(rows).toHaveLength(50);
+  sqlite
+    .prepare("UPDATE poem SET publication_hash = ? WHERE id = ?")
+    .run("b".repeat(64), rows[0]?.poemId);
+  sqlite
+    .prepare("UPDATE poem SET source_hash = ? WHERE id = ?")
+    .run("c".repeat(64), rows[1]?.poemId);
+  await publisher.clearCacheDirtyBatch(rows);
+  expect(
+    sqlite
+      .prepare(
+        "SELECT count(*) AS count FROM poem WHERE publication_cache_dirty = 1"
+      )
+      .get()
+  ).toEqual({ count: 12 });
+  const remaining = await publisher.pendingPurges();
+  expect(remaining.map((row) => row.poemId)).toEqual(
+    expect.arrayContaining([rows[0]?.poemId, rows[1]?.poemId])
+  );
 });
