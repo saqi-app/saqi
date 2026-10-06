@@ -1,5 +1,6 @@
 [Unit]
 Description=Activate the authorized Saqi Codex device login
+ConditionPathExists=/home/saqi/.config/saqi/pending-codex-auth.json
 After=network-online.target
 Before=saqi-translate.timer
 Wants=network-online.target
