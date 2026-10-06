@@ -162,7 +162,9 @@ test.each([false, true])(
 test.each([
   [20, 200],
   [40, 200],
-  [41, 400],
+  [41, 200],
+  [80, 200],
+  [81, 400],
 ])(
   "concurrent claim limit %i returns HTTP %i",
   async (maxConcurrent, expectedStatus) => {

@@ -17,8 +17,8 @@ import { RigCodexServer } from "./rig-codex-server.mjs";
 import { purgeCache, translateNext } from "./rig-lite.mjs";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
 
-const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 40);
-if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 40)
+const concurrency = Number(process.env.SAQI_RIG_CONCURRENCY ?? 80);
+if (!Number.isSafeInteger(concurrency) || concurrency < 2 || concurrency > 80)
   throw new Error("INVALID_POOL_CONCURRENCY");
 const directory =
   process.env.SAQI_RIG_RESULT_DIR ??
@@ -69,6 +69,7 @@ try {
   clearInterval(health);
   clearInterval(cacheTimer);
   await cacheTask;
+  await maintainCache();
   serverFailed = !server.alive;
   server.close();
   await snapshot();
@@ -223,7 +224,7 @@ function workerFailureCode(error) {
 }
 
 function maintainCache() {
-  if (cacheRunning || stopping) return;
+  if (cacheRunning) return cacheTask;
   cacheRunning = true;
   cacheTask = purgeCache()
     .then(() => {
@@ -236,4 +237,5 @@ function maintainCache() {
     .finally(() => {
       cacheRunning = false;
     });
+  return cacheTask;
 }
