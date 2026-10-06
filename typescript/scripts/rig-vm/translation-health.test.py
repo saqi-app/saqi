@@ -55,5 +55,15 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["activePoolPoems"][0]["elapsedMinutes"], 12)
 
 
+    def test_draining_pool_reports_inflight_paid_work_as_maintenance(self):
+        invocation = {"worker": 1, "poemId": "abc", "arabicLines": 32, "model": "gpt-6.1-sol", "reasoningEffort": "xhigh", "serviceTier": "priority", "startedAt": (self.now - timedelta(minutes=3)).isoformat()}
+        snapshot = {"checkedAt": self.now.isoformat(), "concurrency": 20, "stopping": True, "activePoems": [invocation], "pausedWorkers": []}
+        report = health.summarize([], self.now, "inactive", "inactive", "inactive", "deactivating", snapshot)
+        self.assertEqual(report["status"], "maintenance")
+        self.assertEqual(report["issues"], [])
+        self.assertTrue(report["poolDraining"])
+        self.assertEqual(report["activePoolPoems"], [{**invocation, "elapsedMinutes": 3}])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -177,18 +177,15 @@ async function worker(id) {
       });
       paused.delete(id);
     } catch (error) {
+      const code = workerFailureCode(error);
       paused.set(id, {
         worker: id,
         poemId: ownedPoemId,
-        code:
-          error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ??
-          "TRANSLATION_REQUIRES_RECOVERY",
+        code,
         checkedAt: new Date().toISOString(),
       });
       if (!server.alive) stopping = true;
-      console.error(
-        `Worker ${id} paused: ${error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ?? "TRANSLATION_REQUIRES_RECOVERY"}`,
-      );
+      console.error(`Worker ${id} paused: ${code}`);
     } finally {
       releaseScheduling();
     }
@@ -203,4 +200,14 @@ async function acquireScheduling() {
   scheduling = next.promise;
   await previous;
   return next.resolve;
+}
+
+function workerFailureCode(error) {
+  if (error?.name === "TimeoutError") return "RIG_API_TIMEOUT";
+  const httpStatus = error.message?.match(/^Rig API(?: GET)? (\d{3})/u)?.[1];
+  if (httpStatus) return `RIG_API_HTTP_${httpStatus}`;
+  return (
+    error.message?.match(/^[A-Z_0-9]+$/u)?.[0] ??
+    "TRANSLATION_REQUIRES_RECOVERY"
+  );
 }
