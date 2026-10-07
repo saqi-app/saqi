@@ -287,6 +287,11 @@ async function exerciseUnknown(
   const server = createServer(async (request, response) => {
     response.setHeader("content-type", "application/json");
     if (request.method === "GET") {
+      if (args[0] === "recover-attempt") {
+        const query = new URL(request.url, "http://localhost").searchParams;
+        assert.equal(query.get("attemptId"), attemptId);
+        assert.equal(query.get("poemId"), null);
+      }
       response.end(
         JSON.stringify({
           ok: true,
@@ -317,6 +322,8 @@ async function exerciseUnknown(
     }
     if (body.action === "publish") {
       assert.equal(body.expectedVersion, 3);
+      if (args[0] === "recover-attempt")
+        assert.equal(body.deferCachePurge, true);
       response.end(JSON.stringify({ ok: true, cachePending: false }));
       return;
     }
@@ -406,6 +413,55 @@ test("an expired truncated invocation is marked unknown without deletion, public
     assert.deepEqual(run.actions, ["purge-cache", "mark-unknown"]);
     assert.equal(run.codexCalled, false);
     assert.equal(await readFile(path, "utf8"), partial);
+  } finally {
+    await rm(path, { force: true });
+  }
+});
+
+test("recover-attempt publishes the exact saved unknown result with zero Codex calls", async () => {
+  const attemptId = randomUUID();
+  const path = join(tmpdir(), `saqi-rig-${attemptId}.json`);
+  await writeFile(
+    path,
+    JSON.stringify({
+      translation: { lines: ["A saved verse"] },
+      wordMeanings: [["verse"]],
+    }),
+  );
+  try {
+    const run = await exerciseUnknown(attemptId, script, [
+      "recover-attempt",
+      attemptId,
+    ]);
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(run.actions, ["acknowledge", "publish"]);
+    assert.equal(run.codexCalled, false);
+    await assert.rejects(access(path), { code: "ENOENT" });
+  } finally {
+    await rm(path, { force: true });
+  }
+});
+
+test("recover-attempt refuses an active dispatch and preserves the saved file", async () => {
+  const attemptId = randomUUID();
+  const path = join(tmpdir(), `saqi-rig-${attemptId}.json`);
+  const saved = JSON.stringify({
+    translation: { lines: ["A saved verse"] },
+    wordMeanings: [["verse"]],
+  });
+  await writeFile(path, saved);
+  try {
+    const run = await exerciseUnknown(
+      attemptId,
+      script,
+      ["recover-attempt", attemptId],
+      "dispatching",
+    );
+    assert.equal(run.code, 1);
+    assert.match(run.stderr, /SAVED_ATTEMPT_NOT_UNKNOWN/u);
+    assert.deepEqual(run.actions, []);
+    assert.equal(run.codexCalled, false);
+    assert.equal(await readFile(path, "utf8"), saved);
   } finally {
     await rm(path, { force: true });
   }

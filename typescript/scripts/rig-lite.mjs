@@ -26,6 +26,7 @@ const schemaPath = new URL(
 
 async function main() {
   if (process.argv[2] === "retry-unknown") return retryUnknown();
+  if (process.argv[2] === "recover-attempt") return recoverSavedAttempt();
   if (process.argv.length > 3)
     throw new Error(
       "Usage: rig-lite.mjs [POEM_ID | retry-unknown POEM_ID ATTEMPT_ID]",
@@ -129,6 +130,20 @@ export async function translateNext(
   await remember(null);
 }
 
+async function recoverSavedAttempt() {
+  const attemptId = process.argv[3];
+  if (process.argv.length !== 4 || !attemptId)
+    throw new Error("Usage: rig-lite.mjs recover-attempt ATTEMPT_ID");
+  if (process.env.SAQI_RIG_ACTIVE !== "1") throw new Error("RIG_INACTIVE");
+  const state = await current(undefined, attemptId);
+  const invocation = JSON.parse(state?.checkpointJson ?? "{}").invocation;
+  if (state?.status !== "unknown" || invocation?.attemptId !== attemptId)
+    throw new Error("SAVED_ATTEMPT_NOT_UNKNOWN");
+  // This command cannot generate. The pool's cache task handles the deferred
+  // purge; publication retains its dirty flag until that succeeds.
+  await recover(state, true);
+}
+
 async function retryUnknown() {
   const [poemId, attemptId] = process.argv.slice(3);
   if (!poemId || !attemptId || process.argv.length !== 5)
@@ -199,9 +214,10 @@ async function request(body) {
   return result;
 }
 
-async function current(poemId) {
+async function current(poemId, attemptId) {
   const url = new URL(endpoint);
   if (poemId) url.searchParams.set("poemId", poemId);
+  if (attemptId) url.searchParams.set("attemptId", attemptId);
   const response = await fetch(url, {
     signal: AbortSignal.timeout(30_000),
     headers: {

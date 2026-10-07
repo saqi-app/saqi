@@ -362,3 +362,52 @@ test("pooled publication can defer cache invalidation without dropping its dirty
     publication.mockRestore();
   }
 });
+
+test.each([
+  "",
+  "not-a-uuid",
+  "11111111-1111-4111-8111-111111111111&poemId=poem-1",
+])(
+  "invalid or ambiguous saved-attempt lookup does not touch D1 (%s)",
+  async (value) => {
+    const prepare = vi.fn();
+    const env = parseCloudflareEnv({
+      DB: { prepare },
+      SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+    });
+    const response = await get(
+      new Request(`https://ops.saqi.app/api/rig/state?attemptId=${value}`),
+      env
+    );
+    expect(response.status).toBe(400);
+    expect(prepare).not.toHaveBeenCalled();
+  }
+);
+
+test("saved-attempt lookup is a read-only authenticated-state response", async () => {
+  const attemptId = "11111111-1111-4111-8111-111111111111";
+  const state = {
+    poemId: "poem-1",
+    status: "unknown",
+    version: 3,
+    leaseToken: null,
+    leaseExpiresAt: null,
+    checkpointJson: JSON.stringify({ invocation: { attemptId } }),
+  };
+  const first = vi.fn().mockResolvedValue(state);
+  const bind = vi.fn().mockReturnValue({ first });
+  const prepare = vi.fn().mockReturnValue({ bind });
+  const env = parseCloudflareEnv({
+    DB: { prepare },
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  const response = await get(
+    new Request(`https://ops.saqi.app/api/rig/state?attemptId=${attemptId}`),
+    env
+  );
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toEqual({ ok: true, state });
+  expect(bind).toHaveBeenCalledExactlyOnceWith(attemptId);
+  expect(prepare).toHaveBeenCalledOnce();
+  expect(response.headers.get("cache-control")).toContain("no-store");
+});

@@ -87,7 +87,21 @@ export async function get(
   request: Request,
   env: CloudflareEnv
 ): Promise<Response> {
-  const poemId = new URL(request.url).searchParams.get("poemId");
+  const query = new URL(request.url).searchParams;
+  const poemId = query.get("poemId");
+  const attemptId = query.get("attemptId");
+  if (attemptId !== null) {
+    if (poemId !== null || !TokenSchema.safeParse(attemptId).success)
+      return failure(400, "INVALID_ATTEMPT_ID");
+    try {
+      const state = await new RigStateRepository(env.DB).readUnknownAttempt(
+        attemptId
+      );
+      return Response.json({ ok: true, state }, { headers: NO_STORE_HEADERS });
+    } catch {
+      return failure(503, "RIG_STATE_UNAVAILABLE");
+    }
+  }
   if (poemId === null) {
     try {
       const state = await new RigStateRepository(env.DB).currentEnrichment();
