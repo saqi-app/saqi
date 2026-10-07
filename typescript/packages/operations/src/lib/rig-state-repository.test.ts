@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import type { D1Database } from "@cloudflare/workers-types";
+import { wordGlossesFromMeanings } from "@saqi/precedent-iso";
 import Database from "better-sqlite3";
 import { afterEach, expect, test } from "vitest";
 
@@ -902,3 +903,146 @@ test("cache batches are bounded and never clear republished or source-changed ro
     expect.arrayContaining([rows[0]?.poemId, rows[1]?.poemId])
   );
 });
+
+const ElegyId = "b2d4eaf2-6345-4049-8132-a489b785dad7";
+const ElegyCorrection = readFileSync(
+  new URL("../../migrations/0095_correct_elegy_adjective.sql", import.meta.url),
+  "utf8"
+);
+
+async function elegyFixture() {
+  const setup = fixture();
+  const arabic = [
+    "عطية إن صادفت روح محمد",
+    "أخيك وصنويك العليين من قبل",
+    ...Array.from({ length: 16 }, () => "بيت"),
+  ];
+  const output = {
+    translation: {
+      lines: [
+        "Atiyya, if you meet the soul of Muhammad,",
+        "your brother, and your two brothers, the two Alis, who went before,",
+        ...Array.from({ length: 16 }, () => "A verse."),
+      ],
+    },
+    wordMeanings: [
+      ["Atiyya", "if", "you meet", "soul", "Muhammad"],
+      [
+        "your brother",
+        "and your two brothers",
+        "the two Alis",
+        "from",
+        "before",
+      ],
+      ...Array.from({ length: 16 }, () => ["verse"]),
+    ],
+  };
+  setup.sqlite
+    .prepare("UPDATE poem SET id = ?, content_arabic = ? WHERE id = 'poem-1'")
+    .run(ElegyId, JSON.stringify({ content: arabic }));
+  const owner = "11111111-1111-4111-8111-111111111111";
+  const attemptId = "33333333-3333-4333-8333-333333333333";
+  const claimed = await setup.repository.claimNextPoem(owner, 100, ElegyId);
+  await expect(
+    setup.repository.beginInvocation(ElegyId, owner, claimed!.version, {
+      attemptId,
+      inputHash: "c".repeat(64),
+      model: "gpt-6.1-sol",
+      reasoningEffort: "xhigh",
+      startedAt: 101,
+      deadlineAt: 200,
+    })
+  ).resolves.toBe(true);
+  const dispatched = await setup.repository.read(ElegyId);
+  await expect(
+    setup.repository.acknowledgeInvocation(
+      ElegyId,
+      attemptId,
+      dispatched!.version,
+      output
+    )
+  ).resolves.toBe(true);
+  const acknowledged = await setup.repository.read(ElegyId);
+  await expect(
+    setup.publisher.publish(ElegyId, acknowledged!.version)
+  ).resolves.toBe(true);
+  return { ...setup, arabic, output };
+}
+
+test("elegy correction reuses paid output, preserves the public snapshot until publishing, and is idempotent", async () => {
+  const { sqlite, repository, publisher, arabic, output } =
+    await elegyFixture();
+  const prior = await publisher.readPublication(ElegyId);
+  const unrelated = sqlite
+    .prepare("SELECT * FROM poem WHERE id = 'poem-2'")
+    .get();
+  sqlite.exec(ElegyCorrection);
+  const staged = await repository.read(ElegyId);
+  expect(staged).toMatchObject({
+    status: "blocked",
+    version: 5,
+    leaseToken: null,
+  });
+  const corrected = structuredClone(output);
+  corrected.translation.lines[1] =
+    "your brother, and your two noble brothers who went before,";
+  corrected.wordMeanings[1]![2] = "the two noble ones";
+  expect(JSON.parse(staged!.checkpointJson!)).toEqual({
+    phase: "publish",
+    sourceHash: "a".repeat(64),
+    required: ["translation", "wordMeanings"],
+    model: "gpt-6.1-sol",
+    reasoningEffort: "xhigh",
+    outputs: { generation: corrected },
+  });
+  await expect(publisher.readPublication(ElegyId)).resolves.toEqual(prior);
+  sqlite.exec(ElegyCorrection);
+  await expect(repository.read(ElegyId)).resolves.toEqual(staged);
+  await expect(publisher.publish(ElegyId, staged!.version)).resolves.toBe(true);
+  const published = await publisher.readPublication(ElegyId);
+  const expectedSnapshot = structuredClone(prior!.snapshot);
+  expectedSnapshot.fields.modelEnrichments![0]!.lines =
+    corrected.translation.lines;
+  expectedSnapshot.fields.wordGlosses!.meanings = wordGlossesFromMeanings(
+    arabic,
+    corrected.wordMeanings
+  );
+  expect(published!.snapshot).toEqual(expectedSnapshot);
+  expect(published!.publicationHash).not.toBe(prior!.publicationHash);
+  expect(published!.cacheDirty).toBe(1);
+  await expect(repository.read(ElegyId)).resolves.toMatchObject({
+    status: "complete",
+    version: 6,
+    checkpointJson: null,
+  });
+  sqlite.exec(ElegyCorrection);
+  await expect(publisher.readPublication(ElegyId)).resolves.toEqual(published);
+  expect(
+    sqlite.prepare("SELECT * FROM poem WHERE id = 'poem-2'").get()
+  ).toEqual(unrelated);
+});
+
+test.each([
+  "rig_status = 'dispatching'",
+  "rig_status = 'unknown'",
+  "rig_version = 5",
+  "rig_lease_token = 'another-owner'",
+  "source_hash = 'different-source'",
+  "content_arabic = json_set(content_arabic, '$.content[1]', 'changed Arabic')",
+  "publication_json = json_set(publication_json, '$.fields.modelEnrichments[0].lines[1]', 'An editorial correction')",
+  "publication_json = json_set(publication_json, '$.fields.modelEnrichments[0].reasoningEffort', 'medium')",
+  "publication_json = json_set(publication_json, '$.fields.wordGlosses.meanings.lines[1].segments[4].meaning', 'an editorial gloss')",
+])(
+  "elegy correction refuses changed or in-flight state: %s",
+  async (change) => {
+    const { sqlite } = await elegyFixture();
+    sqlite.prepare(`UPDATE poem SET ${change} WHERE id = ?`).run(ElegyId);
+    const before = sqlite
+      .prepare("SELECT * FROM poem WHERE id = ?")
+      .get(ElegyId);
+    sqlite.exec(ElegyCorrection);
+    expect(
+      sqlite.prepare("SELECT * FROM poem WHERE id = ?").get(ElegyId)
+    ).toEqual(before);
+  }
+);
