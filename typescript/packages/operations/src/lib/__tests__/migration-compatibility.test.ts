@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0094_recover_blocked_without_insights.sql"
+      "0095_correct_elegy_adjective.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -235,6 +235,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
     const row = database
       .prepare(
@@ -311,6 +312,7 @@ describe("canonical migration compatibility", () => {
       .run(JSON.stringify(checkpoint), POEM_ID);
     expect(applyPending(database)).toEqual([
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
     const row = database
       .prepare(
@@ -367,6 +369,7 @@ describe("canonical migration compatibility", () => {
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
     expect(
       database
@@ -403,6 +406,7 @@ describe("canonical migration compatibility", () => {
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -511,6 +515,7 @@ describe("canonical migration compatibility", () => {
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -593,6 +598,7 @@ describe("canonical migration compatibility", () => {
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
   });
 
@@ -713,6 +719,7 @@ describe("canonical migration compatibility", () => {
       "0092_drop_author_collected_at.sql",
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
+      "0095_correct_elegy_adjective.sql",
     ]);
   });
 
