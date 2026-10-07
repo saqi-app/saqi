@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 import { arabicWords } from "../packages/precedent-iso/dist/word-glosses.js";
 import { generationSchema, normalizeWordMeanings } from "./rig-output.mjs";
+import { installQueueScanHints } from "./rig-queue-hints.mjs";
 
 const endpoint =
   process.env.SAQI_RIG_ENDPOINT ?? "https://ops.saqi.app/api/rig/state";
@@ -171,6 +172,11 @@ async function retryUnknown() {
 const resultDirectory =
   process.env.SAQI_RIG_RESULT_DIR ??
   join(homedir(), "Library", "Application Support", "Saqi", "results");
+await installQueueScanHints(
+  endpoint,
+  join(resultDirectory, "queue-scan-hint.json"),
+);
+
 function outputPath(attemptId) {
   return join(resultDirectory, `saqi-rig-${attemptId}.json`);
 }
