@@ -497,3 +497,93 @@ test("queue diagnostics fail closed without exposing database errors", async () 
     read.mockRestore();
   }
 });
+
+test("claim requests resume a supplied hint in a fresh repository and return its next position", async () => {
+  let scanBind = vi.fn();
+  const prepare = vi.fn((sql: string) => {
+    const first = vi
+      .fn()
+      .mockResolvedValue(
+        sql.includes("WITH candidates")
+          ? { poemId: null, scannedThrough: null }
+          : null
+      );
+    const bind = vi.fn().mockReturnValue({ first });
+    if (sql.includes("WITH candidates")) scanBind = bind;
+    return { first, bind };
+  });
+  const env = parseCloudflareEnv({
+    DB: { prepare },
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  const response = await post(
+    new Request("https://ops.saqi.app/api/rig/state", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host: "ops.saqi.app",
+        origin: "https://ops.saqi.app",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({
+        action: "claim-poem",
+        token: "11111111-1111-4111-8111-111111111111",
+        maxConcurrent: 80,
+        scanHint: { afterPoemId: "resume", priority: 2 },
+      }),
+    }),
+    env
+  );
+  expect(response.status).toBe(200);
+  expect(scanBind).toHaveBeenCalledExactlyOnceWith(
+    "resume",
+    expect.any(Number),
+    80,
+    2
+  );
+  await expect(response.json()).resolves.toMatchObject({
+    ok: true,
+    state: null,
+    scanHint: { afterPoemId: "", priority: 0 },
+  });
+});
+
+test.each([
+  { afterPoemId: "x", priority: 3 },
+  { afterPoemId: "x", priority: -1 },
+  { afterPoemId: "x".repeat(201), priority: 0 },
+  { afterPoemId: "x", priority: 0, extra: true },
+])(
+  "invalid scan hint is refused before canonical reads: %j",
+  async (scanHint) => {
+    const prepare = vi.fn();
+    const env = parseCloudflareEnv({
+      DB: { prepare },
+      SAQI_RIG_ACTIVE: "1",
+      SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+    });
+    const response = await post(
+      new Request("https://ops.saqi.app/api/rig/state", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "ops.saqi.app",
+          origin: "https://ops.saqi.app",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+        },
+        body: JSON.stringify({
+          action: "claim-poem",
+          token: "11111111-1111-4111-8111-111111111111",
+          maxConcurrent: 80,
+          scanHint,
+        }),
+      }),
+      env
+    );
+    expect(response.status).toBe(400);
+    expect(prepare).not.toHaveBeenCalled();
+  }
+);

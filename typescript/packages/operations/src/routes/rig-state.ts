@@ -28,12 +28,17 @@ const CANDIDATE_CURSOR: RigCandidateCursor = { afterPoemId: "", priority: 0 };
 const VersionSchema = z.number().int().positive();
 const TokenSchema = z.uuid();
 const PoemIdSchema = z.string().min(1).max(200);
+const ScanHintSchema = z.strictObject({
+  afterPoemId: z.string().max(200),
+  priority: z.number().int().min(0).max(2),
+});
 const RequestSchema = z.discriminatedUnion("action", [
   z.strictObject({
     action: z.literal("claim-poem"),
     token: TokenSchema,
     poemId: PoemIdSchema.optional(),
     maxConcurrent: z.number().int().min(1).max(80).optional(),
+    scanHint: ScanHintSchema.optional(),
   }),
   z.strictObject({
     action: z.literal("source"),
@@ -170,14 +175,13 @@ export async function post(
   try {
     switch (input.action) {
       case "claim-poem": {
-        const claimed = await state.claimNextPoem(
-          input.token,
-          now,
-          input.poemId,
-          input.maxConcurrent
-        );
+        const cursor = input.scanHint ?? CANDIDATE_CURSOR;
+        const claimed = await new RigStateRepository(
+          env.DB,
+          cursor
+        ).claimNextPoem(input.token, now, input.poemId, input.maxConcurrent);
         return Response.json(
-          { ok: true, state: claimed },
+          { ok: true, state: claimed, scanHint: { ...cursor } },
           { headers: NO_STORE_HEADERS }
         );
       }
