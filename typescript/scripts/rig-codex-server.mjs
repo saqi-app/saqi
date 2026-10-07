@@ -13,6 +13,8 @@ export class RigCodexServer {
     command = "codex",
     args = [
       "--disable",
+      "fast_mode",
+      "--disable",
       "multi_agent",
       "--disable",
       "shell_tool",
@@ -146,7 +148,7 @@ export class RigCodexServer {
   async generate(prompt, outputSchema, save) {
     const result = await this.call("thread/start", {
       model: "gpt-6.1-sol",
-      serviceTier: "priority",
+      serviceTier: "default",
       approvalPolicy: "never",
       sandbox: "read-only",
       ephemeral: true,
@@ -157,7 +159,7 @@ export class RigCodexServer {
     if (
       result.model !== "gpt-6.1-sol" ||
       result.reasoningEffort !== "xhigh" ||
-      result.serviceTier !== "priority"
+      (result.serviceTier != null && result.serviceTier !== "default")
     )
       throw new Error("CODEX_MODEL_CONFIGURATION_MISMATCH");
     const threadId = result.thread.id;
@@ -182,7 +184,7 @@ export class RigCodexServer {
         threadId,
         model: "gpt-6.1-sol",
         effort: "xhigh",
-        serviceTierForTurn: "priority",
+        serviceTierForTurn: "default",
         approvalPolicy: "never",
         input: [{ type: "text", text: prompt, text_elements: [] }],
         outputSchema,

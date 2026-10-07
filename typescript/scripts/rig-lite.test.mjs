@@ -28,7 +28,7 @@ test(
 const fs = require("node:fs");
 require("node:assert/strict").equal(process.argv[process.argv.indexOf("--model") + 1], "gpt-6.1-sol");
 require("node:assert/strict").ok(process.argv.includes('model_reasoning_effort="xhigh"'));
-require("node:assert/strict").ok(process.argv.includes('service_tier="fast"'));
+require("node:assert/strict").ok(process.argv.includes('service_tier="default"'));
 process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:100,cached_input_tokens:40,output_tokens:200}}) + "\n");
 fs.appendFileSync(process.env.SAQI_TEST_CALLS, "call\n");
 fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message") + 1], ${JSON.stringify(JSON.stringify({ ...output, wordMeanings: { line_1: ["line"] } }))});
