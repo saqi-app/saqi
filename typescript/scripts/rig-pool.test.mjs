@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import process from "node:process";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 
 for (const concurrency of [20, 40, 80]) {
   test(
@@ -30,10 +31,12 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:m.params.serviceTier}});
  else if(m.method==='turn/start') {
   if(m.params.serviceTierForTurn!=='default') throw new Error('Standard tier missing');
-  if (++turns===Number(process.env.SAQI_RIG_CONCURRENCY)) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
+  const width=Number(process.env.SAQI_RIG_CONCURRENCY);
+  const wave=Math.floor(turns++/width)+1;
+  if (turns%width===0) fs.writeFileSync(path.join(__dirname,'all-turns-'+wave),'ready');
   send({id:m.id,result:{turn:{id:'turn'}}});
   const release=setInterval(()=>{
-   if (!fs.existsSync(path.join(__dirname,'release'))) return;
+   if (!fs.existsSync(path.join(__dirname,'release-'+wave))) return;
    clearInterval(release);
    const threadId=m.params.threadId;
    send({method:'item/completed',params:{threadId,item:{type:'agentMessage',phase:'final_answer',text:JSON.stringify({translation:{lines:['A verse']},wordMeanings:{line_1:['verse']}})}}});
@@ -49,6 +52,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       let publications = 0;
       let claims = 0;
       let scheduling = 0;
+      let peakScheduling = 0;
       let failedPurge = false;
       let cacheCalls = 0;
       const cachePublications = [];
@@ -90,10 +94,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
           }
           case "claim-poem": {
             scheduling += 1;
-            assert.equal(
-              scheduling,
-              1,
-              "Queue setup must be serial while model turns run concurrently",
+            peakScheduling = Math.max(peakScheduling, scheduling);
+            assert.ok(
+              scheduling <= 2,
+              "Queue setup must remain bounded to two lanes",
             );
             assert.equal(body.maxConcurrent, concurrency);
             claims += 1;
@@ -107,6 +111,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
             break;
           }
           case "source": {
+            await delay(350);
             response.end(
               JSON.stringify({
                 ok: true,
@@ -159,8 +164,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       http.listen(0, "127.0.0.1");
       await once(http, "listening");
       const allTurns = Promise.withResolvers();
+      const secondWave = Promise.withResolvers();
       const watcher = watch(directory, (_event, name) => {
-        if (name === "all-turns") allTurns.resolve();
+        if (name === "all-turns-1") allTurns.resolve();
+        if (name === "all-turns-2") secondWave.resolve();
       });
       const child = spawn(
         process.execPath,
@@ -195,24 +202,38 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
           await readFile(join(directory, "pool-health.json"), "utf8"),
         );
         assert.equal(running.activePoems.length, concurrency);
+        assert.equal(running.setupConcurrency, 2);
+        assert.equal(
+          peakScheduling,
+          2,
+          "A slow source must not block the other setup lane",
+        );
         assert.ok(
           running.activePoems.every((poem) => poem.serviceTier === "default"),
         );
+        const waves = concurrency === 20 ? 2 : 1;
+        if (waves === 2) {
+          await cacheRecovered.promise;
+          await writeFile(join(directory, "release-1"), "ready");
+          await secondWave.promise;
+          assert.equal(publications, concurrency);
+          assert.equal(claims, concurrency * 2);
+          assert.equal(peakScheduling, 2);
+        }
         child.kill("SIGTERM");
         await draining.promise;
-        if (concurrency === 20) await cacheRecovered.promise;
-        await writeFile(join(directory, "release"), "ready");
+        await writeFile(join(directory, `release-${waves}`), "ready");
         const [code] = await once(child, "exit");
         assert.equal(code, 0, diagnostic);
-        assert.equal(claims, concurrency);
-        assert.equal(publications, concurrency);
+        assert.equal(claims, concurrency * waves);
+        assert.equal(publications, concurrency * waves);
         assert.equal(scheduling, 0);
         assert.equal(failedPurge, true);
         assert.ok(
-          cacheCalls <= 3,
+          cacheCalls <= (waves === 2 ? 4 : 3),
           "Cache maintenance must be independent of poem throughput",
         );
-        assert.equal(cachePublications.at(-1), concurrency);
+        assert.equal(cachePublications.at(-1), concurrency * waves);
         const health = JSON.parse(
           await readFile(join(directory, "pool-health.json"), "utf8"),
         );

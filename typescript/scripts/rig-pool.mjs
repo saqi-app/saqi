@@ -37,7 +37,9 @@ let stopping = false;
 let cacheTask = Promise.resolve();
 let cacheRunning = false;
 let cacheMaintenanceError = null;
-let scheduling = Promise.resolve();
+const setupConcurrency = 2;
+const schedulingWaiters = [];
+let schedulingActive = 0;
 
 process.on("SIGTERM", () => {
   stopping = true;
@@ -49,7 +51,7 @@ process.on("SIGINT", () => {
 const server = new RigCodexServer();
 await server.initialize();
 process.stdout.write(
-  `Translation pool started: ${concurrency} workers; gpt-6.1-sol xhigh; Standard speed.\n`,
+  `Translation pool started: ${concurrency} workers; gpt-6.1-sol xhigh; Standard speed; ${setupConcurrency} setup lanes.\n`,
 );
 const health = setInterval(
   () =>
@@ -94,6 +96,7 @@ async function snapshot() {
     JSON.stringify({
       checkedAt: new Date().toISOString(),
       concurrency,
+      setupConcurrency,
       stopping,
       cacheMaintenanceError,
       activePoems: active.values().toArray(),
@@ -112,7 +115,7 @@ async function worker(id) {
   }
   await delay((id - 1) * 250);
   while (!stopping && server.alive) {
-    // Queue setup is serial; paid model turns run concurrently after dispatch.
+    // Two setup lanes keep workers fed; canonical dispatch still fences paid concurrency.
     // eslint-disable-next-line no-await-in-loop -- Each worker enters the shared scheduling gate before claiming.
     const releaseScheduling = await acquireScheduling();
     if (stopping || !server.alive) {
@@ -206,11 +209,19 @@ async function worker(id) {
 }
 
 async function acquireScheduling() {
-  const previous = scheduling;
-  const next = Promise.withResolvers();
-  scheduling = next.promise;
-  await previous;
-  return next.resolve;
+  if (schedulingActive === setupConcurrency)
+    await new Promise((resolve) => {
+      schedulingWaiters.push(resolve);
+    });
+  else schedulingActive += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const waiting = schedulingWaiters.shift();
+    if (waiting) waiting();
+    else schedulingActive -= 1;
+  };
 }
 
 function workerFailureCode(error) {
