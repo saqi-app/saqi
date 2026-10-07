@@ -2,6 +2,7 @@ import { expect, test, vi } from "vitest";
 
 import { parseCloudflareEnv } from "../lib/cloudflare";
 import { RigPublicationRepository } from "../lib/rig-publication-repository";
+import { RigStateRepository } from "../lib/rig-state-repository";
 import { get, post } from "./rig-state";
 
 test("inactive rig refuses mutation before reading D1", async () => {
@@ -410,4 +411,89 @@ test("saved-attempt lookup is a read-only authenticated-state response", async (
   expect(bind).toHaveBeenCalledExactlyOnceWith(attemptId);
   expect(prepare).toHaveBeenCalledOnce();
   expect(response.headers.get("cache-control")).toContain("no-store");
+});
+
+test("queue diagnostic reads are opt-in and never cached", async () => {
+  const diagnostics = {
+    checkedAt: 100,
+    activeSlots: 0,
+    states: [],
+    expiredDispatches: [],
+  };
+  const read = vi
+    .spyOn(RigStateRepository.prototype, "queueDiagnostics")
+    .mockResolvedValue(diagnostics);
+  const env = parseCloudflareEnv({
+    DB: { prepare: vi.fn() },
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  try {
+    const response = await get(
+      new Request("https://ops.saqi.app/api/rig/state?diagnostics=1"),
+      env
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      diagnostics: {
+        ...diagnostics,
+        scanHint: {
+          afterPoemId: expect.any(String),
+          priority: expect.any(Number),
+        },
+      },
+    });
+    expect(read).toHaveBeenCalledExactlyOnceWith(expect.any(Number));
+  } finally {
+    read.mockRestore();
+  }
+});
+
+test.each([
+  "diagnostics=0",
+  "diagnostics=",
+  "diagnostics=1&poemId=poem-1",
+  "diagnostics=1&attemptId=11111111-1111-4111-8111-111111111111",
+])("invalid diagnostic query %s never reads D1", async (query) => {
+  const prepare = vi.fn();
+  const env = parseCloudflareEnv({
+    DB: { prepare },
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  const response = await get(
+    new Request(`https://ops.saqi.app/api/rig/state?${query}`),
+    env
+  );
+  expect(response.status).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    code: "INVALID_DIAGNOSTICS_QUERY",
+  });
+  expect(prepare).not.toHaveBeenCalled();
+});
+
+test("queue diagnostics fail closed without exposing database errors", async () => {
+  const read = vi
+    .spyOn(RigStateRepository.prototype, "queueDiagnostics")
+    .mockRejectedValue(new Error("private database detail"));
+  const env = parseCloudflareEnv({
+    DB: { prepare: vi.fn() },
+    SAQI_RIG_ACTIVE: "1",
+    SAQI_SOURCE_BASE_URL: "https://www.aldiwan.net",
+  });
+  try {
+    const response = await get(
+      new Request("https://ops.saqi.app/api/rig/state?diagnostics=1"),
+      env
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      code: "RIG_DIAGNOSTICS_UNAVAILABLE",
+    });
+  } finally {
+    read.mockRestore();
+  }
 });

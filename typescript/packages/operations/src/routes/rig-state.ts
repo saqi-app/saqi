@@ -90,6 +90,25 @@ export async function get(
   const query = new URL(request.url).searchParams;
   const poemId = query.get("poemId");
   const attemptId = query.get("attemptId");
+  const diagnostics = query.get("diagnostics");
+  if (diagnostics !== null) {
+    if (diagnostics !== "1" || poemId !== null || attemptId !== null)
+      return failure(400, "INVALID_DIAGNOSTICS_QUERY");
+    try {
+      const result = await new RigStateRepository(env.DB).queueDiagnostics(
+        Math.floor(Date.now() / 1_000)
+      );
+      return Response.json(
+        {
+          ok: true,
+          diagnostics: { ...result, scanHint: { ...CANDIDATE_CURSOR } },
+        },
+        { headers: NO_STORE_HEADERS }
+      );
+    } catch {
+      return failure(503, "RIG_DIAGNOSTICS_UNAVAILABLE");
+    }
+  }
   if (attemptId !== null) {
     if (poemId !== null || !TokenSchema.safeParse(attemptId).success)
       return failure(400, "INVALID_ATTEMPT_ID");

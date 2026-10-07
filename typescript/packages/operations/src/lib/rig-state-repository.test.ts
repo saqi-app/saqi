@@ -1197,3 +1197,80 @@ test("saved-attempt lookup finds only the exact fenced unknown attempt through t
     .run();
   await expect(repository.readUnknownAttempt(attemptId)).resolves.toBeNull();
 });
+
+test("queue diagnostics count canonical slots without expiring or changing paid work", async () => {
+  const { repository, sqlite } = fixture();
+  for (let index = 3; index <= 6; index += 1)
+    sqlite
+      .prepare(
+        "INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic) VALUES(?,0,1,'author-1','poem','{\"content\":[\"verse\"]}')"
+      )
+      .run(`poem-${String(index)}`);
+  const update = sqlite.prepare(
+    "UPDATE poem SET rig_status=?,rig_lease_expires_at=?,rig_version=2 WHERE id=?"
+  );
+  update.run("dispatching", 90, "poem-1");
+  update.run("claimed", 200, "poem-2");
+  update.run("claimed", 90, "poem-3");
+  update.run("unknown", 200, "poem-4");
+  update.run("dispatching", 200, "poem-5");
+  update.run("complete", 200, "poem-6");
+  sqlite.prepare("UPDATE poem SET rig_checkpoint_json=? WHERE id='poem-1'").run(
+    JSON.stringify({
+      invocation: { attemptId: "11111111-1111-4111-8111-111111111111" },
+    })
+  );
+  const rows = () =>
+    sqlite
+      .prepare(
+        "SELECT id,rig_status,rig_version,rig_checkpoint_json FROM poem ORDER BY id"
+      )
+      .all();
+  const before = rows();
+  await expect(repository.queueDiagnostics(100)).resolves.toEqual({
+    checkedAt: 100,
+    activeSlots: 3,
+    states: [
+      { status: "claimed", poems: 2, activeSlots: 1 },
+      { status: "dispatching", poems: 2, activeSlots: 2 },
+      { status: "unknown", poems: 1, activeSlots: 0 },
+    ],
+    expiredDispatches: [
+      {
+        poemId: "poem-1",
+        version: 2,
+        leaseExpiresAt: 90,
+        attemptId: "11111111-1111-4111-8111-111111111111",
+      },
+    ],
+  });
+  expect(rows()).toEqual(before);
+});
+
+test("queue diagnostics bound expired previews and read the active-state index", async () => {
+  const { sqlite, database } = fixture();
+  const insert = sqlite.prepare(
+    "INSERT INTO poem(id,hidden,publishable,name_arabic,content_arabic,rig_status,rig_lease_expires_at) VALUES(?,0,1,'poem','{}','dispatching',90)"
+  );
+  for (let index = 0; index < 81; index += 1)
+    insert.run(`old-${String(index).padStart(3, "0")}`);
+  const queries: string[] = [];
+  const repository = new RigStateRepository({
+    prepare: (query: string) => {
+      queries.push(query);
+      return database.prepare(query);
+    },
+  } as unknown as D1Database);
+  const diagnostic = await repository.queueDiagnostics(100);
+  expect(diagnostic.activeSlots).toBe(81);
+  expect(diagnostic.expiredDispatches).toHaveLength(80);
+  expect(diagnostic.expiredDispatches.at(-1)?.poemId).toBe("old-079");
+  for (const query of queries) {
+    const plan = sqlite
+      .prepare(`EXPLAIN QUERY PLAN ${query}`)
+      .all({ 1: 100 }) as { detail: string }[];
+    expect(plan.some((row) => row.detail.includes("poem_rig_active"))).toBe(
+      true
+    );
+  }
+});
