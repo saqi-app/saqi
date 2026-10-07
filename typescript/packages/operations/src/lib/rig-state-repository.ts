@@ -79,6 +79,25 @@ export class RigStateRepository {
     return raw === null ? null : StateRowSchema.parse(raw);
   }
 
+  async readUnknownAttempt(attemptId: string): Promise<null | RigStateRow> {
+    TokenSchema.parse(attemptId);
+    const raw = await this.#database
+      .prepare(
+        `SELECT id AS poemId, rig_status AS status, rig_version AS version,
+                rig_lease_token AS leaseToken,
+                rig_lease_expires_at AS leaseExpiresAt,
+                rig_checkpoint_json AS checkpointJson
+         FROM poem INDEXED BY poem_rig_active
+         WHERE rig_status IN ('claimed', 'dispatching', 'unknown')
+           AND rig_status = 'unknown'
+           AND json_extract(rig_checkpoint_json, '$.invocation.attemptId') = ?1
+         LIMIT 1`
+      )
+      .bind(attemptId)
+      .first<unknown>();
+    return raw === null ? null : StateRowSchema.parse(raw);
+  }
+
   async currentEnrichment(): Promise<null | RigStateRow> {
     const raw = await this.#database
       .prepare(
@@ -284,13 +303,10 @@ export class RigStateRepository {
       const result = await this.#database
         .prepare(
           `WITH candidates AS MATERIALIZED (
-             SELECT id, author_id, source_hash, publication_source_hash,
-                    publication_json, content_arabic, rig_status,
-                    rig_lease_expires_at, rig_checkpoint_json
-             FROM poem WHERE id > ?1 ORDER BY id LIMIT 128
+             SELECT id FROM poem WHERE id > ?1 ORDER BY id LIMIT 128
            )
            SELECT (
-             SELECT p.id FROM candidates p
+             SELECT p.id FROM candidates c JOIN poem p ON p.id = c.id
              WHERE p.source_hash IS NOT NULL
                AND EXISTS (SELECT 1 FROM author a WHERE a.id = p.author_id)
                AND (p.rig_status IS NULL

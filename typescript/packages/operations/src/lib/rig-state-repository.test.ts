@@ -1092,7 +1092,7 @@ test("bounded discovery advances across completed pages and shares its hint acro
   );
   expect(
     plan.some(({ detail }) =>
-      /SEARCH poem USING INDEX .*\(id>\?\)/u.test(detail)
+      /SEARCH poem USING (?:COVERING )?INDEX .*\(id>\?\)/u.test(detail)
     )
   ).toBe(true);
   await expect(
@@ -1154,4 +1154,46 @@ test("a completed scan wraps to newly due work before the old hint", async () =>
   await expect(
     repository.claimNextPoem(token, 100, undefined, 80)
   ).resolves.toMatchObject({ poemId: "poem-1" });
+});
+
+test("saved-attempt lookup finds only the exact fenced unknown attempt through the active index", async () => {
+  const { repository, sqlite, queries } = fixture();
+  const attemptId = "11111111-1111-4111-8111-111111111111";
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'dispatching', rig_checkpoint_json = ? WHERE id = 'poem-1'"
+    )
+    .run(JSON.stringify({ invocation: { attemptId } }));
+  await expect(repository.readUnknownAttempt(attemptId)).resolves.toBeNull();
+  sqlite
+    .prepare(
+      "UPDATE poem SET rig_status = 'unknown', rig_lease_token = NULL, rig_lease_expires_at = NULL WHERE id = 'poem-1'"
+    )
+    .run();
+  await expect(repository.readUnknownAttempt(attemptId)).resolves.toMatchObject(
+    {
+      poemId: "poem-1",
+      status: "unknown",
+      checkpointJson: expect.stringContaining(attemptId),
+    }
+  );
+  await expect(
+    repository.readUnknownAttempt("22222222-2222-4222-8222-222222222222")
+  ).resolves.toBeNull();
+  const lookup = queries.find(
+    (query) =>
+      query.includes("INDEXED BY poem_rig_active") &&
+      query.includes("attemptId")
+  );
+  expect(lookup).toBeDefined();
+  const plan = sqlite
+    .prepare(`EXPLAIN QUERY PLAN ${lookup!}`)
+    .all({ 1: attemptId }) as { detail: string }[];
+  expect(
+    plan.some(({ detail }) => detail.includes("USING INDEX poem_rig_active"))
+  ).toBe(true);
+  sqlite
+    .prepare("UPDATE poem SET rig_status = 'complete' WHERE id = 'poem-1'")
+    .run();
+  await expect(repository.readUnknownAttempt(attemptId)).resolves.toBeNull();
 });
