@@ -269,7 +269,12 @@ test("a targeted smoke run sends only the requested poem ID to the D1 claim", as
   }
 });
 
-async function exerciseUnknown(attemptId, entry = script, args = []) {
+async function exerciseUnknown(
+  attemptId,
+  entry = script,
+  args = [],
+  initialStatus = "unknown",
+) {
   const directory = await mkdtemp(join(tmpdir(), "saqi-rig-test-"));
   const markerPath = join(directory, "codex-called");
   const fakeCodex = join(directory, "codex");
@@ -287,7 +292,8 @@ async function exerciseUnknown(attemptId, entry = script, args = []) {
           ok: true,
           state: {
             poemId: "poem-1",
-            status: "unknown",
+            status: initialStatus,
+            leaseExpiresAt: 0,
             version: 2,
             checkpointJson: JSON.stringify({ invocation: { attemptId } }),
           },
@@ -370,4 +376,37 @@ test("new work is claimed without a quota check while unresolved work stays fenc
   assert.equal(run.code, 0, run.stderr);
   assert.deepEqual(run.actions, ["purge-cache", "claim-poem"]);
   assert.equal(run.codexCalled, false);
+});
+
+test("truncated paid JSON stays preserved and fenced while other work is checked", async () => {
+  const attemptId = randomUUID();
+  const path = join(tmpdir(), `saqi-rig-${attemptId}.json`);
+  const partial = '{"translation":{"lines":["A saved line"]},"wordMeanings":';
+  await writeFile(path, partial);
+  try {
+    const run = await exerciseUnknown(attemptId);
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(run.actions, ["purge-cache", "claim-poem"]);
+    assert.equal(run.codexCalled, false);
+    assert.equal(await readFile(path, "utf8"), partial);
+    assert.match(run.stderr, /preserving the result for review/u);
+  } finally {
+    await rm(path, { force: true });
+  }
+});
+
+test("an expired truncated invocation is marked unknown without deletion, publication, or regeneration", async () => {
+  const attemptId = randomUUID();
+  const path = join(tmpdir(), `saqi-rig-${attemptId}.json`);
+  const partial = '{"translation":{"lines":["A saved line"]},"wordMeanings":';
+  await writeFile(path, partial);
+  try {
+    const run = await exerciseUnknown(attemptId, script, [], "dispatching");
+    assert.equal(run.code, 1);
+    assert.deepEqual(run.actions, ["purge-cache", "mark-unknown"]);
+    assert.equal(run.codexCalled, false);
+    assert.equal(await readFile(path, "utf8"), partial);
+  } finally {
+    await rm(path, { force: true });
+  }
 });

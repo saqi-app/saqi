@@ -235,7 +235,18 @@ async function readOutputFile(path, attemptId) {
   if (size === 0) return null;
   if (size > 1_048_576)
     throw new Error(`Invalid Codex output size for ${attemptId}`);
-  return normalizeWordMeanings(JSON.parse(await readFile(path, "utf8")));
+  const text = await readFile(path, "utf8");
+  let output;
+  try {
+    output = JSON.parse(text);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    process.stderr.write(
+      `Codex attempt ${attemptId} has incomplete JSON; preserving the result for review.\n`,
+    );
+    return null;
+  }
+  return normalizeWordMeanings(output);
 }
 
 async function recover(state, deferCachePurge = false) {

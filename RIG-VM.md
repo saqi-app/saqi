@@ -4,7 +4,7 @@ Provisioned 2026-10-06 in `sarj-nasr-dev`: `saqi-codex`, zone `us-east1-b`, e2-m
 
 The standard boot disk was expanded online from 20 to 100 GiB after the eighty-worker workload showed repeated disk I/O waits. Its size-based random I/O limits rise from 15 read / 30 write IOPS to 75 read / 150 write IOPS. The VM and paid model turns stayed running. Provisioned capacity determines these limits; the root filesystem is still 19 GiB with 13 GiB available at verification. Expand the filesystem during planned maintenance if additional file space is needed. [Google documents these performance limits](https://docs.cloud.google.com/compute/docs/disks/performance) and [online disk expansion](https://docs.cloud.google.com/compute/docs/disks/resize-persistent-disk).
 
-Codex CLI 0.159.3 and Node 24.21.0 are installed. The dedicated `saqi` Unix account uses GPT-6.1 Sol, xhigh reasoning, Fast speed, and ChatGPT login. The initial login was copied securely over IAP SSH from the existing authenticated device; credentials are private files, never metadata or source files. For a separate device session, use the device login command below. The translation job has no quota reserve or local spending cap. It consumes included allowance and available account credits until Codex rejects further usage.
+Codex CLI 0.159.3 and Node 24.21.0 are installed. The dedicated `saqi` Unix account uses GPT-6.1 Sol, xhigh reasoning, Standard speed, and ChatGPT login. The initial login was copied securely over IAP SSH from the existing authenticated device; credentials are private files, never metadata or source files. For a separate device session, use the device login command below. The translation job has no quota reserve or local spending cap. It consumes included allowance and available account credits until Codex rejects further usage.
 
 ## Connect and authenticate
 
@@ -25,7 +25,7 @@ Enable device login in ChatGPT security settings if required. Follow the browser
 
 ## Background job
 
-The [pool service](typescript/scripts/rig-vm/saqi-translate-pool.service) runs eighty independent poem workers through one shared Codex app-server process. Every new thread explicitly uses GPT-6.1 Sol, xhigh reasoning, Fast speed, a focused translation instruction set, and disabled tools. D1 atomically limits concurrent claims to eighty distinct poems, including any remaining legacy invocation. Claim/source/dispatch setup passes through a shared scheduling gate, preventing startup bursts and competing candidate scans; the gate opens before paid model inference, so all eighty translations can run concurrently. Each worker waits five seconds after an invocation and owns a private recovery ticket. Cache invalidation runs independently every fifteen seconds, batching up to fifty completed publications per request so Cloudflare’s five tag-purges-per-minute limit does not pause model workers. Canonical dirty flags remain until the batch purge succeeds and each source/publication hash still matches. Cache maintenance continues during graceful drains, with a final flush after paid workers finish. Paid results are saved atomically before acknowledgement; ambiguous outcomes stay fenced rather than being regenerated. The older [single-invocation service](typescript/scripts/rig-vm/saqi-translate.service) and [timer](typescript/scripts/rig-vm/saqi-translate.timer) remain available for recovery but the timer is disabled during pool operation. D1 remains the queue. Pending result files live in `/home/saqi/.local/state/saqi/results`; do not delete an unresolved attempt's file.
+The [pool service](typescript/scripts/rig-vm/saqi-translate-standard.service) runs eighty independent poem workers through one shared Codex app-server process. Every new thread explicitly uses GPT-6.1 Sol, xhigh reasoning, Standard speed, a focused translation instruction set, and disabled tools. D1 atomically limits concurrent claims to eighty distinct poems, including any remaining legacy invocation. Claim/source/dispatch setup passes through a shared scheduling gate, preventing startup bursts and competing candidate scans; the gate opens before paid model inference, so all eighty translations can run concurrently. Each worker waits five seconds after an invocation and owns a private recovery ticket. Cache invalidation runs independently every fifteen seconds, batching up to fifty completed publications per request so Cloudflare’s five tag-purges-per-minute limit does not pause model workers. Canonical dirty flags remain until the batch purge succeeds and each source/publication hash still matches. Cache maintenance continues during graceful drains, with a final flush after paid workers finish. Paid results are saved atomically before acknowledgement; ambiguous outcomes stay fenced rather than being regenerated. The older [single-invocation service](typescript/scripts/rig-vm/saqi-translate.service) and [timer](typescript/scripts/rig-vm/saqi-translate.timer) remain available for recovery but the timer is disabled during pool operation. D1 remains the queue. Pending result files live in `/home/saqi/.local/state/saqi/results-standard`; do not delete an unresolved attempt's file.
 
 The service loads `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` from the private mode-0600 file `/home/saqi/.config/saqi/access.env`. Login is in `/home/saqi/.codex/auth.json`, mode 0600. These files are outside the runtime code directory. Never copy their contents into chat, source control, instance metadata, or command arguments.
 
@@ -33,11 +33,11 @@ The service loads `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` from the p
 # These commands run on the VM:
 # Disable legacy scheduling before starting the pool; let its in-flight poem finish.
 sudo systemctl disable --now saqi-translate.timer
-sudo systemctl enable --now saqi-translate-pool.service
-sudo systemctl status saqi-translate-pool.service
-sudo journalctl -u saqi-translate-pool.service -f
+sudo systemctl enable --now saqi-translate-standard.service
+sudo systemctl status saqi-translate-standard.service
+sudo journalctl -u saqi-translate-standard.service -f
 # Stop scheduling new work; let the current invocation finish:
-sudo systemctl disable --now saqi-translate-pool.service
+sudo systemctl disable --now saqi-translate-standard.service
 # Pool SIGTERM drains active translations before exiting; stop can take a while.
 ```
 
@@ -56,7 +56,11 @@ The pool is enabled, the legacy timer is disabled, and the Mac translation Launc
 
 The initial production 503 came from serializing a complete pending-purge database row, including publication/source hashes, into a strict public API request. `purgePublishedPoem` now sends only `authorSlug` and `poemId`; the regression test uses a repository-shaped row and the shared public contract. Known cache errors retain bounded status/details, and every production deployment now tests the authenticated purge write path. Cloudflare deployments use the protected GitHub production workflow because the current local CLI account cannot access Saqi's resources. Unknown older invocations remain fenced and do not prevent new poems from running.
 
-Fast mode is enabled at the user's request to prioritize throughput and spend the available quota and credits faster. Threads and turns explicitly request the `priority` tier, and the runner rejects a thread that does not confirm GPT-6.1 Sol, xhigh reasoning, and that tier. Fast uses included allowance at 2.5 times the Standard rate and purchased credits at twice the Standard rate; these billing multipliers do not guarantee the same speedup. See [Codex speed modes](https://learn.chatgpt.com/docs/agent-configuration/speed).
+FAST is disabled at the user's request to maximize the number of poems covered by the allowance and credits. Threads and turns explicitly use the `default` tier, the CLI disables `fast_mode`, and the runner rejects any thread that does not confirm GPT-6.1 Sol, xhigh reasoning, and the Standard tier. The retired Fast service is inactive and disabled. See [Codex speed modes](https://learn.chatgpt.com/docs/agent-configuration/speed).
+
+Candidate discovery reads at most eight pages of 128 canonical poems per request, with JSON checks applied only after each page has been materialized. An in-memory scan hint continues across operations requests; losing it repeats reads without changing durable work. Discovery cycles through untranslated, current but incomplete, and stale publications in that order. Explicit retries still run first. This avoids repeatedly sorting the entire corpus as publication JSON grows. A temporarily empty claim response can mean the bounded scan is still advancing, so workers continue polling.
+
+Truncated JSON results stay on disk for review. Once the invocation lease expires, its outcome is marked unknown and remains fenced; its worker can continue with other poems. The rig never publishes a syntactically incomplete result or automatically regenerates that attempt.
 
 ## Capacity estimate
 
@@ -72,7 +76,7 @@ The first live four-line poem additionally used 10,344 input tokens, 1,193 outpu
 
 All three synthetic benchmarks reported zero cached input. At the published Standard rate, estimated credits are `(50 * uncached input + 2.5 * cached input + 250 * output) / 1,000,000`. Reasoning is part of billed output; do not charge its breakdown twice. These samples suggest approximately 72,000–102,000 similar short poems from 60,000 credits alone. Allow substantially more tokens for difficult classical poems, longer poems, retries, or extra context. This is a small synthetic benchmark, not a live-corpus average or a guarantee.
 
-A later live-corpus sample of 254 completed GPT-6.1 Sol xhigh Standard generations used 2,420,373 input tokens (255,744 cached) and 3,076,305 output tokens. At the Standard rate, that is about 3.456 credits per generation, or roughly 17,400 similar generations from 60,000 credits. At Fast's doubled credit rate, the same token mix would cover about 8,700. Poem length and reasoning vary; measure the new Fast pool's throughput separately.
+A later live-corpus sample of 254 completed GPT-6.1 Sol xhigh Standard generations used 2,420,373 input tokens (255,744 cached) and 3,076,305 output tokens. At the Standard rate, that is about 3.456 credits per generation, or roughly 17,400 similar generations from 60,000 credits. At Fast's doubled credit rate, the same token mix would cover about 8,700. Poem length and reasoning vary; measure the current Standard pool's throughput separately.
 
 A full weekly Pro allowance adds capacity, but its fixed token/credit equivalent is not published and cannot be inferred from the credit rate card. The original account read showed Pro, 5% weekly use, and about 62,497 credits before these tests and the later device-account replacement. Other work shares that account allowance.
 
