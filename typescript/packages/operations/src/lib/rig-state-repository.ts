@@ -38,6 +38,22 @@ const StateRowSchema = z.object({
   checkpointJson: z.string().nullable(),
 });
 
+const QueueDiagnosticsTimeSchema = z.number().int().nonnegative();
+const QueueCountSchema = z.object({
+  status: z.enum(["claimed", "dispatching", "unknown"]),
+  poems: z.number().int().nonnegative(),
+  activeSlots: z.number().int().nonnegative(),
+});
+const QueueCountsSchema = z.array(QueueCountSchema);
+const ExpiredDispatchSchema = z.object({
+  poemId: z.string(),
+  version: z.number().int().nonnegative(),
+  leaseExpiresAt: z.number().int(),
+  attemptId: z.string().nullable(),
+});
+
+const ExpiredDispatchesSchema = z.array(ExpiredDispatchSchema);
+
 export type RigStateRow = z.infer<typeof StateRowSchema>;
 
 export interface RigCandidateCursor {
@@ -111,6 +127,41 @@ export class RigStateRepository {
       )
       .first<unknown>();
     return raw === null ? null : StateRowSchema.parse(raw);
+  }
+
+  async queueDiagnostics(now: number) {
+    QueueDiagnosticsTimeSchema.parse(now);
+    const counts = await this.#database
+      .prepare(
+        `SELECT rig_status AS status, count(*) AS poems,
+          sum(CASE WHEN rig_status = 'dispatching'
+            OR (rig_status = 'claimed' AND rig_lease_expires_at > ?1)
+            THEN 1 ELSE 0 END) AS activeSlots
+         FROM poem INDEXED BY poem_rig_active
+         WHERE rig_status IN ('claimed', 'dispatching', 'unknown')
+         GROUP BY rig_status`
+      )
+      .bind(now)
+      .all();
+    const expired = await this.#database
+      .prepare(
+        `SELECT id AS poemId, rig_version AS version,
+          rig_lease_expires_at AS leaseExpiresAt,
+          json_extract(rig_checkpoint_json, '$.invocation.attemptId') AS attemptId
+         FROM poem INDEXED BY poem_rig_active
+         WHERE rig_status IN ('claimed', 'dispatching', 'unknown')
+           AND rig_status = 'dispatching' AND rig_lease_expires_at <= ?1
+         ORDER BY id LIMIT 80`
+      )
+      .bind(now)
+      .all();
+    const states = QueueCountsSchema.parse(counts.results);
+    return {
+      checkedAt: now,
+      activeSlots: states.reduce((total, row) => total + row.activeSlots, 0),
+      states,
+      expiredDispatches: ExpiredDispatchesSchema.parse(expired.results),
+    };
   }
 
   async claimNextPoem(
