@@ -16,7 +16,14 @@ import {
   purgePublishedPoems,
 } from "../lib/public-cache";
 import { RigPublicationRepository } from "../lib/rig-publication-repository";
-import { RigStateRepository } from "../lib/rig-state-repository";
+import {
+  type RigCandidateCursor,
+  RigStateRepository,
+} from "../lib/rig-state-repository";
+
+// This optional scan hint survives requests in a Worker isolate. Canonical
+// rows and compare-and-swap claims remain authoritative across all isolates.
+const CANDIDATE_CURSOR: RigCandidateCursor = { afterPoemId: "", priority: 0 };
 
 const VersionSchema = z.number().int().positive();
 const TokenSchema = z.uuid();
@@ -125,7 +132,7 @@ export async function post(
   } catch {
     return failure(400, "INVALID_RIG_REQUEST");
   }
-  const state = new RigStateRepository(env.DB);
+  const state = new RigStateRepository(env.DB, CANDIDATE_CURSOR);
   const now = Math.floor(Date.now() / 1_000);
   try {
     switch (input.action) {

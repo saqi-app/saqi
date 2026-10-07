@@ -68,24 +68,27 @@ function fixture() {
     Object.fromEntries(
       values.map((value, index) => [String(index + 1), value])
     );
+  const queries: string[] = [];
   const wrap = (query: string, values: unknown[] = []) => ({
     bind: (...parameters: unknown[]) => wrap(query, parameters),
-    first: async () => sqlite.prepare(query).get(numbered(values)) ?? null,
+    first: async () => {
+      queries.push(query);
+      return sqlite.prepare(query).get(numbered(values)) ?? null;
+    },
     all: async () => ({ results: sqlite.prepare(query).all(numbered(values)) }),
     run: async () => {
       const result = sqlite.prepare(query).run(numbered(values));
       return { meta: { changes: result.changes } };
     },
   });
-  const repository = new RigStateRepository({
-    prepare: wrap,
-  } as unknown as D1Database);
+  const database = { prepare: wrap } as unknown as D1Database;
+  const repository = new RigStateRepository(database);
   const publisher = new RigPublicationRepository({
     prepare: wrap,
     batch: async (statements: { run: () => Promise<unknown> }[]) =>
       Promise.all(statements.map((statement) => statement.run())),
   } as unknown as D1Database);
-  return { publisher, repository, sqlite };
+  return { publisher, repository, sqlite, database, queries };
 }
 
 test("poems without a canonical author do not enter the queue or expose a claimed source", async () => {
@@ -1046,3 +1049,109 @@ test.each([
     ).toEqual(before);
   }
 );
+
+test("bounded discovery advances across completed pages and shares its hint across requests", async () => {
+  const { sqlite, database, queries } = fixture();
+  const hash = "a".repeat(64);
+  const publication = JSON.stringify({
+    active: true,
+    fields: {
+      linesEnglish: ["A verse"],
+      wordGlosses: { sourceHash: hash, meanings: { lines: [{}] } },
+    },
+  });
+  sqlite.exec("UPDATE poem SET rig_status = 'unknown'");
+  const insert = sqlite.prepare(
+    `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,
+       source_hash,publication_source_hash,publication_json,rig_status)
+     VALUES(?,0,1,'author-1','قصيدة','{"content":["بيت"]}',?,?,?,'complete')`
+  );
+  sqlite.transaction(() => {
+    for (let index = 0; index < 1_200; index += 1)
+      insert.run(`a${String(index).padStart(5, "0")}`, hash, hash, publication);
+  })();
+  sqlite.prepare("UPDATE poem SET rig_status = NULL WHERE id = 'poem-2'").run();
+  const cursor = { afterPoemId: "", priority: 0 };
+  const token = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    new RigStateRepository(database, cursor).claimNextPoem(
+      token,
+      100,
+      undefined,
+      80
+    )
+  ).resolves.toBeNull();
+  const pages = queries.filter((query) => query.includes("AS MATERIALIZED"));
+  expect(pages).toHaveLength(8);
+  expect(cursor.afterPoemId).not.toBe("");
+  const plan = sqlite
+    .prepare(`EXPLAIN QUERY PLAN ${pages[0]!}`)
+    .all({ 1: "", 2: 100, 3: 80, 4: 0 }) as { detail: string }[];
+  expect(plan.some(({ detail }) => detail === "MATERIALIZE candidates")).toBe(
+    true
+  );
+  expect(
+    plan.some(({ detail }) =>
+      /SEARCH poem USING INDEX .*\(id>\?\)/u.test(detail)
+    )
+  ).toBe(true);
+  await expect(
+    new RigStateRepository(database, cursor).claimNextPoem(
+      token,
+      100,
+      undefined,
+      80
+    )
+  ).resolves.toMatchObject({ poemId: "poem-2" });
+  expect(
+    sqlite
+      .prepare(
+        "SELECT count(*) AS count FROM poem WHERE rig_status = 'complete'"
+      )
+      .get()
+  ).toEqual({ count: 1_200 });
+});
+
+test("bounded discovery preserves untranslated priority across page boundaries", async () => {
+  const { sqlite, repository } = fixture();
+  const hash = "a".repeat(64);
+  const publication = JSON.stringify({
+    active: true,
+    fields: { linesEnglish: ["Keep this English"] },
+  });
+  sqlite.exec("UPDATE poem SET rig_status = 'blocked'");
+  const insert = sqlite.prepare(
+    `INSERT INTO poem(id,hidden,publishable,author_id,name_arabic,content_arabic,
+       source_hash,publication_source_hash,publication_json)
+     VALUES(?,0,1,'author-1','قصيدة','{"content":["بيت"]}',?,?,?)`
+  );
+  sqlite.transaction(() => {
+    for (let index = 0; index < 130; index += 1)
+      insert.run(`a${String(index).padStart(5, "0")}`, hash, hash, publication);
+    insert.run("z-untranslated", hash, null, null);
+  })();
+  const first = "11111111-1111-4111-8111-111111111111";
+  const second = "22222222-2222-4222-8222-222222222222";
+  await expect(
+    repository.claimNextPoem(first, 100, undefined, 80)
+  ).resolves.toMatchObject({ poemId: "z-untranslated" });
+  await expect(
+    repository.claimNextPoem(second, 100, undefined, 80)
+  ).resolves.toMatchObject({
+    poemId: "a00000",
+    checkpointJson: expect.stringContaining('"required":["wordMeanings"]'),
+  });
+});
+
+test("a completed scan wraps to newly due work before the old hint", async () => {
+  const { database } = fixture();
+  const cursor = { afterPoemId: "z", priority: 2 };
+  const repository = new RigStateRepository(database, cursor);
+  const token = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    repository.claimNextPoem(token, 100, undefined, 80)
+  ).resolves.toBeNull();
+  await expect(
+    repository.claimNextPoem(token, 100, undefined, 80)
+  ).resolves.toMatchObject({ poemId: "poem-1" });
+});

@@ -40,6 +40,11 @@ const StateRowSchema = z.object({
 
 export type RigStateRow = z.infer<typeof StateRowSchema>;
 
+export interface RigCandidateCursor {
+  afterPoemId: string;
+  priority: number;
+}
+
 export interface InvocationIntent {
   readonly attemptId: string;
   readonly deadlineAt: number;
@@ -53,9 +58,11 @@ export interface InvocationIntent {
 // eslint-disable-next-line @sarj/require-port-for-service, @sarj/require-interface-for-exported-class -- One concrete D1 implementation; callers and real-SQL tests need no interchangeable service contract.
 export class RigStateRepository {
   readonly #database: D1Database;
+  readonly #candidateCursor: RigCandidateCursor;
 
-  constructor(database: D1Database) {
+  constructor(database: D1Database, candidateCursor?: RigCandidateCursor) {
     this.#database = database;
+    this.#candidateCursor = candidateCursor ?? { afterPoemId: "", priority: 0 };
   }
 
   async read(poemId: string): Promise<null | RigStateRow> {
@@ -267,25 +274,51 @@ export class RigStateRepository {
   }
 
   async #nextDuePoem(now: number, maxConcurrent = 1): Promise<null | string> {
-    const candidate = await this.#database
-      .prepare(
-        `SELECT p.id FROM poem p
-         WHERE p.source_hash IS NOT NULL
-           AND EXISTS (SELECT 1 FROM author a
-                       WHERE a.id = p.author_id)
-           AND ${NeedsEnrichmentSql}
-           AND (p.rig_status IS NULL
-             OR p.rig_status IN ('retry', 'complete')
-             OR (p.rig_status = 'claimed'
-               AND (p.rig_lease_expires_at IS NULL
-                 OR p.rig_lease_expires_at <= ?1)))
-         AND (?2 = 1 OR p.rig_status IS NOT 'claimed'
-           OR json_extract(p.rig_checkpoint_json, '$.phase') = 'generation')
-         ORDER BY ${EnrichmentPrioritySql}, p.id LIMIT 1`
-      )
-      .bind(now, maxConcurrent)
-      .first<{ id: string }>();
-    return candidate?.id ?? null;
+    const cursor = this.#candidateCursor;
+    // Bound JSON work before filtering: LIMIT on the final sorted query would
+    // still evaluate the entire corpus. A lost cursor only repeats safe reads.
+    for (let page = 0; page < 8; page += 1) {
+      const afterPoemId = cursor.afterPoemId;
+      const priority = cursor.priority;
+      // eslint-disable-next-line no-await-in-loop -- Read one bounded page at a time; stop as soon as eligible work is found.
+      const result = await this.#database
+        .prepare(
+          `WITH candidates AS MATERIALIZED (
+             SELECT id, author_id, source_hash, publication_source_hash,
+                    publication_json, content_arabic, rig_status,
+                    rig_lease_expires_at, rig_checkpoint_json
+             FROM poem WHERE id > ?1 ORDER BY id LIMIT 128
+           )
+           SELECT (
+             SELECT p.id FROM candidates p
+             WHERE p.source_hash IS NOT NULL
+               AND EXISTS (SELECT 1 FROM author a WHERE a.id = p.author_id)
+               AND (p.rig_status IS NULL
+                 OR p.rig_status IN ('retry', 'complete')
+                 OR (p.rig_status = 'claimed'
+                   AND (p.rig_lease_expires_at IS NULL
+                     OR p.rig_lease_expires_at <= ?2)))
+               AND (?3 = 1 OR p.rig_status IS NOT 'claimed'
+                 OR json_extract(p.rig_checkpoint_json, '$.phase') = 'generation')
+               AND ${EnrichmentPrioritySql} = ?4
+               AND ${NeedsEnrichmentSql}
+             ORDER BY p.id LIMIT 1
+           ) AS poemId, (SELECT max(id) FROM candidates) AS scannedThrough`
+        )
+        .bind(afterPoemId, now, maxConcurrent, priority)
+        .first<{ poemId: null | string; scannedThrough: null | string }>();
+      if (result?.poemId) return result.poemId;
+      // Concurrent requests may have advanced the shared hint. Never rewind it
+      // on the strength of an older page; the atomic claim remains the fence.
+      if (cursor.afterPoemId !== afterPoemId || cursor.priority !== priority)
+        continue;
+      cursor.afterPoemId = result?.scannedThrough ?? "";
+      if (!result?.scannedThrough) {
+        cursor.priority = (priority + 1) % 3;
+        if (cursor.priority === 0) return null;
+      }
+    }
+    return null;
   }
 
   async #claimPoem(
