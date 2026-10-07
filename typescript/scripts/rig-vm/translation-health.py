@@ -8,6 +8,7 @@ import statistics
 import subprocess
 
 BUSY_STATES = {"active", "activating", "deactivating", "reloading"}
+POOL_SERVICES = {"saqi-translate-pool.service", "saqi-translate-standard.service"}
 
 
 def publication_history(records, now):
@@ -18,7 +19,7 @@ def publication_history(records, now):
         match = re.fullmatch(r"Translating ([0-9a-f-]+): (\d+) Arabic lines \(([^)]+)\)", message)
         if match:
             invocation = {"poemId": match[1], "arabicLines": int(match[2]), "model": match[3], "startedAt": timestamp}
-            if record.get("_SYSTEMD_UNIT") != "saqi-translate-pool.service":
+            if record.get("_SYSTEMD_UNIT") not in POOL_SERVICES:
                 history["latest"] = invocation
             history["starts"][match[1]] = invocation
         if re.fullmatch(r"Published [0-9a-f-]+(?: \(cache purge pending\))?", message):
@@ -80,6 +81,8 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
     if issues:
         status = "attention"
     pool_snapshot = snapshot or {}
+    if not issues and pool_snapshot.get("stopping"):
+        status = "maintenance"
     return {
         "checkedAt": now.isoformat(),
         "status": status,
@@ -92,7 +95,8 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
         "poolService": pool,
         "poolConcurrency": pool_snapshot.get("concurrency"),
         "cacheMaintenanceError": pool_snapshot.get("cacheMaintenanceError"),
-        "poolDraining": pool == "deactivating" and bool(pool_snapshot.get("stopping")),
+        "poolDraining": pool in BUSY_STATES and bool(pool_snapshot.get("stopping")),
+        "drainingPoolPoems": pool_snapshot.get("drainingPoolPoems", 0),
         "activePoolPoems": active,
         "pausedWorkers": pool_snapshot.get("pausedWorkers", []),
     }
@@ -119,6 +123,12 @@ def pool_health(pool, snapshot, now):
         issues.append("translation workers require recovery; inspect their metadata")
     return active, issues
 
+def merge_draining_snapshot(primary, legacy):
+    if primary is None or not legacy or not legacy.get("stopping"):
+        return primary
+    draining = [{**item, "draining": True} for item in legacy.get("activePoems", [])]
+    return {**primary, "activePoems": [*primary.get("activePoems", []), *draining], "drainingPoolPoems": len(draining)}
+
 
 def unit_state(unit):
     return subprocess.check_output(["systemctl", "show", unit, "-p", "ActiveState", "--value"], text=True).strip()
@@ -126,16 +136,24 @@ def unit_state(unit):
 
 def main():
     now = datetime.now(timezone.utc)
-    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
-    snapshot_path = Path("/home/saqi/.local/state/saqi/results/pool-health.json")
+    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-translate-standard.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
+    standard_state = unit_state("saqi-translate-standard.service")
+    legacy_state = unit_state("saqi-translate-pool.service")
+    standard_active = standard_state in BUSY_STATES or standard_state == "failed"
+    directory = "results-standard" if standard_active else "results"
+    snapshot_path = Path("/home/saqi/.local/state/saqi") / directory / "pool-health.json"
     snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else None
+    if standard_active and legacy_state in BUSY_STATES:
+        legacy_path = Path("/home/saqi/.local/state/saqi/results/pool-health.json")
+        legacy = json.loads(legacy_path.read_text()) if legacy_path.exists() else None
+        snapshot = merge_draining_snapshot(snapshot, legacy)
     report = summarize(
         [json.loads(line) for line in journal.splitlines()],
         now,
         unit_state("saqi-translate.service"),
         unit_state("saqi-translate.timer"),
         unit_state("saqi-codex-login.service"),
-        unit_state("saqi-translate-pool.service"),
+        standard_state if standard_active else legacy_state,
         snapshot,
     )
     print(json.dumps(report), flush=True)

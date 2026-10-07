@@ -21,10 +21,10 @@ createInterface({input:process.stdin}).on("line", line => {
   const m = JSON.parse(line);
   if (!m.id) return;
   if (m.method === "thread/start") {
-    if (m.params.model !== "gpt-6.1-sol" || m.params.config.model_reasoning_effort !== "xhigh" || m.params.serviceTier !== "priority" || !m.params.ephemeral) throw new Error("configuration");
-    send({id:m.id,result:{thread:{id:"thread-" + ++sequence},model:"gpt-6.1-sol",reasoningEffort:"xhigh",serviceTier:"priority"}});
+    if (m.params.model !== "gpt-6.1-sol" || m.params.config.model_reasoning_effort !== "xhigh" || m.params.serviceTier !== "default" || !m.params.ephemeral) throw new Error("configuration");
+    send({id:m.id,result:{thread:{id:"thread-" + ++sequence},model:"gpt-6.1-sol",reasoningEffort:"xhigh",serviceTier:sequence === 1 ? null : "default"}});
   } else if (m.method === "turn/start") {
-    if (m.params.serviceTierForTurn !== "priority") throw new Error("turn-tier");
+    if (m.params.serviceTierForTurn !== "default") throw new Error("turn-tier");
     const threadId = m.params.threadId;
     const text = JSON.stringify({value:m.params.input[0].text});
     setTimeout(() => {
@@ -76,7 +76,7 @@ test("a server disconnect rejects every pending turn instead of hanging or retry
   }
 });
 
-test("a rejected Fast configuration cannot start paid inference", async () => {
+test("a Fast configuration is rejected before starting paid inference", async () => {
   const server = new RigCodexServer(process.execPath, [
     "-e",
     `
@@ -84,7 +84,7 @@ test("a rejected Fast configuration cannot start paid inference", async () => {
     readline.createInterface({input:process.stdin}).on('line',line=>{
       const m=JSON.parse(line); if(!m.id) return;
       if(m.method==='turn/start') throw new Error('inference must not start');
-      console.log(JSON.stringify({id:m.id,result:m.method==='thread/start'?{thread:{id:'wrong-tier'},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:'default'}:{}}));
+      console.log(JSON.stringify({id:m.id,result:m.method==='thread/start'?{thread:{id:'wrong-tier'},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:'priority'}:{}}));
     });
   `,
   ]);
@@ -92,7 +92,7 @@ test("a rejected Fast configuration cannot start paid inference", async () => {
     await server.initialize();
     await assert.rejects(
       server.generate("test", {}, async () => {
-        assert.fail("Rejected Fast configuration must not produce output");
+        assert.fail("Fast configuration must not produce output");
       }),
       /CODEX_MODEL_CONFIGURATION_MISMATCH/u,
     );

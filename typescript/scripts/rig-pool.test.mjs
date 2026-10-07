@@ -29,7 +29,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if (!m.id) return;
  if(m.method==='thread/start') send({id:m.id,result:{thread:{id:'thread-'+ ++sequence},model:'gpt-6.1-sol',reasoningEffort:'xhigh',serviceTier:m.params.serviceTier}});
  else if(m.method==='turn/start') {
-  if(m.params.serviceTierForTurn!=='priority') throw new Error('Fast tier missing');
+  if(m.params.serviceTierForTurn!=='default') throw new Error('Standard tier missing');
   if (++turns===Number(process.env.SAQI_RIG_CONCURRENCY)) fs.writeFileSync(path.join(__dirname,'all-turns'),'ready');
   send({id:m.id,result:{turn:{id:'turn'}}});
   const release=setInterval(()=>{
@@ -196,7 +196,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
         );
         assert.equal(running.activePoems.length, concurrency);
         assert.ok(
-          running.activePoems.every((poem) => poem.serviceTier === "priority"),
+          running.activePoems.every((poem) => poem.serviceTier === "default"),
         );
         child.kill("SIGTERM");
         await draining.promise;

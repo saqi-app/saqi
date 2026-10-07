@@ -2,7 +2,7 @@
 Description=Activate the authorized Saqi Codex device login
 ConditionPathExists=/home/saqi/.config/saqi/pending-codex-auth.json
 After=network-online.target
-Before=saqi-translate.timer saqi-translate-pool.service
+Before=saqi-translate.timer saqi-translate-standard.service
 Wants=network-online.target
 
 [Service]
@@ -10,9 +10,9 @@ Type=oneshot
 User=saqi
 Group=saqi
 EnvironmentFile=-/home/saqi/.config/saqi/pending-codex-login.env
-ExecStartPre=+/usr/bin/systemctl stop saqi-translate.timer saqi-translate-pool.service
+ExecStartPre=+/usr/bin/systemctl stop saqi-translate.timer saqi-translate-standard.service
 ExecStart=/usr/bin/python3 /usr/local/libexec/saqi/activate-device-login.py
-ExecStopPost=+/usr/bin/systemctl start --no-block saqi-translate-pool.service
+ExecStopPost=+/usr/bin/systemctl start --no-block saqi-translate-standard.service
 TimeoutStartSec=infinity
 UMask=0077
 

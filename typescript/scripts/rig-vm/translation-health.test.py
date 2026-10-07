@@ -85,5 +85,26 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["activePoolPoems"], [{**invocation, "elapsedMinutes": 3}])
 
 
+    def test_sigterm_drain_is_maintenance_while_systemd_unit_remains_active(self):
+        snapshot = {"checkedAt": self.now.isoformat(), "concurrency": 80, "stopping": True, "activePoems": [], "pausedWorkers": []}
+        report = health.summarize([], self.now, "inactive", "inactive", "inactive", "active", snapshot)
+        self.assertEqual(report["status"], "maintenance")
+        self.assertTrue(report["poolDraining"])
+
+    def test_standard_pool_includes_prior_paid_turns_during_handoff(self):
+        new = {"worker": 1, "poemId": "new", "serviceTier": "default", "startedAt": self.now.isoformat()}
+        old = {"worker": 1, "poemId": "old", "serviceTier": "priority", "startedAt": self.now.isoformat()}
+        primary = {"checkedAt": self.now.isoformat(), "concurrency": 80, "stopping": False, "activePoems": [new]}
+        legacy = {"stopping": True, "activePoems": [old]}
+        combined = health.merge_draining_snapshot(primary, legacy)
+        report = health.summarize([], self.now, "inactive", "inactive", "inactive", "active", combined)
+        self.assertEqual(report["poolConcurrency"], 80)
+        self.assertEqual(report["drainingPoolPoems"], 1)
+        self.assertFalse(report["poolDraining"])
+        self.assertEqual([p["poemId"] for p in report["activePoolPoems"]], ["new", "old"])
+        self.assertTrue(report["activePoolPoems"][1]["draining"])
+        self.assertEqual(primary["activePoems"], [new])
+
+
 if __name__ == "__main__":
     unittest.main()
