@@ -34,6 +34,39 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["status"], "idle")
         self.assertNotIn("private", str(report))
 
+    def test_snapshot_windows_exclude_future_and_expired_records(self):
+        records = [
+            self.record(25 * 60, "Translating bad: 10 Arabic lines (gpt-6.1-sol)"),
+            self.record(25 * 60, "Published bad"),
+            self.record(2, "Translating abc: 12 Arabic lines (gpt-6.1-sol)"),
+            self.record(1, "Published abc"),
+            self.record(-1, "Published abc"),
+            self.record(-2, "Published fed"),
+            self.record(-3, "service: Failed with result 'exit-code'."),
+        ]
+        report = health.summarize(records, self.now, "inactive", "active", "inactive")
+        self.assertEqual(report["publishedLast24Hours"], 1)
+        self.assertEqual(report["publishedLast20Minutes"], 1)
+        self.assertEqual(report["lastPublishedAt"], (self.now - timedelta(minutes=1)).isoformat())
+        self.assertEqual(report["medianGenerationAndPublicationSecondsLastHour"], 60)
+        self.assertEqual(report["issues"], [])
+
+    def test_journal_selection_retains_publication_health_metadata_and_bounds_the_snapshot(self):
+        process = MagicMock()
+        process.__enter__.return_value = process
+        process.stdout = iter([])
+        process.wait.return_value = 0
+        with patch.object(health.subprocess, "Popen", return_value=process) as popen:
+            list(health.journal_records(self.now))
+        command = popen.call_args.args[0]
+        self.assertEqual(command[command.index("--until") + 1], self.now.isoformat())
+        pattern = command[command.index("--grep") + 1]
+        import re
+        for message in ["Translating abc: 10 Arabic lines (gpt-6.1-sol)", "Published abc", "Published abc (cache purge pending)", "service: Failed with result 'exit-code'."]:
+            self.assertIsNotNone(re.search(pattern, message))
+        for message in ["No poem ready; waiting", "unrelated private diagnostic"]:
+            self.assertIsNone(re.search(pattern, message))
+
     def test_explicit_publication_repair_counts_without_a_second_paid_generation(self):
         repaired = self.record(1, "Published abc (cache purge pending)")
         repaired["_SYSTEMD_UNIT"] = "saqi-publication-repair.service"
