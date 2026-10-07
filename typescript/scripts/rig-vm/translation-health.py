@@ -15,6 +15,8 @@ def publication_history(records, now):
     history = {"starts": {}, "completed": {}, "failures": 0, "latest": None}
     for record in records:
         timestamp = datetime.fromtimestamp(int(record["__REALTIME_TIMESTAMP"]) / 1_000_000, timezone.utc)
+        if timestamp > now or timestamp < now - timedelta(hours=24):
+            continue
         message = record.get("MESSAGE", "")
         match = re.fullmatch(r"Translating ([0-9a-f-]+): (\d+) Arabic lines \(([^)]+)\)", message)
         if match:
@@ -136,8 +138,9 @@ def unit_state(unit):
 
 def journal_records(now):
     # Stream one record at a time: a day's logs must not compete with the pool
-    # for the 1 GiB VM's memory. Only publication metadata survives each record.
-    command = ["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-translate-standard.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--output-fields=__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,MESSAGE", "--no-pager"]
+    # for the 1 GiB VM's memory. Filter unrelated diagnostics before JSON
+    # serialization and stop at the snapshot time while paid work continues.
+    command = ["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-translate-standard.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "--until", now.isoformat(), "--grep", r"^(Translating |Published )|Failed with result", "-o", "json", "--output-fields=__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,MESSAGE", "--no-pager"]
     with subprocess.Popen(command, stdout=subprocess.PIPE, text=True) as journal:
         for line in journal.stdout:
             yield json.loads(line)
