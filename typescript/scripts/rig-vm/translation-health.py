@@ -134,9 +134,20 @@ def unit_state(unit):
     return subprocess.check_output(["systemctl", "show", unit, "-p", "ActiveState", "--value"], text=True).strip()
 
 
+def journal_records(now):
+    # Stream one record at a time: a day's logs must not compete with the pool
+    # for the 1 GiB VM's memory. Only publication metadata survives each record.
+    command = ["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-translate-standard.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--output-fields=__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,MESSAGE", "--no-pager"]
+    with subprocess.Popen(command, stdout=subprocess.PIPE, text=True) as journal:
+        for line in journal.stdout:
+            yield json.loads(line)
+        returncode = journal.wait()
+        if returncode:
+            raise subprocess.CalledProcessError(returncode, command)
+
+
 def main():
     now = datetime.now(timezone.utc)
-    journal = subprocess.check_output(["journalctl", "-u", "saqi-translate.service", "-u", "saqi-translate-pool.service", "-u", "saqi-translate-standard.service", "-u", "saqi-publication-repair.service", "--since", (now - timedelta(hours=24)).isoformat(), "-o", "json", "--no-pager"], text=True)
     standard_state = unit_state("saqi-translate-standard.service")
     legacy_state = unit_state("saqi-translate-pool.service")
     standard_active = standard_state in BUSY_STATES or standard_state == "failed"
@@ -148,7 +159,7 @@ def main():
         legacy = json.loads(legacy_path.read_text()) if legacy_path.exists() else None
         snapshot = merge_draining_snapshot(snapshot, legacy)
     report = summarize(
-        [json.loads(line) for line in journal.splitlines()],
+        journal_records(now),
         now,
         unit_state("saqi-translate.service"),
         unit_state("saqi-translate.timer"),

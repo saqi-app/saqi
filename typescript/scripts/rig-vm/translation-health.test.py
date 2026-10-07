@@ -2,6 +2,9 @@ from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import MagicMock, patch
+import subprocess
+import tracemalloc
 
 spec = importlib.util.spec_from_file_location("translation_health", Path(__file__).with_name("translation-health.py"))
 health = importlib.util.module_from_spec(spec)
@@ -39,6 +42,43 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertEqual(report["publishedLast20Minutes"], 1)
         self.assertEqual(report["arabicLinesPublishedLastHour"], 184)
         self.assertEqual(report["publishedLast24Hours"], 1)
+
+    def test_full_day_journal_is_streamed_with_bounded_memory(self):
+        import json
+
+        def lines():
+            yield json.dumps(self.record(40, "Translating abc: 10 Arabic lines (gpt-6.1-sol)")) + "\n"
+            # 128 MiB of irrelevant diagnostics, generated without preloading.
+            for _ in range(8192):
+                yield json.dumps(self.record(30, "x" * 16384)) + "\n"
+            yield json.dumps(self.record(1, "Published abc")) + "\n"
+
+        process = MagicMock()
+        process.__enter__.return_value = process
+        process.stdout = lines()
+        process.wait.return_value = 0
+        with patch.object(health.subprocess, "Popen", return_value=process):
+            tracemalloc.start()
+            try:
+                report = health.summarize(health.journal_records(self.now), self.now, "inactive", "active", "inactive")
+                _, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+        self.assertEqual(report["publishedLast24Hours"], 1)
+        self.assertEqual(report["publishedLast20Minutes"], 1)
+        self.assertEqual(report["arabicLinesPublishedLastHour"], 10)
+        self.assertLess(peak, 4 * 1024 * 1024)
+        process.wait.assert_called_once()
+
+    def test_journal_failure_is_not_reported_as_healthy_empty_history(self):
+        process = MagicMock()
+        process.__enter__.return_value = process
+        process.stdout = iter([])
+        process.wait.return_value = 2
+        with patch.object(health.subprocess, "Popen", return_value=process):
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                list(health.journal_records(self.now))
+        self.assertEqual(raised.exception.returncode, 2)
 
     def test_login_handoff_pause_is_maintenance_and_does_not_raise_a_timer_alarm(self):
         report = health.summarize([self.record(30, "Translating abc: 270 Arabic lines (gpt-6.1-sol)")], self.now, "activating", "inactive", "activating")
