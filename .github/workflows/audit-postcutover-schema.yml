@@ -2,6 +2,11 @@ name: Audit deployed corpus schema
 
 on:
   workflow_dispatch:
+    inputs:
+      totals_only:
+        description: Read translated poem totals without the full schema audit
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,7 +28,65 @@ jobs:
         with:
           node-version-file: typescript/.nvmrc
       - run: corepack enable && yarn install --immutable --mode=skip-build
+      - name: Count poems with English translations
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from datetime import datetime, timezone
+
+          started_at = datetime.now(timezone.utc).isoformat()
+          totals = {"poems": 0, "translatedPoems": 0, "publishedTranslatedPoems": 0}
+          # Cover every ID, including non-UUID legacy IDs, with disjoint ranges.
+          boundaries = ["", *"123456789abcdef", None]
+          for lower, upper in zip(boundaries, boundaries[1:]):
+              upper_bound = f"AND p.id < '{upper}'" if upper is not None else ""
+              sql = f"""
+              WITH translation_presence AS (
+                SELECT coalesce((
+                  json_array_length(p.publication_json, '$.fields.linesEnglish') > 0
+                  OR json_array_length(p.publication_json, '$.fields.linesEnglishSol') > 0
+                  OR json_array_length(p.publication_json, '$.fields.linesEnglishGemini') > 0
+                  OR EXISTS (
+                    SELECT 1 FROM json_each(p.publication_json, '$.fields.modelEnrichments') track
+                    WHERE json_array_length(track.value, '$.lines') > 0
+                  )
+                ), 0) AS has_english,
+                coalesce(json_extract(p.publication_json, '$.active'), 0) AS active
+                FROM poem p JOIN author a ON a.id = p.author_id
+                WHERE p.id >= '{lower}' {upper_bound}
+              )
+              SELECT count(*) AS poems,
+                coalesce(sum(has_english), 0) AS translatedPoems,
+                coalesce(sum(has_english AND active = 1), 0) AS publishedTranslatedPoems
+              FROM translation_presence;
+              """
+              result = subprocess.run(
+                  ["yarn", "workspace", "@saqi/operations", "db:execute",
+                   "--remote", "--json", "--command", sql],
+                  check=True, capture_output=True, text=True,
+              )
+              responses = json.loads(result.stdout)
+              if len(responses) != 1 or not responses[0].get("success"):
+                  raise RuntimeError("Translation count query failed")
+              for key in totals:
+                  totals[key] += responses[0]["results"][0][key]
+          report = {
+              "startedAt": started_at,
+              "checkedAt": datetime.now(timezone.utc).isoformat(),
+              **totals,
+          }
+          print("SAQI_TRANSLATION_TOTALS " + json.dumps(report), flush=True)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("Translated poem totals (each poem counted once):\n\n")
+              summary.write("```json\n" + json.dumps(report, indent=2) + "\n```\n")
+          PY
       - name: Read deployed table and publication counts
+        if: inputs.totals_only != true
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
@@ -118,4 +181,14 @@ jobs:
           ORDER BY type, name;
           SQL
           )
-          yarn workspace @saqi/operations db:execute --remote --json --command "$sql"
+          # Separate statements so the full audit cannot exhaust one D1
+          # request's CPU budget by combining all corpus scans.
+          statement=""
+          while IFS= read -r line; do
+            statement+="$line"$'\n'
+            if [[ "$line" == *\; ]]; then
+              yarn workspace @saqi/operations db:execute --remote --json --command "$statement"
+              statement=""
+            fi
+          done <<< "$sql"
+          [[ -z "$statement" ]] || { echo "Unterminated audit statement" >&2; exit 1; }
