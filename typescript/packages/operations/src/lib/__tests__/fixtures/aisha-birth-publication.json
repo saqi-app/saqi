@@ -1,0 +1,438 @@
+{
+  "source": {
+    "content": [
+      "قرت عُيون السَعادَةِ بِالصَفا",
+      "مُذ بشرت بِسعي عَم المُصطَفى",
+      "عباس أَشرَق بِالمَعالي نجمه",
+      "من نير التَوفيق سَعد أَشرَقا",
+      "رَقَصَت بمنيتها الغُصون بَشارَة",
+      "بِقُدوم من بوجودِهِ دهر صفا",
+      "قالَت ميا من بشره تهن الوَرى",
+      "فَالاِمن وَالتَوفيق فَوزا أَخلَفا"
+    ],
+    "titleArabic": "قرت عيون السعادة بالصفا"
+  },
+  "snapshot": {
+    "schemaVersion": 2,
+    "active": true,
+    "fields": {
+      "wordGlosses": {
+        "sourceHash": "5dc8b828bc16150ce597cbee716b257fb4d2c9dcb12f072dc1c95485eb9101cd",
+        "model": "gpt-6.1-sol",
+        "meanings": {
+          "lines": [
+            {
+              "lineIndex": 0,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "were gladdened",
+                  "surface": "قرت",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "eyes",
+                  "surface": "عُيون",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "happiness",
+                  "surface": "السَعادَةِ",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "by serenity",
+                  "surface": "بِالصَفا",
+                  "tokenIndex": 3
+                }
+              ]
+            },
+            {
+              "lineIndex": 1,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "since",
+                  "surface": "مُذ",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "received glad tidings",
+                  "surface": "بشرت",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "of the endeavor",
+                  "surface": "بِسعي",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "paternal uncle",
+                  "surface": "عَم",
+                  "tokenIndex": 3
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "al-Mustafa (the Chosen One)",
+                  "surface": "المُصطَفى",
+                  "tokenIndex": 4
+                }
+              ]
+            },
+            {
+              "lineIndex": 2,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "Abbas",
+                  "surface": "عباس",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "shone",
+                  "surface": "أَشرَق",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "with lofty distinction",
+                  "surface": "بِالمَعالي",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "his star",
+                  "surface": "نجمه",
+                  "tokenIndex": 3
+                }
+              ]
+            },
+            {
+              "lineIndex": 3,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "from",
+                  "surface": "من",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "the luminary",
+                  "surface": "نير",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "success",
+                  "surface": "التَوفيق",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "good fortune",
+                  "surface": "سَعد",
+                  "tokenIndex": 3
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "shone forth",
+                  "surface": "أَشرَقا",
+                  "tokenIndex": 4
+                }
+              ]
+            },
+            {
+              "lineIndex": 4,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "danced",
+                  "surface": "رَقَصَت",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "at their heart’s desire",
+                  "surface": "بمنيتها",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "the boughs",
+                  "surface": "الغُصون",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "glad tidings",
+                  "surface": "بَشارَة",
+                  "tokenIndex": 3
+                }
+              ]
+            },
+            {
+              "lineIndex": 5,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "at the coming",
+                  "surface": "بِقُدوم",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "one who",
+                  "surface": "من",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "through his presence",
+                  "surface": "بوجودِهِ",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "the age",
+                  "surface": "دهر",
+                  "tokenIndex": 3
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "grew serene",
+                  "surface": "صفا",
+                  "tokenIndex": 4
+                }
+              ]
+            },
+            {
+              "lineIndex": 6,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "they said",
+                  "surface": "قالَت",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "unclear in the supplied text",
+                  "surface": "ميا",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "from",
+                  "surface": "من",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "his glad tidings",
+                  "surface": "بشره",
+                  "tokenIndex": 3
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "rejoices",
+                  "surface": "تهن",
+                  "tokenIndex": 4
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "humankind",
+                  "surface": "الوَرى",
+                  "tokenIndex": 5
+                }
+              ]
+            },
+            {
+              "lineIndex": 7,
+              "segments": [
+                {
+                  "kind": "word",
+                  "meaning": "so security",
+                  "surface": "فَالاِمن",
+                  "tokenIndex": 0
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "and success",
+                  "surface": "وَالتَوفيق",
+                  "tokenIndex": 1
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "triumph",
+                  "surface": "فَوزا",
+                  "tokenIndex": 2
+                },
+                {
+                  "kind": "text",
+                  "surface": " "
+                },
+                {
+                  "kind": "word",
+                  "meaning": "both yielded",
+                  "surface": "أَخلَفا",
+                  "tokenIndex": 3
+                }
+              ]
+            }
+          ],
+          "tokenizerVersion": "saqi-orthographic-v1"
+        }
+      },
+      "linesEnglish": [
+        "The eyes of happiness shone with joy",
+        "Since the good tidings of the efforts of Al-Mustafa",
+        "Abbas' star shone with glories  ",
+        "With the light of success it shone brightly",
+        "The branches danced with glad tidings  ",
+        "Of the arrival of one whose existence purified the times",
+        "The water said whoever brings him good news will have the world rejoice",
+        "So security and success followed in his wake"
+      ],
+      "modelEnrichments": [
+        {
+          "lines": [
+            "The eyes of happiness were gladdened by serenity,",
+            "Since they received glad tidings of the endeavor of al-Mustafa’s paternal uncle.",
+            "Abbas—his star shone with lofty distinction;",
+            "From the luminary of success, good fortune shone forth.",
+            "The boughs danced at their heart’s desire, in glad celebration,",
+            "At the coming of one whose presence made the age serene.",
+            "They said [unclear word]: humankind rejoices at his glad tidings.",
+            "So security and success together yielded triumph."
+          ],
+          "model": "gpt-6.1-sol",
+          "modelKey": "saqi-current",
+          "reasoningEffort": "xhigh",
+          "vendorKey": "openai"
+        }
+      ]
+    }
+  },
+  "sourceHash": "5dc8b828bc16150ce597cbee716b257fb4d2c9dcb12f072dc1c95485eb9101cd",
+  "publicationHash": "c793fecd5c70b677c6fd8d825000ba565cb62824e4d8faa11c6eb92924d0d828"
+}
