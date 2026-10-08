@@ -40,20 +40,33 @@ jobs:
           from datetime import datetime, timezone
 
           started_at = datetime.now(timezone.utc).isoformat()
-          totals = {"poems": 0, "translatedPoems": 0, "publishedTranslatedPoems": 0}
+          totals = {"poems": 0, "translatedPoems": 0, "rigPublishedTranslatedPoems": 0, "rigPublicationsWithCurrentSource": 0, "rigPublicationsPendingCachePurge": 0}
+          samples = []
+          whitespace = [*range(9, 14), 32, 160, 5760, *range(8192, 8203), 8232, 8233, 8239, 8287, 12288, 65279]
+          whitespace_sql = " || ".join(f"char({codepoint})" for codepoint in whitespace)
           # Cover every ID, including non-UUID legacy IDs, with disjoint ranges.
           boundaries = ["", *"123456789abcdef", None]
           for lower, upper in zip(boundaries, boundaries[1:]):
               upper_bound = f"AND p.id < '{upper}'" if upper is not None else ""
               sql = f"""
               WITH translation_presence AS (
-                SELECT coalesce((
-                  json_array_length(p.publication_json, '$.fields.linesEnglish') > 0
-                  OR json_array_length(p.publication_json, '$.fields.linesEnglishSol') > 0
-                  OR json_array_length(p.publication_json, '$.fields.linesEnglishGemini') > 0
-                  OR EXISTS (
-                    SELECT 1 FROM json_each(p.publication_json, '$.fields.modelEnrichments') track
-                    WHERE json_array_length(track.value, '$.lines') > 0
+                SELECT p.id,
+                p.source_hash, p.publication_source_hash,
+                p.publication_cache_dirty AS cache_dirty,
+                coalesce((
+                  EXISTS (
+                    SELECT 1 FROM json_each(p.publication_json, '$.fields.linesEnglish') line
+                    WHERE line.type = 'text' AND trim(line.value, {whitespace_sql}) <> ''
+                  ) OR EXISTS (
+                    SELECT 1 FROM json_each(p.publication_json, '$.fields.linesEnglishSol') line
+                    WHERE line.type = 'text' AND trim(line.value, {whitespace_sql}) <> ''
+                  ) OR EXISTS (
+                    SELECT 1 FROM json_each(p.publication_json, '$.fields.linesEnglishGemini') line
+                    WHERE line.type = 'text' AND trim(line.value, {whitespace_sql}) <> ''
+                  ) OR EXISTS (
+                    SELECT 1 FROM json_each(p.publication_json, '$.fields.modelEnrichments') track,
+                      json_each(track.value, '$.lines') line
+                    WHERE line.type = 'text' AND trim(line.value, {whitespace_sql}) <> ''
                   )
                 ), 0) AS has_english,
                 coalesce(json_extract(p.publication_json, '$.active'), 0) AS active
@@ -62,7 +75,12 @@ jobs:
               )
               SELECT count(*) AS poems,
                 coalesce(sum(has_english), 0) AS translatedPoems,
-                coalesce(sum(has_english AND active = 1), 0) AS publishedTranslatedPoems
+                coalesce(sum(has_english AND active = 1), 0) AS rigPublishedTranslatedPoems,
+                coalesce(sum(has_english AND active = 1 AND source_hash IS NOT NULL
+                  AND publication_source_hash = source_hash), 0) AS rigPublicationsWithCurrentSource,
+                coalesce(sum(has_english AND active = 1 AND cache_dirty = 1), 0) AS rigPublicationsPendingCachePurge,
+                min(CASE WHEN has_english AND active = 1 THEN id END) AS rigSampleId,
+                min(CASE WHEN has_english AND active = 0 THEN id END) AS legacySampleId
               FROM translation_presence;
               """
               result = subprocess.run(
@@ -73,16 +91,22 @@ jobs:
               responses = json.loads(result.stdout)
               if len(responses) != 1 or not responses[0].get("success"):
                   raise RuntimeError("Translation count query failed")
+              row = responses[0]["results"][0]
+              samples.append({key: row[key] for key in ("rigSampleId", "legacySampleId")})
               for key in totals:
-                  totals[key] += responses[0]["results"][0][key]
+                  totals[key] += row[key]
           report = {
               "startedAt": started_at,
               "checkedAt": datetime.now(timezone.utc).isoformat(),
               **totals,
+              "samples": samples,
           }
           print("SAQI_TRANSLATION_TOTALS " + json.dumps(report), flush=True)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write("Translated poem totals (each poem counted once):\n\n")
+              summary.write("`rigPublishedTranslatedPoems` counts completed rig snapshots, not every visible English translation. "
+                            "The public site also renders valid legacy snapshots with `active: false`. "
+                            "These database counts do not verify every public URL or snapshot schema.\n\n")
               summary.write("```json\n" + json.dumps(report, indent=2) + "\n```\n")
           PY
       - name: Read deployed table and publication counts
