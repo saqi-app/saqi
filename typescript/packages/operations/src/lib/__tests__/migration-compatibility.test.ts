@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0096_correct_denshawai_grey.sql"
+      "0097_correct_aisha_birth_transcription.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -237,6 +237,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
     const row = database
       .prepare(
@@ -315,6 +316,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
     const row = database
       .prepare(
@@ -373,6 +375,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
     expect(
       database
@@ -411,6 +414,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -521,6 +525,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -605,6 +610,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
   });
 
@@ -727,6 +733,7 @@ describe("canonical migration compatibility", () => {
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
       "0096_correct_denshawai_grey.sql",
+      "0097_correct_aisha_birth_transcription.sql",
     ]);
   });
 
