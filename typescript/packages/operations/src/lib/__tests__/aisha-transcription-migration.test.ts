@@ -174,7 +174,7 @@ describe("Aisha birth transcription correction", () => {
     ],
     [
       "changed translation",
-      "publication_json=json_set(publication_json,'$.fields.modelEnrichments[0]?.lines[1]','changed')",
+      "publication_json=json_set(publication_json,'$.fields.modelEnrichments[0].lines[1]','changed')",
     ],
     [
       "changed model",
