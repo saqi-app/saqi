@@ -158,7 +158,7 @@ describe("canonical migration compatibility", () => {
   it("bootstraps exactly two application tables and replays as a no-op", () => {
     const database = open();
     expect(applyPending(database).at(-1)).toBe(
-      "0095_correct_elegy_adjective.sql"
+      "0096_correct_denshawai_grey.sql"
     );
     expect(tables(database)).toEqual(["author", "poem"]);
     expect(
@@ -236,6 +236,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
     const row = database
       .prepare(
@@ -313,6 +314,7 @@ describe("canonical migration compatibility", () => {
     expect(applyPending(database)).toEqual([
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
     const row = database
       .prepare(
@@ -370,6 +372,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
     expect(
       database
@@ -407,6 +410,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
     expect(canonicalPoem(database)).toEqual(before);
     expect(
@@ -516,6 +520,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
     expect(database.prepare("SELECT count(*) FROM poem").pluck().get()).toBe(1);
     expect(
@@ -599,6 +604,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
   });
 
@@ -720,6 +726,7 @@ describe("canonical migration compatibility", () => {
       "0093_remove_broad_insights.sql",
       "0094_recover_blocked_without_insights.sql",
       "0095_correct_elegy_adjective.sql",
+      "0096_correct_denshawai_grey.sql",
     ]);
   });
 
