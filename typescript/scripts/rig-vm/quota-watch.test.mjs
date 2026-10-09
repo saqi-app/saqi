@@ -95,12 +95,12 @@ test("quota lookup failures, spend controls, and live leases cannot start the se
       throw new Error("offline");
     },
     serviceState: async () => "inactive",
-    stop: async () => {},
+    stop: async () => assert.fail("Must not stop on an unreadable quota"),
     start: async () => assert.fail("Must not start"),
     capturePending: async () => [],
     recover: async () => "leased",
     load: async () => ({ pending: [{ poemId: "poem" }] }),
-    save: async () => {},
+    save: async () => undefined,
   };
   await assert.rejects(reconcileQuota(dependencies), /offline/u);
   assert.equal(

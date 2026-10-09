@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
+import console from "node:console";
 import { randomUUID } from "node:crypto";
 import {
   chown,
   mkdir,
   open,
-  readFile,
   readdir,
+  readFile,
   rename,
   stat,
 } from "node:fs/promises";
@@ -27,7 +28,7 @@ export function quotaSummary(result) {
   const bucket = result.rateLimitsByLimitId?.codex ?? result.rateLimits;
   if (
     bucket?.limitId !== "codex" ||
-    typeof result.ordinaryUsageAllowed !== "boolean"
+    ![true, false].includes(result.ordinaryUsageAllowed)
   )
     throw new Error("CODEX_QUOTA_STATUS_UNAVAILABLE");
   return {
@@ -63,8 +64,11 @@ export async function recoverQuotaAttempt(
   if (state.status === "dispatching") {
     if (state.leaseExpiresAt == null || state.leaseExpiresAt > now())
       return "leased";
-    state = (await request({ action: "mark-unknown", poemId: record.poemId }))
-      .state;
+    const response = await request({
+      action: "mark-unknown",
+      poemId: record.poemId,
+    });
+    state = response.state;
   }
   const current = JSON.parse(state?.checkpointJson ?? "{}");
   if (
@@ -137,7 +141,7 @@ export async function reconcileQuota({
 }
 
 async function mapBounded(items, action) {
-  const results = new Array(items.length);
+  const results = Array.from({ length: items.length });
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(4, items.length) }, async () => {
@@ -151,7 +155,7 @@ async function mapBounded(items, action) {
   return results;
 }
 
-async function readQuota() {
+async function readAccountQuota() {
   const server = new RigCodexServer("/usr/bin/sudo", [
     "-H",
     "-u",
@@ -186,7 +190,7 @@ async function readQuota() {
   }
 }
 
-async function request(body, poemId) {
+async function requestRig(body, poemId) {
   const headers = {
     "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID,
     "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET,
@@ -200,14 +204,15 @@ async function request(body, poemId) {
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-origin",
     });
+  const options = {
+    method: body ? "POST" : "GET",
+    headers,
+    signal: AbortSignal.timeout(30_000),
+  };
+  if (body) options.body = JSON.stringify(body);
   const response = await fetch(
     poemId ? `${endpoint}?poemId=${encodeURIComponent(poemId)}` : endpoint,
-    {
-      method: body ? "POST" : "GET",
-      headers,
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(30_000),
-    },
+    options,
   );
   if (!response.ok) throw new Error(`QUOTA_RIG_HTTP_${response.status}`);
   const result = await response.json();
@@ -215,11 +220,12 @@ async function request(body, poemId) {
   return result;
 }
 
-async function resultBytes(attemptId) {
+async function readResultBytes(attemptId) {
   const sizes = await Promise.all(
     [directory, "/tmp"].map(async (path) => {
       try {
-        return (await stat(join(path, `saqi-rig-${attemptId}.json`))).size;
+        const result = await stat(join(path, `saqi-rig-${attemptId}.json`));
+        return result.size;
       } catch (error) {
         if (error.code === "ENOENT") return 0;
         throw error;
@@ -229,24 +235,23 @@ async function resultBytes(attemptId) {
   return Math.max(...sizes);
 }
 
-async function capturePending(previous) {
+async function captureInterrupted(previous) {
   const records = new Map(previous.map((record) => [record.poemId, record]));
-  const tickets = (await readdir(directory)).filter((name) =>
-    /^worker-\d+\.json$/u.test(name),
-  );
+  const files = await readdir(directory);
+  const tickets = files.filter((name) => /^worker-\d+\.json$/u.test(name));
   await mapBounded(tickets, async (name) => {
     const { poemId } = JSON.parse(
       await readFile(join(directory, name), "utf8"),
     );
-    const { state } = await request(undefined, poemId);
+    const { state } = await requestRig(undefined, poemId);
     const checkpoint = JSON.parse(state?.checkpointJson ?? "{}");
     const attemptId = checkpoint.invocation?.attemptId;
     if (
       ["dispatching", "unknown"].includes(state?.status) &&
-      typeof attemptId === "string" &&
-      typeof checkpoint.sourceHash === "string" &&
+      /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(attemptId) &&
+      /^[0-9a-f]{64}$/u.test(checkpoint.sourceHash) &&
       checkpoint.outputs?.generation == null &&
-      (await resultBytes(attemptId)) === 0
+      (await readResultBytes(attemptId)) === 0
     )
       records.set(poemId, {
         poemId,
@@ -254,10 +259,10 @@ async function capturePending(previous) {
         sourceHash: checkpoint.sourceHash,
       });
   });
-  return [...records.values()];
+  return records.values().toArray();
 }
 
-async function save(report) {
+async function saveReport(report) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const path = join(directory, "quota-health.json");
   const temporary = `${path}.${randomUUID()}.tmp`;
@@ -275,25 +280,28 @@ async function save(report) {
 
 async function main() {
   const status = await reconcileQuota({
-    readQuota,
-    serviceState: async () =>
-      (
-        await execute("systemctl", [
-          "show",
-          unit,
-          "-p",
-          "ActiveState",
-          "--value",
-        ])
-      ).stdout.trim(),
+    readQuota: readAccountQuota,
+    serviceState: async () => {
+      const result = await execute("systemctl", [
+        "show",
+        unit,
+        "-p",
+        "ActiveState",
+        "--value",
+      ]);
+      return result.stdout.trim();
+    },
     stop: () => execute("systemctl", ["stop", "--no-block", unit]),
     start: () => execute("systemctl", ["start", unit]),
-    capturePending,
+    capturePending: captureInterrupted,
     recover: (record) =>
       recoverQuotaAttempt(record, {
-        readState: async (poemId) => (await request(undefined, poemId)).state,
-        resultBytes,
-        request,
+        readState: async (poemId) => {
+          const result = await requestRig(undefined, poemId);
+          return result.state;
+        },
+        resultBytes: readResultBytes,
+        request: requestRig,
         now: () => Math.floor(Date.now() / 1000),
       }),
     load: async () => {
@@ -306,9 +314,9 @@ async function main() {
         throw error;
       }
     },
-    save,
+    save: saveReport,
   });
-  console.log(`Quota watcher: ${status}`);
+  console.warn(`Quota watcher: ${status}`);
 }
 
 if (
