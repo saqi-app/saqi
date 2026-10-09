@@ -1,0 +1,16 @@
+[Unit]
+Description=Pause Saqi at its Codex quota and resume when usage is available
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/saqi/work/saqi
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=SAQI_RIG_RESULT_DIR=/home/saqi/.local/state/saqi/results-standard
+EnvironmentFile=/home/saqi/.config/saqi/access.env
+ExecStart=/usr/local/bin/node /home/saqi/work/saqi/typescript/scripts/rig-vm/quota-watch.mjs
+TimeoutStartSec=3min
+Nice=10
+UMask=0077
+

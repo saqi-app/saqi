@@ -178,6 +178,21 @@ class TranslationHealthTests(unittest.TestCase):
         self.assertTrue(report["activePoolPoems"][1]["draining"])
         self.assertEqual(primary["activePoems"], [new])
 
+    def test_expected_quota_pause_reports_automatic_resume_without_an_alert(self):
+        quota = {"checkedAt": self.now.isoformat(), "status": "waiting_for_quota", "automaticResume": True,
+                 "quota": {"available": False, "usedPercent": 100, "credits": "0", "resetsAt": 1234},
+                 "pending": [{"poemId": "poem"}]}
+        report = health.summarize([], self.now, "inactive", "inactive", "inactive", quota=quota, quota_timer="active")
+        self.assertEqual(report["status"], "waiting_for_quota")
+        self.assertEqual(report["issues"], [])
+        self.assertTrue(report["automaticResume"])
+        self.assertEqual(report["interruptedPoemsAwaitingQuota"], 1)
+        self.assertEqual(report["quota"]["credits"], "0")
+        quota["checkedAt"] = (self.now - timedelta(minutes=11)).isoformat()
+        stale = health.summarize([], self.now, "inactive", "inactive", "inactive", quota=quota, quota_timer="active")
+        self.assertEqual(stale["status"], "attention")
+        self.assertEqual(health.summarize([], self.now, "inactive", "inactive", "inactive", quota=quota)["status"], "attention")
+
 
 if __name__ == "__main__":
     unittest.main()

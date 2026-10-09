@@ -74,7 +74,7 @@ def flow_health(current, failures, units):
     return "idle", issues
 
 
-def summarize(records, now, service, timer, login, pool="inactive", snapshot=None):
+def summarize(records, now, service, timer, login, pool="inactive", snapshot=None, quota=None, quota_timer="inactive"):
     history = publication_history(records, now)
     current = current_invocation(history["latest"], now, service)
     status, issues = flow_health(current, history["failures"], {"service": service, "timer": timer, "login": login, "pool": pool})
@@ -85,6 +85,14 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
     pool_snapshot = snapshot or {}
     if not issues and pool_snapshot.get("stopping"):
         status = "maintenance"
+    quota_snapshot = quota or {}
+    quota_fresh = quota_snapshot.get("checkedAt") and now - datetime.fromisoformat(quota_snapshot["checkedAt"]) <= timedelta(minutes=10)
+    if (quota_timer == "active" and quota_fresh
+            and quota_snapshot.get("status") == "waiting_for_quota"
+            and quota_snapshot.get("quota", {}).get("available") is False
+            and pool == "inactive" and service == "inactive"):
+        issues = [issue for issue in issues if issue != "translation timer is not active"]
+        status = "attention" if issues else "waiting_for_quota"
     return {
         "checkedAt": now.isoformat(),
         "status": status,
@@ -101,6 +109,10 @@ def summarize(records, now, service, timer, login, pool="inactive", snapshot=Non
         "drainingPoolPoems": pool_snapshot.get("drainingPoolPoems", 0),
         "activePoolPoems": active,
         "pausedWorkers": pool_snapshot.get("pausedWorkers", []),
+        "quota": quota_snapshot.get("quota"),
+        "quotaWatcherTimer": quota_timer,
+        "automaticResume": quota_snapshot.get("automaticResume", False),
+        "interruptedPoemsAwaitingQuota": len(quota_snapshot.get("pending", [])),
     }
 
 
@@ -153,8 +165,12 @@ def main():
     now = datetime.now(timezone.utc)
     standard_state = unit_state("saqi-translate-standard.service")
     legacy_state = unit_state("saqi-translate-pool.service")
+    quota_timer = unit_state("saqi-translation-quota.timer")
+    quota_path = Path("/home/saqi/.local/state/saqi/results-standard/quota-health.json")
+    quota = json.loads(quota_path.read_text()) if quota_path.exists() else None
     standard_active = standard_state in BUSY_STATES or standard_state == "failed"
-    directory = "results-standard" if standard_active else "results"
+    standard_managed = standard_active or quota_timer == "active"
+    directory = "results-standard" if standard_managed else "results"
     snapshot_path = Path("/home/saqi/.local/state/saqi") / directory / "pool-health.json"
     snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else None
     if standard_active and legacy_state in BUSY_STATES:
@@ -167,8 +183,10 @@ def main():
         unit_state("saqi-translate.service"),
         unit_state("saqi-translate.timer"),
         unit_state("saqi-codex-login.service"),
-        standard_state if standard_active else legacy_state,
+        standard_state if standard_managed else legacy_state,
         snapshot,
+        quota,
+        quota_timer,
     )
     print(json.dumps(report), flush=True)
     if report["issues"]:
