@@ -1,0 +1,12 @@
+[Unit]
+Description=Recheck Saqi Codex quota every five minutes
+
+[Timer]
+OnBootSec=30s
+OnCalendar=*:0/5
+AccuracySec=15s
+Persistent=true
+Unit=saqi-translation-quota.service
+
+[Install]
+WantedBy=timers.target

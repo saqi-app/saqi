@@ -98,6 +98,7 @@ jobs:
           node --test scripts/rig-lite.test.mjs scripts/rig-codex-server.test.mjs scripts/rig-queue-hints.test.mjs scripts/rig-pool.test.mjs scripts/rig-chrome-*.test.mjs chrome/saqi-collector/popup.test.mjs scripts/rig-output.test.mjs
           python3 scripts/rig-vm/activate-device-login.test.py
           python3 scripts/rig-vm/translation-health.test.py
+          node --test scripts/rig-vm/quota-watch.test.mjs
 
       - name: Format and type-check local runtime
         if: steps.changes.outputs.crawler_only == 'true'
