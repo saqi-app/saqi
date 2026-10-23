@@ -1,0 +1,35 @@
+{
+  "name": "@saqi/site",
+  "description": "Public Astro site for the Saqi poetry corpus",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "yarn workspace @saqi/precedent-iso build && astro build",
+    "check": "astro sync && astro-check",
+    "deploy:preview": "yarn build && yarn deploy:artifact",
+    "deploy:artifact": "wrangler deploy --config dist/server/wrangler.json",
+    "deploy:production": "SAQI_WRANGLER_CONFIG=wrangler.production.jsonc yarn build && yarn deploy:artifact",
+    "deploy:www": "wrangler deploy --config wrangler.www.jsonc",
+    "dev": "astro dev",
+    "preview": "astro preview",
+    "test": "astro build --silent && yarn test:built",
+    "test:built": "node --import tsx --test tests/canonical-request.test.ts tests/catalog.test.ts tests/catalog-d1-adapter.test.ts tests/json-for-html.test.ts tests/metadata.test.ts tests/poem-translations.test.ts tests/poem-reader.test.ts tests/word-meaning-position.test.ts tests/public-cache-purge.test.ts tests/response-headers.test.ts tests/routes.test.ts tests/www-worker.test.ts && node --test tests/build-output.test.ts tests/index-filter.test.ts tests/search-normalization.test.ts",
+    "validate:build": "node --test tests/build-output.test.ts"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.4.2",
+    "@saqi/precedent-iso": "workspace:^",
+    "astro": "7.4.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@cloudflare/workers-types": "5.20261022.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
+    "tsx": "4.23.15",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "wrangler": "4.151.3"
+  }
+}

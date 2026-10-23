@@ -1,0 +1,24 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "ES2024"],
+    "noEmit": true,
+    "incremental": true,
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "worker.ts",
+    "src/**/*.ts",
+    "vitest.config.ts",
+    "../site/src/lib/publication-snapshot.ts",
+    "../site/src/lib/snapshot-contract.ts",
+    "../site/src/lib/poem-translations.ts",
+    "../site/src/lib/public-route-request.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    {
+      "path": "../precedent-iso"
+    }
+  ]
+}

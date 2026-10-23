@@ -1,0 +1,57 @@
+# Managed by code-standards; regenerate with `code-standards show ci --output .github/workflows/standards.yml`.
+name: Standards
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standards-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.5'
+          enable-cache: true
+          cache-dependency-glob: |
+            .sarj-standards.toml
+            **/uv.lock
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Activate Corepack
+        run: corepack enable
+      - name: Install JavaScript dependencies
+        run: yarn install --immutable --mode=skip-build
+        working-directory: "typescript"
+      - name: Materialize the pinned ESLint preset
+        working-directory: typescript
+        run: yarn setup:standards
+      - name: Install the pinned native tool bootstrap
+        env:
+          UV_PYTHON_DOWNLOADS_JSON_URL: https://raw.githubusercontent.com/astral-sh/uv/4ecd0eff2a81e3ffdcd7cfee10d08936e4747c17/crates/uv-python-managed/download-metadata.json
+        run: uv run --no-config --no-project --python 3.15.0 --with code-standards==8.113.0 python -m sarj_standards.libs.adoption.native_bootstrap
+      - name: Install and attest applicable native tools
+        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards setup --tools-only
+      - name: Run standards
+        env:
+          SARJ_STANDARDS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --trust-repository-code --format github

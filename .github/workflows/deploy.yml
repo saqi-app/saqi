@@ -1,0 +1,201 @@
+name: Deploy to Cloudflare
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full main commit SHA approved for production
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify and deploy approved commit
+    if: >-
+      github.repository == 'saqi-app/saqi' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'nmaswood'
+    environment: production
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the approved production commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: bash ../.github/scripts/verify-production-ref.sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: typescript/.nvmrc
+
+      - name: Restore Yarn cache
+        id: yarn-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: typescript/.yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml') }}
+          restore-keys: yarn-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          npm install --global npm@12.2.1 corepack@0.36.0
+          corepack enable
+          yarn install --immutable --mode=skip-build
+
+      - name: Save Yarn cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: typescript/.yarn/cache
+          key: ${{ steps.yarn-cache.outputs.cache-primary-key }}
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.5'
+      - name: Materialize the pinned ESLint preset
+        run: yarn setup:standards
+
+      - name: Build shared libraries
+        run: yarn build:api
+
+      - name: Reject high and critical dependency advisories
+        run: yarn audit:high
+
+      - name: Format and type-check source
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: yarn check:built
+
+      - name: Build the public Worker
+        run: yarn build
+        working-directory: typescript/packages/site
+        env:
+          SAQI_WRANGLER_CONFIG: wrangler.production.jsonc
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
+
+      - name: Test source
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          yarn test:built
+          yarn knip
+
+      - name: Build application Worker
+        run: yarn workspace @saqi/operations build
+
+      - name: Validate application Worker artifact
+        run: >-
+          yarn workspace @saqi/operations wrangler deploy --dry-run
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/ops-dry-run"
+
+      - name: Validate public artifact
+        run: >-
+          yarn workspace @saqi/site wrangler deploy --dry-run
+          --config dist/server/wrangler.json
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/public-dry-run"
+
+      - name: Validate www redirect artifact
+        env:
+          SAQI_WRANGLER_CONFIG: wrangler.production.jsonc
+        run: >-
+          yarn workspace @saqi/site wrangler deploy --dry-run
+          --config wrangler.www.jsonc
+          --outdir "${RUNNER_TEMP:?RUNNER_TEMP must be set}/www-dry-run"
+
+      - name: Verify the deployment commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: bash ../.github/scripts/verify-production-ref.sh
+
+      - name: Verify the production D1 identity
+        run: |
+          yarn workspace @saqi/operations wrangler d1 info saqi-db --json >"$RUNNER_TEMP/saqi-d1-identity.json"
+          node scripts/verify-production-d1-identity.ts <"$RUNNER_TEMP/saqi-d1-identity.json"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Record the D1 rollback bookmark
+        run: yarn workspace @saqi/operations wrangler d1 time-travel info saqi-db --json
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Verify publisher compatibility before schema expansion
+        run: ../.github/scripts/verify-publication-compatibility.sh
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
+
+      - name: Expand the production schema
+        run: yarn workspace @saqi/operations db:migrate:remote
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}
+
+      - name: Configure authenticated operations secrets
+        run: node scripts/configure-ops-secrets.ts
+        env:
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
+          CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ secrets.CF_ACCESS_TEAM_DOMAIN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
+          SAQI_SOURCE_NAME: ${{ secrets.SAQI_SOURCE_NAME }}
+          SAQI_SOURCE_BASE_URL: ${{ secrets.SAQI_SOURCE_BASE_URL }}
+
+      - name: Configure public cache purge secret
+        run: bash ../.github/scripts/configure-public-cache-secret.sh
+        env:
+          SAQI_PUBLIC_CACHE_PURGE_SECRET: ${{ secrets.SAQI_PUBLIC_CACHE_PURGE_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Deploy the public catalog
+        run: >-
+          yarn workspace @saqi/site wrangler deploy
+          --config dist/server/wrangler.json
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Deploy authenticated operations
+        run: yarn workspace @saqi/operations deploy:artifact
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_OPS_DEPLOY_TOKEN }}
+
+      - name: Deploy the canonical-host redirect
+        run: yarn workspace @saqi/site deploy:www
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PUBLIC_DEPLOY_TOKEN }}
+
+      - name: Verify production canaries
+        run: bash ../.github/scripts/verify-production-route-canaries.sh
+        env:
+          SAQI_BOOTSTRAP_AUTHOR_INDEX: "true"
+          CF_ACCESS_CLIENT_ID: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.SAQI_PUBLICATION_CANARY_CLIENT_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_MIGRATE_TOKEN }}

@@ -1,0 +1,6 @@
+# Stable hosted image from actions/runner-images; actionlint 1.7.12's
+# built-in label catalog predates it. Keep the additional label explicit.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - xcode-27

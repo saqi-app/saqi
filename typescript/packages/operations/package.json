@@ -1,0 +1,48 @@
+{
+  "name": "@saqi/operations",
+  "description": "Authenticated collection and publication Cloudflare Worker",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "packageManager": "yarn@4.18.1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "lint": "eslint .",
+    "fix": "yarn fix::lint && yarn fix::format",
+    "fix::lint": "eslint --fix .",
+    "fix::format": "prettier --write src/",
+    "check": "yarn check::lint && yarn check::format && yarn check::types",
+    "check::lint": "eslint .",
+    "check::format": "prettier --check src/",
+    "check::types": "yarn run --top-level tsc --noEmit",
+    "test": "vitest run",
+    "preview": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:artifact": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply saqi-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply saqi-db --remote",
+    "db:list": "wrangler d1 migrations list saqi-db",
+    "db:execute": "wrangler d1 execute saqi-db"
+  },
+  "dependencies": {
+    "@saqi/precedent-iso": "workspace:^",
+    "jose": "6.2.13",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261022.1",
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "26.6.5",
+    "better-sqlite3": "^13.0.3",
+    "eslint": "10.13.0",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "prettier": "^3.9.10",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.3"
+  }
+}

@@ -1,0 +1,7 @@
+/node_modules
+/coverage
+/dist
+.wrangler/
+*.tsbuildinfo
+.DS_Store
+migrations/seed/

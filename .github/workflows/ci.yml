@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "typescript/**"
+      - ".github/scripts/**"
+      - ".github/workflows/*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-format-build:
+    name: Format, Types & Build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15.1"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: typescript/.nvmrc
+
+      - name: Enable Corepack
+        run: |
+          npm install --global npm@12.2.1 corepack@0.36.0
+          corepack enable
+
+      - name: Restore Yarn cache
+        id: yarn-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: typescript/.yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('typescript/yarn.lock', 'typescript/.yarnrc.yml') }}
+          restore-keys: yarn-${{ runner.os }}-
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.5'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Materialize the pinned ESLint preset
+        run: yarn setup:standards
+
+      - name: Save Yarn cache
+        if: steps.yarn-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: typescript/.yarn/cache
+          key: ${{ steps.yarn-cache.outputs.cache-primary-key }}
+
+      - name: Reject high and critical dependency advisories
+        run: yarn audit:high
+
+      - name: Build libraries
+        run: yarn build:api
+
+      - name: Build source parser for browser bridge tests
+        run: yarn workspace @saqi/source-collector build
+
+      - name: Format and type-check workspaces
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: yarn check:built
+
+      - name: Build the public artifact
+        run: yarn workspace @saqi/site build
+
+      - name: Test workspaces
+        run: yarn test:built
+
+      - name: Test operator tools
+        run: yarn test:tools
+
+      - name: Test Python and deployment tools
+        working-directory: .
+        run: python3 typescript/scripts/test-python.py
+
+      - name: Find unused code
+        run: yarn knip
+
+      - name: Build the operations artifact
+        run: yarn workspace @saqi/operations build

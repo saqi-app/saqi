@@ -1,0 +1,18 @@
+---
+import { env } from "cloudflare:workers";
+
+import { CatalogRepository } from "../../../../lib/catalog";
+import { authorPageRequest } from "../../../../lib/author-page-request";
+import { publicRouteRedirectUrl } from "../../../../lib/public-route-request";
+import { authorPagePath } from "../../../../lib/routes";
+
+const page = await authorPageRequest(Astro.request.url, CatalogRepository.fromD1(env.DB));
+if (!page) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+Astro.locals.publicCacheRoute = { authorSlug: page.author.slug };
+const path = authorPagePath(page.author, page.pageNumber);
+const redirect = publicRouteRedirectUrl(Astro.request.url, path);
+return Astro.redirect(redirect?.href ?? path, 308);
+---

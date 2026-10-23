@@ -1,0 +1,110 @@
+---
+import amiriFontUrl from "../assets/fonts/amiri-saqi-v1.003.woff2?url";
+import amiriLicenseUrl from "../assets/fonts/Amiri-OFL.txt?url";
+import { serializeJsonForHtml } from "../lib/serialize-json-for-html";
+import globalCssUrl from "../styles/global.css?url";
+
+interface Props {
+  title: string;
+  description: string;
+  canonicalPath: string;
+  nextPath?: string | undefined;
+  noindex?: boolean;
+  openGraphType?: "article" | "website";
+  preloadArabicFont?: boolean;
+  previousPath?: string | undefined;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  canonicalPath,
+  nextPath,
+  noindex = false,
+  openGraphType = "website",
+  preloadArabicFont = true,
+  previousPath,
+  structuredData,
+} = Astro.props;
+const canonical = new URL(canonicalPath, Astro.site);
+const jsonLd = structuredData
+  ? {
+      "@context": "https://schema.org",
+      "@graph": Array.isArray(structuredData) ? structuredData : [structuredData],
+    }
+  : undefined;
+const serializedJsonLd = jsonLd ? serializeJsonForHtml(jsonLd) : undefined;
+const hasHeaderTools = Astro.slots.has("header-tools");
+Astro.response.headers.append("Link", `<${globalCssUrl}>; rel=preload; as=style`);
+if (preloadArabicFont) {
+  Astro.response.headers.append(
+    "Link",
+    `<${amiriFontUrl}>; rel=preload; as=font; type="font/woff2"; crossorigin`,
+  );
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" href="/favicon-v2.svg" type="image/svg+xml" />
+    <link rel="license" href={amiriLicenseUrl} title="Amiri font license" />
+    <link rel="stylesheet" href={globalCssUrl} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f8f7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1513" />
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <link rel="canonical" href={canonical} />
+    {previousPath && <link rel="prev" href={new URL(previousPath, Astro.site)} />}
+    {nextPath && <link rel="next" href={new URL(nextPath, Astro.site)} />}
+    <meta property="og:type" content={openGraphType} />
+    <meta property="og:site_name" content="Saqi" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ar_AR" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {serializedJsonLd && <script is:inline type="application/ld+json" set:html={serializedJsonLd} />}
+    <title>{title}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header
+      class:list={[
+        "site-header",
+        { "has-header-tools": hasHeaderTools, "has-header-actions": true },
+      ]}
+    >
+      <a class="wordmark" href="/" aria-label="Saqi home">
+        <img class="wordmark-logo" src="/saqi-logo.svg" alt="" width="191" height="129" />
+      </a>
+      {hasHeaderTools && (
+        <div class="site-header-tools">
+          <slot name="header-tools" />
+        </div>
+      )}
+      <div class="site-header-actions">
+        <a
+          class="github-link"
+          href="https://github.com/saqi-app/saqi"
+          aria-label="View Saqi source on GitHub"
+          title="View source on GitHub"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+            <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.93c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 .17 1.95.72 2.9.54.1-.73.39-1.23.71-1.51-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.15a10.8 10.8 0 0 1 5.65 0c2.15-1.46 3.1-1.15 3.1-1.15.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.75 1.03.75 2.08v3.09c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z" />
+          </svg>
+        </a>
+      </div>
+    </header>
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+  </body>
+</html>

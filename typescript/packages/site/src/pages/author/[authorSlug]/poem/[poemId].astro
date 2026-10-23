@@ -1,0 +1,20 @@
+---
+import { env } from "cloudflare:workers";
+
+import { CatalogRepository } from "../../../../lib/catalog";
+import { publicRouteRequest, publicRouteRedirectUrl } from "../../../../lib/public-route-request";
+import { poemPath } from "../../../../lib/routes";
+
+const route = publicRouteRequest(Astro.request.url);
+const page = route?.kind === "poem"
+  ? await CatalogRepository.fromD1(env.DB).getPoemPage(route.authorSlug, route.poemSlug)
+  : undefined;
+if (!page) {
+  Astro.response.status = 404;
+  return Astro.rewrite("/404");
+}
+const { author, poem } = page;
+Astro.locals.publicCacheRoute = { authorSlug: author.slug, poemId: poem.id };
+const path = poemPath(author, poem);
+return Astro.redirect(publicRouteRedirectUrl(Astro.request.url, path)?.href ?? path, 308);
+---

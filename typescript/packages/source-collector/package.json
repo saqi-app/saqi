@@ -1,0 +1,25 @@
+{
+  "name": "@saqi/source-collector",
+  "description": "Browser source parser for the stateless D1 collector",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "scripts": {
+    "build": "yarn run --top-level tsc",
+    "check::format": "prettier --check .",
+    "check::types": "yarn run --top-level tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@saqi/precedent-iso": "workspace:^",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "prettier": "^3.9.10",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

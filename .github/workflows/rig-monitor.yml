@@ -1,0 +1,61 @@
+name: Rig monitor
+
+on:
+  pull_request:
+    paths:
+      - 'macos/**'
+      - 'typescript/scripts/rig-background*'
+      - 'typescript/chrome/**'
+      - 'typescript/scripts/rig-chrome*'
+      - 'typescript/scripts/rig_launchctl.py'
+      - 'typescript/scripts/rig-node-runtime.ts'
+      - '.github/workflows/rig-monitor.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26-intel
+            xcode: /Applications/Xcode_26.6.app/Contents/Developer
+          # GitHub's image label remains a preview; this selects Apple's
+          # released Xcode 27.1 build 27A9275, rather than a beta toolchain.
+          - runner: xcode-27
+            xcode: /Applications/Xcode_27.1.app/Contents/Developer
+    runs-on: ${{ matrix.runner }}
+    env:
+      DEVELOPER_DIR: ${{ matrix.xcode }}
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15.1"
+      - name: Compile native monitor
+        run: xcrun swiftc -parse-as-library -warnings-as-errors macos/SaqiActivityMonitor/CollectorStatus.swift macos/SaqiActivityMonitor/main.swift -o /tmp/SaqiActivityMonitor
+      - name: Report native toolchain
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+      - name: Validate installers
+        run: python3 -m py_compile macos/SaqiActivityMonitor/install.py typescript/scripts/rig-background.py
+      - name: Test collector health decoding
+        run: |
+          xcrun swiftc -parse-as-library macos/SaqiActivityMonitor/CollectorStatus.swift macos/SaqiActivityMonitor/CollectorStatus.test.swift -o /tmp/SaqiCollectorStatusTests
+          /tmp/SaqiCollectorStatusTests
+      - name: Test collector installation
+        run: |
+          python3 macos/SaqiActivityMonitor/install.test.py
+          python3 typescript/scripts/rig-background.test.py
+          python3 typescript/scripts/rig-chrome-install.test.py
+          python3 typescript/scripts/rig-chrome-launcher.test.py

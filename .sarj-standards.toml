@@ -1,0 +1,45 @@
+# Managed by `code-standards setup`; commit this file.
+bundle = "8.113.0"
+rule_profile = "all"
+schema = 4
+
+[capabilities]
+disable = [
+  "ruff",
+  "pyright",
+  "swiftformat",
+  "swiftlint",
+  "ktlint",
+  "detekt",
+  "mobile-security",
+  "markdownlint",
+  "shellcheck",
+  "taplo",
+  "yamllint",
+  "zizmor",
+  "checkov",
+  "deptry",
+  "jscpd",
+  "knip",
+]
+
+[artifacts]
+durable = [
+  "**/README.md",
+  "docs/**",
+  "**/docs/**",
+  "architecture/**",
+  "**/adr/**",
+  ".github/**",
+  "**/AGENTS.md",
+  "**/CLAUDE.md",
+]
+
+[dest]
+kotlin = "."
+python = "."
+swift = "."
+typescript = "typescript"
+
+[hooks]
+manager = "pre-commit"

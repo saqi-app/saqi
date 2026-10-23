@@ -1,0 +1,95 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.test.ts",
+        "scripts/rig-vm/*.test.ts",
+        "scripts/rig-chrome-host.ts",
+        "scripts/rig-pool.ts",
+        "scripts/rig-local.ts",
+        "scripts/rig-vm/quota-watch.ts",
+        "scripts/build-collector.ts",
+        "scripts/configure-ops-secrets.ts",
+        "scripts/verify-production-d1-identity.ts",
+        "chrome/saqi-collector/*.ts",
+        "scripts/rig-node-runtime.ts"
+      ],
+      "project": [
+        "*.ts",
+        "scripts/**/*.ts",
+        "chrome/**/*.ts"
+      ]
+    },
+    "packages/precedent-iso": {
+      "project": [
+        "src/**/*.ts"
+      ],
+      "entry": [
+        "src/__tests__/**/*.test.ts"
+      ]
+    },
+    "packages/source-collector": {
+      "entry": [
+        "src/source-adapter/index.ts",
+        "src/**/__tests__/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/operations": {
+      "entry": [
+        "src/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "*.ts"
+      ]
+    },
+    "packages/site": {
+      "entry": [
+        "src/pages/**/*.{astro,ts}"
+      ],
+      "project": [
+        "src/**/*.{astro,ts,tsx}",
+        "tests/*.ts"
+      ]
+    }
+  },
+  "ignoreDependencies": [
+    "@eslint-community/eslint-plugin-eslint-comments",
+    "@eslint/compat",
+    "@eslint/js",
+    "@sarj/eslint-plugin",
+    "@shadcn/lint",
+    "@vitest/eslint-plugin",
+    "cloudflare",
+    "eslint-node-test",
+    "eslint-plugin-better-tailwindcss",
+    "eslint-plugin-jest",
+    "eslint-plugin-jsdoc",
+    "eslint-plugin-n",
+    "eslint-plugin-perfectionist",
+    "eslint-plugin-playwright",
+    "eslint-plugin-promise",
+    "eslint-plugin-react",
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-regexp",
+    "eslint-plugin-simple-import-sort",
+    "eslint-plugin-sonarjs",
+    "eslint-plugin-testing-library",
+    "eslint-plugin-unicorn",
+    "eslint-plugin-zod",
+    "react-doctor",
+    "tailwindcss",
+    "typescript-eslint"
+  ],
+  "ignore": [],
+  "ignoreExportsUsedInFile": false,
+  "ignoreBinaries": [
+    "codex",
+    "mkfifo",
+    "uvx"
+  ]
+}

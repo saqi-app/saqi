@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Saqi poem translation flow every 20 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=20min
+AccuracySec=1s
+Unit=saqi-translation-health.service
+
+[Install]
+WantedBy=timers.target
